@@ -2,8 +2,16 @@
 
 namespace Mysql;
 
+use Amp\Future;
+use Amp\Reactor;
+
 class VirtualConnection {
 	private $call = [];
+	private $reactor;
+
+	public function __construct(Reactor $reactor) {
+		$this->reactor = $reactor;
+	}
 
 	public function getCall() {
 		$cur = current($this->call);
@@ -15,6 +23,8 @@ class VirtualConnection {
 	}
 
 	public function __call($func, $args) {
-		$this->call[] = [$func, $args];
+		$future = new Future($this->reactor);
+		$this->call[] = [$func, array_merge($args, [$future])];
+		return $future;
 	}
 }

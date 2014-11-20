@@ -13,7 +13,7 @@ class ResultSet {
 	private $rows;
 	private $fetchedRows = 0;
 	private $userFetched = 0;
-	private $futures = [];
+	private $futures = [self::SINGLE_ROW_FETCH => [], self::COLUMNS_FETCHED => [], self::ROWS_FETCHED => []];
 	private $state = self::UNFETCHED;
 
 	const UNFETCHED = 0;
@@ -65,7 +65,8 @@ class ResultSet {
 
 	private function rowFetched($row) {
 		$this->rows[$this->fetchedRows++] = $row;
-		if ((list($key, $entry) = next($this->futures[self::SINGLE_ROW_FETCH])) !== null) {
+		list($key, $entry) = next($this->futures[self::SINGLE_ROW_FETCH]);
+		if ($key !== null) {
 			unset($this->futures[self::SINGLE_ROW_FETCH][$key]);
 			$entry->succeed($row);
 		}
@@ -74,10 +75,11 @@ class ResultSet {
 	public function __debugInfo() {
 		$tmp = clone $this;
 		unset($tmp->reactor);
-		foreach ($tmp->futures as &$type)
+		foreach ($tmp->futures as &$type) {
 			foreach ($type as &$entry) {
 				$entry[0] = null;
 			}
+		}
 		return $tmp;
 	}
 }

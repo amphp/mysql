@@ -141,8 +141,7 @@ class Connection {
 		// @TODO flags to use?
 		$this->capabilities |= self::CLIENT_SESSION_TRACK | self::CLIENT_TRANSACTIONS | self::CLIENT_PROTOCOL_41 | self::CLIENT_SECURE_CONNECTION;
 
-		$this->writeWatcher = $this->reactor->onWritable($this->socket, [$this, "onWrite"]);
-		$this->reactor->disable($this->writeWatcher);
+		$this->writeWatcher = $this->reactor->onWritable($this->socket, [$this, "onWrite"], $enableNow = false);
 	}
 
 	/** @return Future */
@@ -627,25 +626,25 @@ class Connection {
 	}
 
 	/** @see 14.6.2 COM_QUIT */
-	public function closeConnection($future) {
+	public function closeConnection($future = null) {
 		$this->sendPacket("\x01");
 		$this->connectionState = self::QUITTING;
-		$this->futures[] = $future;
+		return $this->futures[] = $future ?: new Future($this->reactor);
 	}
 
 	/** @see 14.6.3 COM_INIT_DB */
-	public function useDb($future, $db) {
+	public function useDb($db, $future = null) {
 		$this->oldDb = $this->db;
 		$this->db = $db;
 		$this->sendPacket("\x02$db");
-		$this->futures[] = $future;
+		return $this->futures[] = $future ?: new Future($this->reactor);
 	}
 
 	/** @see 14.6.4 COM_QUERY */
-	public function query($future, $query) {
+	public function query($query, $future = null) {
 		$this->seqId = -1;
 		$this->sendPacket("\x03$query");
-		$this->futures[] = $future;
+		return $this->futures[] = $future ?: new Future($this->reactor);
 	}
 
 	public function onRead() {

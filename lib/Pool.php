@@ -27,7 +27,7 @@ class Pool {
 		$this->user = $user;
 		$this->pass = $pass;
 		$this->db = $db;
-		$this->virtualConnection = new VirtualConnection;
+		$this->virtualConnection = new VirtualConnection($this->reactor);
 		$this->addConnection();
 	}
 
@@ -63,9 +63,6 @@ class Pool {
 	}
 
 	public function query($query) {
-		$future = new Future();
-		$conn = $this->getReadyConnection();
-		$conn->query($future, $query);
-		return $future;
+		return $this->getReadyConnection()->query($query);
 	}
 }
