@@ -1,0 +1,82 @@
+<?php
+
+namespace Mysql;
+
+use Amp\Future;
+use Nbsock\Connector;
+
+/**
+ * @TODO limit?
+ */
+
+class Pool {
+	private $host;
+	private $db;
+	private $user;
+	private $connector;
+	private $connections = [];
+	private $ready = [];
+	private $connectionFuture;
+	private $virtualConnection;
+
+	public function __construct($host, $user, $pass, $db = null, \Amp\Reactor $reactor = null) {
+		$this->reactor = $reactor ?: \Amp\reactor();
+		$this->connector = new Connector($this->reactor);
+		$this->host = $host;
+		$this->resolvedHost = "tcp://$host:3306"; // @TODO allow full hosts with port and protocol...
+		$this->user = $user;
+		$this->pass = $pass;
+		$this->db = $db;
+		$this->virtualConnection = new VirtualConnection;
+		$this->addConnection();
+	}
+
+	private function addConnection() {
+		$this->connections[] = $conn = new Connection($this->reactor, $this->connector, $this->host, $this->resolvedHost, $this->user, $this->pass, $this->db);
+		$this->connectionFuture = new Future($this->reactor);
+		$conn->connect($this->connectionFuture);
+		$this->addReady($this->connectionFuture, $conn);
+	}
+
+	private function addReady(Future $future, &$conn) {
+		return $future->when(function () use (&$conn) {
+			$this->ready($conn);
+		});
+	}
+
+	private function ready($conn) {
+		if (list(, $method, $args) = $call = $this->virtualConnection->getCall()) {
+			$call[0] = &$conn; /* reference to addReady connection */
+			call_user_func_array([$conn, $method], $args);
+		} else {
+			$this->ready[] = $conn;
+		}
+	}
+
+	public function init() {
+		return $this->connectionFuture;
+	}
+
+	/** @return Connection */
+	protected function &getReadyConnection() {
+		if (count($this->ready) < 2) {
+			$this->addConnection();
+		}
+
+		if (list($key, $conn) = current($this->ready)) {
+			unset($this->ready[$key]);
+			return $conn;
+		}
+
+		$this->virtualConnection->connRef = &$this->virtualConnection;
+		return $this->virtualConnection->connRef;
+	}
+
+	public function query($query) {
+		$future = new Future();
+		$conn = &$this->getReadyConnection();
+		$this->addReady($future, $conn);
+		$conn->query($future, $query);
+		return $future;
+	}
+}

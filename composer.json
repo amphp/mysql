@@ -1,0 +1,20 @@
+{
+	"name": "amphp/amp-mysql",
+	"description": "description_text",
+	"minimum-stability": "dev",
+	"require": {
+		"amphp/amp": "~0.12",
+		"rdlowrey/nbsock": "~0.4"
+	},
+	"authors": [
+		{
+			"name": "Bob Weinand",
+			"email": "bobwei9@hotmail.com"
+		}
+	],
+	"autoload": {
+		"psr-4": {
+			"Mysql\\": "lib/"
+		}
+	}
+}
