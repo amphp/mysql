@@ -13,6 +13,7 @@ use Nbsock\Connector;
  * COM_CHANGE_USER
  * 14.3 alternative auths
  * 14.4 Compression
+ * option for exceptions
  */
 
 class Connection {
@@ -40,6 +41,7 @@ class Connection {
 
 	private $reactor;
 	private $connector;
+	private $ready;
 	private $futures = [];
 	private $resultSet = null;
 	private $resultSetMethod;
@@ -94,7 +96,7 @@ class Connection {
 	const READY = 2;
 	const QUITTING = 3;
 
-	public function __construct(Reactor $reactor, Connector $connector, $host, $resolvedHost, $user, $pass, $db = null) {
+	public function __construct(Reactor $reactor, Connector $connector, callable $ready, $host, $resolvedHost, $user, $pass, $db = null) {
 		$this->reactor = $reactor;
 		$this->connector = $connector;
 		$this->host = $host;
@@ -102,6 +104,12 @@ class Connection {
 		$this->user = $user;
 		$this->pass = $pass;
 		$this->db = $db;
+		$this->ready = $ready;
+	}
+
+	private function ready() {
+		$cb = $this->ready;
+		$cb();
 	}
 
 	public function connect(Future $future) {
@@ -174,6 +182,7 @@ class Connection {
 		finished: {
 			if ($this->connectionState == self::READY) {
 				// normal error
+				$this->ready();
 				$this->getFuture()->succeed(false);
 			} elseif ($this->connectionState == self::ESTABLISHED) {
 				// connection failure
@@ -237,7 +246,7 @@ class Connection {
 			while ($len < $sessionStateLen) {
 				$data = $this->decodeString(substr($sessionState, $len + 1), $datalen);
 
-				switch ($this->decode_int8(substr($sessionState, $len))) {
+				switch ($type = $this->decode_int8(substr($sessionState, $len))) {
 					case SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES:
 						$this->sessionState[SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES][$this->decodeString($data, $intlen, $strlen)] = $this->decodeString(substr($data, $intlen + $strlen));
 						break;
@@ -264,6 +273,7 @@ class Connection {
 
 	private function handleOk() {
 		$this->parseOk();
+		$this->ready();
 		$this->getFuture()->succeed(true);
 	}
 
@@ -296,6 +306,7 @@ class Connection {
 
 	private function handleEof() {
 		$this->parseEof();
+		$this->ready();
 		$this->getFuture()->succeed(true);
 	}
 
@@ -359,7 +370,7 @@ class Connection {
 		read_capability_flags2: {
 			$this->serverCapabilities += $this->decode_int16(substr($this->packet, $off)) << 32;
 			$off += 2;
-			goto get_plugin_auth_data;
+			// goto get_plugin_auth_data;
 		}
 
 		get_plugin_auth_data: {
@@ -585,14 +596,16 @@ class Connection {
 
 	/** @see 14.6.4.1.1.3 Resultset Row */
 	private function handleResultsetRow() {
-		switch (ord($this->packet)) {
+		switch ($type = ord($this->packet)) {
 			case self::OK_PACKET:
 				$this->parseOk();
-				$this->parseCallback = null;
-				return;
+				/* intentional fall through */
 			case self::EOF_PACKET:
-				$this->parseEof();
+				if ($type == self::EOF_PACKET) {
+					$this->parseEof();
+				}
 				$this->parseCallback = null;
+				$this->ready();
 				$this->resultSetMethod("updateState", ResultSet::ROWS_FETCHED);
 				return;
 		}

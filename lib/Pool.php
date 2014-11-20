@@ -32,21 +32,13 @@ class Pool {
 	}
 
 	private function addConnection() {
-		$this->connections[] = $conn = new Connection($this->reactor, $this->connector, $this->host, $this->resolvedHost, $this->user, $this->pass, $this->db);
+		$this->connections[] = $conn = new Connection($this->reactor, $this->connector, function () use (&$conn) { $this->ready($conn); }, $this->host, $this->resolvedHost, $this->user, $this->pass, $this->db);
 		$this->connectionFuture = new Future($this->reactor);
 		$conn->connect($this->connectionFuture);
-		$this->addReady($this->connectionFuture, $conn);
-	}
-
-	private function addReady(Future $future, &$conn) {
-		return $future->when(function () use (&$conn) {
-			$this->ready($conn);
-		});
 	}
 
 	private function ready($conn) {
-		if (list(, $method, $args) = $call = $this->virtualConnection->getCall()) {
-			$call[0] = &$conn; /* reference to addReady connection */
+		if (list($method, $args) = $call = $this->virtualConnection->getCall()) {
 			call_user_func_array([$conn, $method], $args);
 		} else {
 			$this->ready[] = $conn;
@@ -68,14 +60,12 @@ class Pool {
 			return $conn;
 		}
 
-		$this->virtualConnection->connRef = &$this->virtualConnection;
-		return $this->virtualConnection->connRef;
+		return $this->virtualConnection;
 	}
 
 	public function query($query) {
 		$future = new Future();
-		$conn = &$this->getReadyConnection();
-		$this->addReady($future, $conn);
+		$conn = $this->getReadyConnection();
 		$conn->query($future, $query);
 		return $future;
 	}
