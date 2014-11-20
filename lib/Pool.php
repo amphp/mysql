@@ -33,8 +33,7 @@ class Pool {
 
 	private function addConnection() {
 		$this->connections[] = $conn = new Connection($this->reactor, $this->connector, function () use (&$conn) { $this->ready($conn); }, $this->host, $this->resolvedHost, $this->user, $this->pass, $this->db);
-		$this->connectionFuture = new Future($this->reactor);
-		$conn->connect($this->connectionFuture);
+		$this->connectionFuture = $conn->connect();
 	}
 
 	private function ready($conn) {

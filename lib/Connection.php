@@ -112,9 +112,9 @@ class Connection {
 		$cb();
 	}
 
-	public function connect(Future $future) {
-		$this->inBuf = "";
-		return $this->connector->connect($this->resolvedHost)->when(function ($error, $socket) use ($future) {
+	public function connect() {
+		$future = new Future($this->reactor);
+		$this->connector->connect($this->resolvedHost)->when(function ($error, $socket) use ($future) {
 			if ($error) {
 				$future->fail($error);
 			} else {
@@ -123,6 +123,7 @@ class Connection {
 				$this->futures[] = $future;
 			}
 		});
+		return $future;
 	}
 
 	public function onInit() {
