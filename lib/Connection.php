@@ -3,6 +3,7 @@
 namespace Mysql;
 use Amp\Future;
 use Amp\Reactor;
+use Amp\Success;
 use Nbsock\Connector;
 
 /* @TODO
@@ -79,6 +80,9 @@ class Connection {
 	const CLIENT_PROTOCOL_41 = 0x00000200;
 	const CLIENT_TRANSACTIONS = 0x00002000;
 	const CLIENT_SECURE_CONNECTION = 0x00008000;
+	const CLIENT_MULTI_STATEMENTS = 0x00010000;
+	const CLIENT_MULTI_RESULTS = 0x00020000;
+	const CLIENT_PS_MULTI_RESULTS = 0x00040000;
 	const CLIENT_PLUGIN_AUTH = 0x00080000;
 	const CLIENT_CONNECT_ATTRS = 0x00100000;
 	const CLIENT_SESSION_TRACK = 0x00800000;
@@ -139,7 +143,7 @@ class Connection {
 
 	private function established() {
 		// @TODO flags to use?
-		$this->capabilities |= self::CLIENT_SESSION_TRACK | self::CLIENT_TRANSACTIONS | self::CLIENT_PROTOCOL_41 | self::CLIENT_SECURE_CONNECTION;
+		$this->capabilities |= self::CLIENT_SESSION_TRACK | self::CLIENT_TRANSACTIONS | self::CLIENT_PROTOCOL_41 | self::CLIENT_SECURE_CONNECTION | self::CLIENT_MULTI_RESULTS | self::CLIENT_PS_MULTI_RESULTS | self::CLIENT_MULTI_STATEMENTS;
 
 		$this->writeWatcher = $this->reactor->onWritable($this->socket, [$this, "onWrite"], $enableNow = false);
 	}
@@ -214,9 +218,6 @@ class Connection {
 
 		get_status_flags: {
 			$this->statusFlags = $this->decode_int16(substr($this->packet, $off));
-			if ($this->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
-				$this->parseCallback = [$this, "handleQuery"];
-			}
 			$off += 2;
 			// goto get_warning_count;
 		}
@@ -293,9 +294,6 @@ class Connection {
 
 		get_eof_status_flags: {
 			$this->statusFlags = $this->decode_int16(substr($this->packet, $off));
-			if ($this->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
-				$this->parseCallback = [$this, "handleQuery"];
-			}
 			// goto finished;
 		}
 
@@ -368,7 +366,7 @@ class Connection {
 		}
 
 		read_capability_flags2: {
-			$this->serverCapabilities += $this->decode_int16(substr($this->packet, $off)) << 32;
+			$this->serverCapabilities += $this->decode_int16(substr($this->packet, $off)) << 16;
 			$off += 2;
 			// goto get_plugin_auth_data;
 		}
@@ -437,7 +435,7 @@ class Connection {
 	/** @see 14.6.4.1 COM_QUERY Response */
 	private function handleQuery() {
 		$this->getFuture()->succeed($resultSet = new ResultSet($this->reactor, ord($this->packet)));
-		$this->resultSet = \Closure::bind(function &($prop, $val = NAN) { if (!is_nan($val)) $this->prop = $val; return $this->$prop; }, $resultSet, ResultSet::class);
+		$this->resultSet = \Closure::bind(function &($prop, $val = NAN) { if (!@is_nan($val)) $this->prop = $val; return $this->$prop; }, $resultSet, ResultSet::class);
 		$this->resultSetMethod = \Closure::bind(function &($method, $args) { call_user_func_array([$this, $method], $args); }, $resultSet, ResultSet::class);
 		$this->parseCallback = [$this, "handleColumnDefinition"];
 	}
@@ -604,7 +602,18 @@ class Connection {
 				if ($type == self::EOF_PACKET) {
 					$this->parseEof();
 				}
-				$this->parseCallback = null;
+				$future = &$this->resultSet("next");
+				if ($this->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
+					$this->parseCallback = [$this, "handleQuery"];
+					$this->futures[] = $future ?: $future = new Future($this->reactor);
+				} else {
+					if ($future) {
+						$future->succeed(null);
+					} else {
+						$future = new Success(null);
+					}
+					$this->parseCallback = null;
+				}
 				$this->ready();
 				$this->resultSetMethod("updateState", ResultSet::ROWS_FETCHED);
 				return;
@@ -983,9 +992,6 @@ class Connection {
 		}
 
 		more_data_needed: {
-			unset($this->reactor, $this->futures, $this->connector);
-			var_dump($this);
-			die();
 			return NULL;
 		}
 	}
