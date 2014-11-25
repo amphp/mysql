@@ -39,6 +39,7 @@ class Connection {
 	private $watcherEnabled = false;
 	private $authPluginDataLen;
 	private $parseCallback = null;
+	private $packetCallback = null;
 
 	private $reactor;
 	private $connector;
@@ -141,18 +142,101 @@ class Connection {
 		$this->onRead();
 	}
 
-	private function established() {
-		// @TODO flags to use?
-		$this->capabilities |= self::CLIENT_SESSION_TRACK | self::CLIENT_TRANSACTIONS | self::CLIENT_PROTOCOL_41 | self::CLIENT_SECURE_CONNECTION | self::CLIENT_MULTI_RESULTS | self::CLIENT_PS_MULTI_RESULTS | self::CLIENT_MULTI_STATEMENTS;
-
-		$this->writeWatcher = $this->reactor->onWritable($this->socket, [$this, "onWrite"], $enableNow = false);
-	}
-
 	/** @return Future */
 	private function getFuture() {
 		list($key, $future) = each($this->futures);
 		unset($this->futures[$key]);
 		return $future;
+	}
+
+	private function startCommand($future = null) {
+		$this->seqId = -1;
+		return $this->futures[] = $future ?: new Future($this->reactor);
+	}
+
+	/** @see 14.6.2 COM_QUIT */
+	public function closeConnection($future = null) {
+		$this->sendPacket("\x01");
+		$this->connectionState = self::QUITTING;
+		return $this->startCommand($future);
+	}
+
+	/** @see 14.6.3 COM_INIT_DB */
+	public function useDb($db, $future = null) {
+		$this->oldDb = $this->db;
+		$this->db = $db;
+		$this->sendPacket("\x02$db");
+		return $this->startCommand($future);
+	}
+
+	/** @see 14.6.4 COM_QUERY */
+	public function query($query, $future = null) {
+		$this->sendPacket("\x03$query");
+		$this->packetCallback = [$this, "handleQuery"];
+		return $this->startCommand($future);
+	}
+
+	/** @see 14.6.5 COM_FIELD_LIST */
+	public function listFields($table, $like = "%", $future = null) {
+		$this->sendPacket("\x04$table\0$like");
+		$this->parseCallback = [$this, "handleFieldlist"];
+		return $this->startCommand($future);
+	}
+
+	public function listAllFields($table, $like = "%", $future = null) {
+		if (!$future) {
+			$future = new Future($this->reactor);
+		}
+
+		$columns = [];
+		$when = function($error, $array) use (&$columns, &$when, $future) {
+			if ($error) {
+				$future->fail($error);
+				return;
+			}
+			if ($array === null) {
+				$future->succeed($columns);
+				return;
+			}
+			list($columns[], $promise) = $array;
+			$promise->when($when);
+		};
+		$this->listFields($table, $like)->when($when);
+		$this->seqId = -1;
+
+		return $future;
+	}
+
+	public function onRead() {
+		$this->inBuf .= $bytes = @fread($this->socket, $this->readGranularity);
+		if ($bytes != "") {
+			$len = strlen($bytes);
+
+			$this->readLen += $len;
+			$this->unreadlen = $this->inBuflen;
+			$this->inBuflen += $len;
+			try {
+				if ($this->parse() === true) {
+					//$this->handlePacket();
+				}
+			} catch (\Exception $e) {
+				foreach ($this->futures as $future) {
+					$future->fail($e);
+				}
+			}
+		} else {
+			// Gone away...
+			// @TODO restart connection; throw error? remove from ready Connections
+			var_dump("Gone away?!");
+			$this->closeSocket();
+		}
+	}
+
+	private function established() {
+		// @TODO flags to use?
+		$this->capabilities |= self::CLIENT_SESSION_TRACK | self::CLIENT_TRANSACTIONS | self::CLIENT_PROTOCOL_41 | self::CLIENT_SECURE_CONNECTION | self::CLIENT_MULTI_RESULTS | self::CLIENT_PS_MULTI_RESULTS | self::CLIENT_MULTI_STATEMENTS;
+
+		$this->writeWatcher = $this->reactor->onWritable($this->socket, [$this, "onWrite"], $enableNow = false);
 	}
 
 	/** @see 14.1.3.2 ERR-Packet */
@@ -434,18 +518,32 @@ class Connection {
 
 	/** @see 14.6.4.1 COM_QUERY Response */
 	private function handleQuery() {
-		$this->getFuture()->succeed($resultSet = new ResultSet($this->reactor, ord($this->packet)));
+		$this->getFuture()->succeed($resultSet = new ResultSet($this->reactor));
 		$this->resultSet = \Closure::bind(function &($prop, $val = NAN) { if (!@is_nan($val)) $this->prop = $val; return $this->$prop; }, $resultSet, ResultSet::class);
 		$this->resultSetMethod = \Closure::bind(function &($method, $args) { call_user_func_array([$this, $method], $args); }, $resultSet, ResultSet::class);
 		$this->parseCallback = [$this, "handleColumnDefinition"];
+		$this->resultSetMethod("setColumns", ord($this->packet));
 	}
 
-	/** @see 14.6.4.1.1.2 Column Defintion */
+	private function handleFieldList() {
+		if (ord($this->packet) == self::ERR_PACKET) {
+			$this->parseCallback = null;
+			$this->handleError();
+		} elseif (ord($this->packet) == self::EOF_PACKET) {
+			$this->parseCallback = null;
+			$this->parseEof();
+			$this->getFuture()->succeed(null);
+			$this->ready();
+		} else {
+			$this->getFuture()->succeed([$this->parseColumnDefinition(), $this->futures[] = new Future($this->reactor)]);
+		}
+	}
+
 	private function handleColumnDefinition() {
 		$toFetch = &$this->resultSet("columnsToFetch");
 		if (!$toFetch--) {
 			$this->resultSetMethod("updateState", ResultSet::COLUMNS_FETCHED);
-			if (ord($this->packet) == 0xff) {
+			if (ord($this->packet) == self::ERR_PACKET) {
 				$this->parseCallback = null;
 				$this->handleError();
 			} else {
@@ -453,12 +551,18 @@ class Connection {
 				if ($this->capabilities & self::CLIENT_DEPRECATE_EOF) {
 					$this->handleResultsetRow();
 				} else {
+					$this->parseEof();
 					// we don't need the EOF packet, skip!
 				}
 			}
 			return;
 		}
 
+		$this->resultSet("columns")[] = $this->parseColumnDefinition();
+	}
+
+	/** @see 14.6.4.1.1.2 Column Defintion */
+	private function parseColumnDefinition() {
 		$off = 0;
 
 		$column = [];
@@ -588,7 +692,7 @@ class Connection {
 		}
 
 		finished: {
-			$this->resultSet("columns")[] = $column;
+			return $column;
 		}
 	}
 
@@ -632,53 +736,6 @@ class Connection {
 			}
 		}
 		$this->resultSetMethod("rowFetched", $fields);
-	}
-
-	/** @see 14.6.2 COM_QUIT */
-	public function closeConnection($future = null) {
-		$this->sendPacket("\x01");
-		$this->connectionState = self::QUITTING;
-		return $this->futures[] = $future ?: new Future($this->reactor);
-	}
-
-	/** @see 14.6.3 COM_INIT_DB */
-	public function useDb($db, $future = null) {
-		$this->oldDb = $this->db;
-		$this->db = $db;
-		$this->sendPacket("\x02$db");
-		return $this->futures[] = $future ?: new Future($this->reactor);
-	}
-
-	/** @see 14.6.4 COM_QUERY */
-	public function query($query, $future = null) {
-		$this->seqId = -1;
-		$this->sendPacket("\x03$query");
-		return $this->futures[] = $future ?: new Future($this->reactor);
-	}
-
-	public function onRead() {
-		$this->inBuf .= $bytes = @fread($this->socket, $this->readGranularity);
-		if ($bytes != "") {
-			$len = strlen($bytes);
-
-			$this->readLen += $len;
-			$this->unreadlen = $this->inBuflen;
-			$this->inBuflen += $len;
-			try {
-				if ($this->parse() === true) {
-					//$this->handlePacket();
-				}
-			} catch (\Exception $e) {
-				foreach ($this->futures as $future) {
-					$future->fail($e);
-				}
-			}
-		} else {
-			// Gone away...
-			// @TODO restart connection; throw error? remove from ready Connections
-			var_dump("Gone away?!");
-			$this->closeSocket();
-		}
 	}
 
 	private function closeSocket() {
@@ -827,9 +884,11 @@ class Connection {
 					if ($this->writeWatcher === NULL) {
 						$this->established();
 						$this->handleHandshake();
+					} elseif ($this->packetCallback) {
+						$cb = $this->packetCallback;
+						$cb();
 					} else {
-						$this->handleQuery();
-//						throw new \UnexpectedValueException("Unexpected packet type: {$this->packetType}");
+						throw new \UnexpectedValueException("Unexpected packet type: {$this->packetType}");
 					}
 			}
 			goto finished;

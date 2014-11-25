@@ -23,9 +23,12 @@ class ResultSet {
 
 	const SINGLE_ROW_FETCH = 255;
 
-	public function __construct(\Amp\Reactor $reactor, $columns) {
-		$this->columnCount = $this->columnsToFetch = $columns;
+	public function __construct(\Amp\Reactor $reactor) {
 		$this->reactor = $reactor;
+	}
+
+	private function setColumns($columns) {
+		$this->columnCount = $this->columnsToFetch = $columns;
 	}
 
 	public function getFields() {

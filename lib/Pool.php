@@ -65,4 +65,12 @@ class Pool {
 	public function query($query) {
 		return $this->getReadyConnection()->query($query);
 	}
+
+	public function listFields($table, $like = "%") {
+		return $this->getReadyConnection()->listFields($table, $like);
+	}
+
+	public function listAllFields($table, $like = "%") {
+		return $this->getReadyConnection()->listAllFields($table, $like);
+	}
 }
