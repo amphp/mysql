@@ -97,4 +97,8 @@ class Pool {
 	public function processInfo() {
 		return $this->getReadyConnection()->processInfo();
 	}
+
+	public function killProcess($process) {
+		return $this->getReadyConnection()->killProcess($process);
+	}
 }

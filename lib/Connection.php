@@ -245,6 +245,12 @@ class Connection {
 		return $this->startCommand($future);
 	}
 
+	/* @see 14.6.13 COM_PROCESS_KILL */
+	public function killProcess($process, $future = null) {
+		$this->sendPacket("\x0c$process");
+		return $this->startCommand($future);
+	}
+
 	public function onRead() {
 		$this->inBuf .= $bytes = @fread($this->socket, $this->readGranularity);
 		if ($bytes != "") {
