@@ -89,4 +89,8 @@ class Pool {
 	public function shutdown() {
 		return $this->getReadyConnection()->shutdown();
 	}
+
+	public function statistics() {
+		return $this->getReadyConnection()->statistics();
+	}
 }

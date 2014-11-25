@@ -183,6 +183,30 @@ class Connection {
 		return $this->startCommand($future);
 	}
 
+	public function listAllFields($table, $like = "%", $future = null) {
+		if (!$future) {
+			$future = new Future($this->reactor);
+		}
+
+		$columns = [];
+		$when = function($error, $array) use (&$columns, &$when, $future) {
+			if ($error) {
+				$future->fail($error);
+				return;
+			}
+			if ($array === null) {
+				$future->succeed($columns);
+				return;
+			}
+			list($columns[], $promise) = $array;
+			$promise->when($when);
+		};
+		$this->listFields($table, $like)->when($when);
+		$this->seqId = -1;
+
+		return $future;
+	}
+
 	/* @see 14.6.6 COM_CREATE_DB */
 	public function createDatabase($db, $future = null) {
 		$this->sendPacket("\x05$db");
@@ -207,28 +231,11 @@ class Connection {
 		return $this->startCommand($future);
 	}
 
-	public function listAllFields($table, $like = "%", $future = null) {
-		if (!$future) {
-			$future = new Future($this->reactor);
-		}
-
-		$columns = [];
-		$when = function($error, $array) use (&$columns, &$when, $future) {
-			if ($error) {
-				$future->fail($error);
-				return;
-			}
-			if ($array === null) {
-				$future->succeed($columns);
-				return;
-			}
-			list($columns[], $promise) = $array;
-			$promise->when($when);
-		};
-		$this->listFields($table, $like)->when($when);
-		$this->seqId = -1;
-
-		return $future;
+	/** @see 14.6.10 COM_STATISTICS */
+	public function statistics($future = null) {
+		$this->sendPacket("\x09");
+		$this->parseCallback = [$this, "readStatistics"];
+		return $this->startCommand($future);
 	}
 
 	public function onRead() {
@@ -760,6 +767,12 @@ class Connection {
 			}
 		}
 		$this->resultSetMethod("rowFetched", $fields);
+	}
+
+	private function readStatistics() {
+		$this->getFuture()->succeed($this->packet);
+		$this->ready();
+		$this->parseCallback = null;
 	}
 
 	private function closeSocket() {
