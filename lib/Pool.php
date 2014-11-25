@@ -81,4 +81,8 @@ class Pool {
 	public function dropDatabase($db) {
 		return $this->getReadyConnection()->dropDatabase($db);
 	}
+
+	public function refresh($subcommand) {
+		return $this->getReadyConnection()->refresh($subcommand);
+	}
 }

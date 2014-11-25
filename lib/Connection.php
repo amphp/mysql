@@ -189,9 +189,15 @@ class Connection {
 		return $this->startCommand($future);
 	}
 
-	/* @see 14.6.6 COM_CREATE_DB */
+	/* @see 14.6.7 COM_DROP_DB */
 	public function dropDatabase($db, $future = null) {
 		$this->sendPacket("\x06$db");
+		return $this->startCommand($future);
+	}
+
+	/* @see 14.6.8 COM_REFRESH */
+	public function refresh($subcommand, $future = null) {
+		$this->sendPacket("\x06$subcommand");
 		return $this->startCommand($future);
 	}
 
