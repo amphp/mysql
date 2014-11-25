@@ -73,4 +73,8 @@ class Pool {
 	public function listAllFields($table, $like = "%") {
 		return $this->getReadyConnection()->listAllFields($table, $like);
 	}
+
+	public function createDatabase($db) {
+		return $this->getReadyConnection()->createDatabase($db);
+	}
 }

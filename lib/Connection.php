@@ -183,6 +183,12 @@ class Connection {
 		return $this->startCommand($future);
 	}
 
+	/* @see 14.6.6 COM_CREATE_DB */
+	public function createDatabase($db, $future = null) {
+		$this->sendPacket("\x05$db");
+		return $this->startCommand($future);
+	}
+
 	public function listAllFields($table, $like = "%", $future = null) {
 		if (!$future) {
 			$future = new Future($this->reactor);
