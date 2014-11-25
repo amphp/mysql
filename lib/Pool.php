@@ -93,4 +93,8 @@ class Pool {
 	public function statistics() {
 		return $this->getReadyConnection()->statistics();
 	}
+
+	public function processInfo() {
+		return $this->getReadyConnection()->processInfo();
+	}
 }

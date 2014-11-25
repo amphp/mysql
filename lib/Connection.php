@@ -238,6 +238,13 @@ class Connection {
 		return $this->startCommand($future);
 	}
 
+	/** @see 14.6.11 COM_PROCESS_INFO */
+	public function processInfo($future = null) {
+		$this->sendPacket("\x0a");
+		$this->packetCallback = [$this, "handleQuery"];
+		return $this->startCommand($future);
+	}
+
 	public function onRead() {
 		$this->inBuf .= $bytes = @fread($this->socket, $this->readGranularity);
 		if ($bytes != "") {
@@ -547,7 +554,7 @@ class Connection {
 		return $cb($method, $args);
 	}
 
-	/** @see 14.6.4.1 COM_QUERY Response */
+	/** @see 14.6.4.1.1 Text Resultset */
 	private function handleQuery() {
 		$this->getFuture()->succeed($resultSet = new ResultSet($this->reactor));
 		$this->resultSet = \Closure::bind(function &($prop, $val = NAN) { if (!@is_nan($val)) $this->prop = $val; return $this->$prop; }, $resultSet, ResultSet::class);
