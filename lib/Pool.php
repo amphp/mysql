@@ -77,4 +77,8 @@ class Pool {
 	public function createDatabase($db) {
 		return $this->getReadyConnection()->createDatabase($db);
 	}
+
+	public function dropDatabase($db) {
+		return $this->getReadyConnection()->dropDatabase($db);
+	}
 }
