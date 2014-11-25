@@ -85,4 +85,8 @@ class Pool {
 	public function refresh($subcommand) {
 		return $this->getReadyConnection()->refresh($subcommand);
 	}
+
+	public function shutdown() {
+		return $this->getReadyConnection()->shutdown();
+	}
 }

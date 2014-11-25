@@ -197,7 +197,13 @@ class Connection {
 
 	/* @see 14.6.8 COM_REFRESH */
 	public function refresh($subcommand, $future = null) {
-		$this->sendPacket("\x06$subcommand");
+		$this->sendPacket("\x07$subcommand");
+		return $this->startCommand($future);
+	}
+
+	/* @see 14.6.9 COM_SHUTDOWN */
+	public function shutdown($future = null) {
+		$this->sendPacket("\x08\x00"); /* SHUTDOWN_DEFAULT / SHUTDOWN_WAIT_ALL_BUFFERS, only one in use */
 		return $this->startCommand($future);
 	}
 
