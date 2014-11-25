@@ -251,6 +251,12 @@ class Connection {
 		return $this->startCommand($future);
 	}
 
+	/* @see 14.6.14 COM_DEBUG */
+	public function debugStdout($future = null) {
+		$this->sendPacket("\x0d");
+		return $this->startCommand($future);
+	}
+
 	public function onRead() {
 		$this->inBuf .= $bytes = @fread($this->socket, $this->readGranularity);
 		if ($bytes != "") {

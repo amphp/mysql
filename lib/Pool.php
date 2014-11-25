@@ -101,4 +101,8 @@ class Pool {
 	public function killProcess($process) {
 		return $this->getReadyConnection()->killProcess($process);
 	}
+
+	public function debugStdout() {
+		return $this->getReadyConnection()->debugStdout();
+	}
 }
