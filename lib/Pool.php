@@ -105,4 +105,18 @@ class Pool {
 	public function debugStdout() {
 		return $this->getReadyConnection()->debugStdout();
 	}
+
+	public function ping() {
+		return $this->getReadyConnection()->ping();
+	}
+
+	/* broken...
+	public function changeUser($user, $pass, $db = null) {
+		return $this->getReadyConnection()->changeUser($user, $pass, $db);
+	}
+	*/
+
+	public function resetConnection() {
+		return $this->getReadyConnection()->resetConnection();
+	}
 }

@@ -207,25 +207,25 @@ class Connection {
 		return $future;
 	}
 
-	/* @see 14.6.6 COM_CREATE_DB */
+	/** @see 14.6.6 COM_CREATE_DB */
 	public function createDatabase($db, $future = null) {
 		$this->sendPacket("\x05$db");
 		return $this->startCommand($future);
 	}
 
-	/* @see 14.6.7 COM_DROP_DB */
+	/** @see 14.6.7 COM_DROP_DB */
 	public function dropDatabase($db, $future = null) {
 		$this->sendPacket("\x06$db");
 		return $this->startCommand($future);
 	}
 
-	/* @see 14.6.8 COM_REFRESH */
+	/** @see 14.6.8 COM_REFRESH */
 	public function refresh($subcommand, $future = null) {
 		$this->sendPacket("\x07$subcommand");
 		return $this->startCommand($future);
 	}
 
-	/* @see 14.6.9 COM_SHUTDOWN */
+	/** @see 14.6.9 COM_SHUTDOWN */
 	public function shutdown($future = null) {
 		$this->sendPacket("\x08\x00"); /* SHUTDOWN_DEFAULT / SHUTDOWN_WAIT_ALL_BUFFERS, only one in use */
 		return $this->startCommand($future);
@@ -245,15 +245,50 @@ class Connection {
 		return $this->startCommand($future);
 	}
 
-	/* @see 14.6.13 COM_PROCESS_KILL */
+	/** @see 14.6.13 COM_PROCESS_KILL */
 	public function killProcess($process, $future = null) {
 		$this->sendPacket("\x0c$process");
 		return $this->startCommand($future);
 	}
 
-	/* @see 14.6.14 COM_DEBUG */
+	/** @see 14.6.14 COM_DEBUG */
 	public function debugStdout($future = null) {
 		$this->sendPacket("\x0d");
+		return $this->startCommand($future);
+	}
+
+	/** @see 14.6.15 COM_PING */
+	public function ping($future = null) {
+		$this->sendPacket("\x0d");
+		return $this->startCommand($future);
+	}
+
+	/** @see 14.6.18 COM_CHANGE_USER */
+	/* @TODO broken, my test server doesn't support that command, can't test now
+	public function changeUser($user, $pass, $db = null, $future = null) {
+		$this->user = $user;
+		$this->pass = $pass;
+		$this->db = $db;
+		$payload = "\x11";
+
+		$payload .= "$user\0";
+		$auth = $this->secureAuth($this->pass, $this->authPluginData);
+		if ($this->capabilities & self::CLIENT_SECURE_CONNECTION) {
+			$payload .= ord($auth).$auth;
+		} else {
+			$payload .= "$auth\0";
+		}
+		$payload .= "$db\0";
+
+		$this->sendPacket($payload);
+		$this->parseCallback = [$this, "authSwitchRequest"];
+		return $this->startCommand($future);
+	}
+	*/
+
+	/** @see 14.6.19 COM_RESET_CONNECTION */
+	public function resetConnection($future = null) {
+		$this->sendPacket("\x1f");
 		return $this->startCommand($future);
 	}
 
@@ -1111,6 +1146,31 @@ class Connection {
 		}
 	}
 
+	private function secureAuth($pass, $scramble) {
+		$hash = sha1($pass, 1);
+		return $hash ^ sha1(substr($scramble, 0, 20) . sha1($hash, 1), 1);
+	}
+
+	private function authSwitchRequest() {
+		$this->parseCallback = null;
+		switch (ord($this->packet)) {
+			case 0xfe:
+				if ($this->packetSize == 1) {
+					break;
+				}
+				$len = strpos($this->packet, "\0");
+				$pluginName = substr($this->packet, 0, $len); // @TODO mysql_native_pass only now...
+				$authPluginData = substr($this->packet, $len + 1);
+				$this->sendPacket($this->secureAuth($this->pass, $authPluginData));
+				break;
+			case self::ERR_PACKET:
+				$this->handleError();
+				return;
+			default:
+				throw new \UnexpectedValueException("AuthSwitchRequest: Expecting 0xfe (or ERR_Packet), got 0x".dechex(ord($this->packet)));
+		}
+	}
+
 	/**
 	 * @see 14.2.5 Connection Phase Packets
 	 * @see 14.3 Authentication Method
@@ -1131,8 +1191,7 @@ class Connection {
 		if ($this->capabilities & self::CLIENT_PLUGIN_AUTH) {
 			$auth = ""; // @TODO AUTH
 		} elseif ($this->pass !== "") {
-			$hash = sha1($this->pass, 1);
-			$auth = $hash ^ sha1(substr($this->authPluginData, 0, 20) . sha1($hash, 1), 1);
+			$auth = $this->secureAuth($this->pass, $this->authPluginData);
 		} else {
 			$auth = "";
 		}
