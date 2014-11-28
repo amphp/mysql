@@ -22,13 +22,28 @@ class Pool {
 	public function __construct($host, $user, $pass, $db = null, \Amp\Reactor $reactor = null) {
 		$this->reactor = $reactor ?: \Amp\reactor();
 		$this->connector = new Connector($this->reactor);
-		$this->host = $host;
-		$this->resolvedHost = "tcp://$host:3306"; // @TODO allow full hosts with port and protocol...
+		$this->resolveHost($host);
 		$this->user = $user;
 		$this->pass = $pass;
 		$this->db = $db;
 		$this->virtualConnection = new VirtualConnection($this->reactor);
 		$this->addConnection();
+	}
+
+	private function resolveHost($host) {
+		$index = strpos($host, ':');
+
+		if($index === false) {
+			$this->host = $host;
+			$this->resolvedHost = "tcp://$host:3306";
+		} else if($index === 0) {
+			$this->host = "localhost";
+			$this->resolvedHost = "tcp://localhost:" . (int) substr($host, 1);
+		} else {
+			list($host, $port) = explode(':', $host, 2);
+			$this->host = $host;
+			$this->resolvedHost = "tcp://$host:" . (int) $port;
+		}
 	}
 
 	private function addConnection() {
