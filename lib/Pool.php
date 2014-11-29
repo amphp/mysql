@@ -2,9 +2,6 @@
 
 namespace Mysql;
 
-use Amp\Future;
-use Nbsock\Connector;
-
 /**
  * @TODO limit?
  */
@@ -21,7 +18,7 @@ class Pool {
 
 	public function __construct($host, $user, $pass, $db = null, \Amp\Reactor $reactor = null) {
 		$this->reactor = $reactor ?: \Amp\reactor();
-		$this->connector = new Connector($this->reactor);
+		$this->connector = new \Nbsock\Connector($this->reactor);
 		$this->resolveHost($host);
 		$this->user = $user;
 		$this->pass = $pass;
@@ -125,7 +122,7 @@ class Pool {
 		return $this->getReadyConnection()->ping();
 	}
 
-	/* broken...
+	/* @TODO changeUser broken...
 	public function changeUser($user, $pass, $db = null) {
 		return $this->getReadyConnection()->changeUser($user, $pass, $db);
 	}
@@ -133,5 +130,9 @@ class Pool {
 
 	public function resetConnection() {
 		return $this->getReadyConnection()->resetConnection();
+	}
+
+	public function prepare($query) {
+		return $this->getReadyConnection()->prepare($query);
 	}
 }

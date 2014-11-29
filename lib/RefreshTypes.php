@@ -1,5 +1,7 @@
 <?php
 
+namespace Mysql;
+
 class RefreshTypes {
 	const REFRESH_GRANT = 0x01;
 	const REFRESH_LOG = 0x02;

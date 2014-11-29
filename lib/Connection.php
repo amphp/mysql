@@ -15,6 +15,7 @@ use Nbsock\Connector;
  * 14.3 alternative auths
  * 14.4 Compression
  * option for exceptions
+ * large packets (>= 1 << 24 bytes)
  */
 
 class Connection {
@@ -45,6 +46,7 @@ class Connection {
 	private $connector;
 	private $ready;
 	private $futures = [];
+	private $onReady = [];
 	private $resultSet = null;
 	private $resultSetMethod;
 	private $host;
@@ -113,8 +115,15 @@ class Connection {
 	}
 
 	private function ready() {
-		$cb = $this->ready;
-		$cb();
+		if (empty($this->futures)) {
+			if (empty($this->onReady)) {
+				$cb = $this->ready;
+			} else {
+				list($key, $cb) = each($this->onReady);
+				unset($this->onReady[$key]);
+			}
+			$cb();
+		}
 	}
 
 	public function connect() {
@@ -147,6 +156,14 @@ class Connection {
 		list($key, $future) = each($this->futures);
 		unset($this->futures[$key]);
 		return $future;
+	}
+
+	private function appendTask($callback) {
+		if ($this->packetCallback || $this->parseCallback || !empty($this->onReady)) {
+			$this->onReady[] = $callback;
+		} else {
+			$callback();
+		}
 	}
 
 	private function startCommand($future = null) {
@@ -292,6 +309,66 @@ class Connection {
 		return $this->startCommand($future);
 	}
 
+	/** @see 14.7.4 COM_STMT_PREPARE */
+	public function prepare($query, $future = null) {
+		$this->sendPacket("\x16$query");
+		$this->parseCallback = [$this, "handlePrepare"];
+		return $this->startCommand($future);
+	}
+
+	/** @see 14.7.5 COM_STMT_SEND_LONG_DATA */
+	public function bindParam($stmtId, $paramId, $data) {
+		$payload = "\x18";
+		$payload .= DataTypes::encode_int32($stmtId);
+		$payload .= DataTypes::encode_int16($paramId);
+		$payload .= $data;
+		$this->appendTask(function () use ($payload) {
+			$this->seqId = -1;
+			$this->sendPacket($payload);
+		});
+	}
+
+	/** @see 14.7.6 COM_STMT_EXECUTE */
+	// @TODO what to do with the prebound params?! (bindParam())
+	public function execute($stmtId, $data = []) {
+		$payload = "\x17";
+		$payload .= DataTypes::encode_int32($stmtId);
+		$payload .= chr(0); // cursor flag // @TODO cursor types?!
+		$payload .= DataTypes::encode_int32(1);
+		$params = count($data);
+		if ($params) {
+			$nullOff = strlen($payload);
+			$payload .= str_repeat("\0", ($params + 7) >> 3);
+			$bound = 0;
+			$types = "";
+			$values = "";
+			foreach (array_values($data) as $paramId => $param) {
+				if ($param === null) {
+					$payload[$nullOff + ($paramId >> 3)] |= 1 << ($paramId % 8);
+				} else {
+					$bound = 1;
+				}
+				list($unsigned, $type, $value) = DataTypes::encodeBinary($param);
+				$types .= chr($type);
+				$types .= $unsigned?"\x80":"\0";
+				$values .= $value;
+			}
+			$payload .= chr($bound);
+			if ($bound) {
+				$payload .= $types;
+				$payload .= $values;
+			}
+		}
+		$future = new Future($this->reactor);
+		$this->appendTask(function () use ($payload, &$future) {
+			$this->seqId = -1;
+			$this->futures[] = $future;
+			$this->sendPacket($payload);
+			$this->packetCallback = [$this, "handleExecute"];
+		});
+		return $future; // do not use $this->startCommand(), that might unexpectedly reset the seqId!
+	}
+
 	public function onRead() {
 		$this->inBuf .= $bytes = @fread($this->socket, $this->readGranularity);
 		if ($bytes != "") {
@@ -329,7 +406,7 @@ class Connection {
 		$off = 1;
 
 		err_packet: {
-			$this->errorCode = $this->decode_int16(substr($this->packet, $off, 2));
+			$this->errorCode = DataTypes::decode_int16(substr($this->packet, $off, 2));
 			$off += 2;
 			if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
 				// goto get_err_state;
@@ -353,10 +430,11 @@ class Connection {
 
 
 		finished: {
+			$this->packetCallback = $this->parseCallback = null;
 			if ($this->connectionState == self::READY) {
 				// normal error
-				$this->ready();
 				$this->getFuture()->succeed(false);
+				$this->ready();
 			} elseif ($this->connectionState == self::ESTABLISHED) {
 				// connection failure
 				$this->closeSocket();
@@ -370,13 +448,13 @@ class Connection {
 		$off = 1;
 
 		ok_packet: {
-			$this->affectedRows = $this->decodeInt(substr($this->packet, $off), $intlen);
+			$this->affectedRows = DataTypes::decodeInt(substr($this->packet, $off), $intlen);
 			$off += $intlen;
 			// goto get_last_insert_id;
 		}
 
 		get_last_insert_id: {
-			$this->insertId = $this->decodeInt(substr($this->packet, $off), $intlen);
+			$this->insertId = DataTypes::decodeInt(substr($this->packet, $off), $intlen);
 			$off += $intlen;
 			if ($this->capabilities & (self::CLIENT_PROTOCOL_41 | self::CLIENT_TRANSACTIONS)) {
 				// goto get_status_flags;
@@ -386,20 +464,20 @@ class Connection {
 		}
 
 		get_status_flags: {
-			$this->statusFlags = $this->decode_int16(substr($this->packet, $off));
+			$this->statusFlags = DataTypes::decode_int16(substr($this->packet, $off));
 			$off += 2;
 			// goto get_warning_count;
 		}
 
 		get_warning_count: {
-			$this->warnings = $this->decode_int16(substr($this->packet, $off));
+			$this->warnings = DataTypes::decode_int16(substr($this->packet, $off));
 			$off += 2;
 			// goto fetch_status_info;
 		}
 
 		fetch_status_info: {
 			if ($this->capabilities & self::CLIENT_SESSION_TRACK) {
-				$this->statusInfo = $this->decodeString(substr($this->packet, $off), $intlen, $strlen);
+				$this->statusInfo = DataTypes::decodeString(substr($this->packet, $off), $intlen, $strlen);
 				$off += $intlen + $strlen;
 				if ($this->statusFlags & StatusFlags::SERVER_SESSION_STATE_CHANGED) {
 					goto fetch_state_changes;
@@ -411,20 +489,20 @@ class Connection {
 		}
 
 		fetch_state_changes: {
-			$sessionState = $this->decodeString(substr($this->packet, $off), $intlen, $sessionStateLen);
+			$sessionState = DataTypes::decodeString(substr($this->packet, $off), $intlen, $sessionStateLen);
 			$len = 0;
 			while ($len < $sessionStateLen) {
-				$data = $this->decodeString(substr($sessionState, $len + 1), $datalen);
+				$data = DataTypes::decodeString(substr($sessionState, $len + 1), $datalen);
 
-				switch ($type = $this->decode_int8(substr($sessionState, $len))) {
+				switch ($type = DataTypes::decode_int8(substr($sessionState, $len))) {
 					case SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES:
-						$this->sessionState[SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES][$this->decodeString($data, $intlen, $strlen)] = $this->decodeString(substr($data, $intlen + $strlen));
+						$this->sessionState[SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES][DataTypes::decodeString($data, $intlen, $strlen)] = DataTypes::decodeString(substr($data, $intlen + $strlen));
 						break;
 					case SessionStateTypes::SESSION_TRACK_SCHEMA:
-						$this->sessionState[SessionStateTypes::SESSION_TRACK_SCHEMA] = $this->decodeString($data);
+						$this->sessionState[SessionStateTypes::SESSION_TRACK_SCHEMA] = DataTypes::decodeString($data);
 						break;
 					case SessionStateTypes::SESSION_TRACK_STATE_CHANGE:
-						$this->sessionState[SessionStateTypes::SESSION_TRACK_STATE_CHANGE] = $this->decodeString($data);
+						$this->sessionState[SessionStateTypes::SESSION_TRACK_STATE_CHANGE] = DataTypes::decodeString($data);
 						break;
 					default:
 						throw new \UnexpectedValueException("$type is not a valid mysql session state type");
@@ -443,8 +521,8 @@ class Connection {
 
 	private function handleOk() {
 		$this->parseOk();
-		$this->ready();
 		$this->getFuture()->succeed(true);
+		$this->ready();
 	}
 
 	/** @see 14.1.3.3 EOF-Packet */
@@ -453,7 +531,7 @@ class Connection {
 
 		eof_packet: {
 			if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
-				$this->warnings = $this->decode_int16(substr($this->packet, $off));
+				$this->warnings = DataTypes::decode_int16(substr($this->packet, $off));
 				$off += 2;
 				// goto get_eof_status_flags;
 			} else {
@@ -462,7 +540,7 @@ class Connection {
 		}
 
 		get_eof_status_flags: {
-			$this->statusFlags = $this->decode_int16(substr($this->packet, $off));
+			$this->statusFlags = DataTypes::decode_int16(substr($this->packet, $off));
 			// goto finished;
 		}
 
@@ -473,8 +551,8 @@ class Connection {
 
 	private function handleEof() {
 		$this->parseEof();
-		$this->ready();
 		$this->getFuture()->succeed(true);
+		$this->ready();
 	}
 
 	/** @see 14.2.5 Connection Phase Packets */
@@ -490,13 +568,13 @@ class Connection {
 		}
 
 		fetch_server_version: {
-			$this->serverVersion = $this->decodeNullString(substr($this->packet, $off), $len);
+			$this->serverVersion = DataTypes::decodeNullString(substr($this->packet, $off), $len);
 			$off += $len + 1;
 			// goto get_connection_id;
 		}
 
 		get_connection_id: {
-			$this->connectionId = $this->decode_int32(substr($this->packet, $off));
+			$this->connectionId = DataTypes::decode_int32(substr($this->packet, $off));
 			$off += 4;
 			goto read_auth_plugin_data1;
 		}
@@ -513,7 +591,7 @@ class Connection {
 		}
 
 		read_capability_flags1: {
-			$this->serverCapabilities = $this->decode_int16(substr($this->packet, $off));
+			$this->serverCapabilities = DataTypes::decode_int16(substr($this->packet, $off));
 			$off += 2;
 			if ($this->packetSize > $off) {
 				// goto charset;
@@ -529,13 +607,13 @@ class Connection {
 		}
 
 		handshake_status_flags: {
-			$this->statusFlags = $this->decode_int16(substr($this->packet, $off));
+			$this->statusFlags = DataTypes::decode_int16(substr($this->packet, $off));
 			$off += 2;
 			// goto read_capability_flags2;
 		}
 
 		read_capability_flags2: {
-			$this->serverCapabilities += $this->decode_int16(substr($this->packet, $off)) << 16;
+			$this->serverCapabilities += DataTypes::decode_int16(substr($this->packet, $off)) << 16;
 			$off += 2;
 			// goto get_plugin_auth_data;
 		}
@@ -567,7 +645,7 @@ class Connection {
 		}
 
 		fetch_auth_plugin_name: {
-			$this->authPluginName = $this->decodeNullString(substr($this->packet, $off));
+			$this->authPluginName = DataTypes::decodeNullString(substr($this->packet, $off));
 			// goto do_handshake;
 		}
 
@@ -601,12 +679,25 @@ class Connection {
 		return $cb($method, $args);
 	}
 
+	private function bindResultSet($resultSet) {
+		$class = get_class($resultSet);
+		$this->resultSet = \Closure::bind(function &($prop, $val = NAN) { if (!@is_nan($val)) $this->prop = $val; return $this->$prop; }, $resultSet, $class);
+		$this->resultSetMethod = \Closure::bind(function &($method, $args) { return call_user_func_array([$this, $method], $args); }, $resultSet, $class);
+	}
+
 	/** @see 14.6.4.1.1 Text Resultset */
 	private function handleQuery() {
 		$this->getFuture()->succeed($resultSet = new ResultSet($this->reactor));
-		$this->resultSet = \Closure::bind(function &($prop, $val = NAN) { if (!@is_nan($val)) $this->prop = $val; return $this->$prop; }, $resultSet, ResultSet::class);
-		$this->resultSetMethod = \Closure::bind(function &($method, $args) { call_user_func_array([$this, $method], $args); }, $resultSet, ResultSet::class);
-		$this->parseCallback = [$this, "handleColumnDefinition"];
+		$this->bindResultSet($resultSet);
+		$this->parseCallback = [$this, "handleTextColumnDefinition"];
+		$this->resultSetMethod("setColumns", ord($this->packet));
+	}
+
+	/** @see 14.7.1 Binary Protocol Resultset */
+	private function handleExecute() {
+		$this->getFuture()->succeed($resultSet = new ResultSet($this->reactor));
+		$this->bindResultSet($resultSet);
+		$this->parseCallback = [$this, "handleBinaryColumnDefinition"];
 		$this->resultSetMethod("setColumns", ord($this->packet));
 	}
 
@@ -624,7 +715,15 @@ class Connection {
 		}
 	}
 
-	private function handleColumnDefinition() {
+	private function handleTextColumnDefinition() {
+		$this->handleColumnDefinition("handleTextResultsetRow");
+	}
+
+	private function handleBinaryColumnDefinition() {
+		$this->handleColumnDefinition("handleBinaryResultsetRow");
+	}
+
+	private function handleColumnDefinition($cbMethod) {
 		$toFetch = &$this->resultSet("columnsToFetch");
 		if (!$toFetch--) {
 			$this->resultSetMethod("updateState", ResultSet::COLUMNS_FETCHED);
@@ -632,9 +731,9 @@ class Connection {
 				$this->parseCallback = null;
 				$this->handleError();
 			} else {
-				$this->parseCallback = [$this, "handleResultsetRow"];
+				$this->parseCallback = [$this, $cbMethod];
 				if ($this->capabilities & self::CLIENT_DEPRECATE_EOF) {
-					$this->handleResultsetRow();
+					$this->handleTextResultsetRow();
 				} else {
 					$this->parseEof();
 					// we don't need the EOF packet, skip!
@@ -646,6 +745,37 @@ class Connection {
 		$this->resultSet("columns")[] = $this->parseColumnDefinition();
 	}
 
+	private function prepareParams() {
+		$toFetch = &$this->resultSet("columnsToFetch");
+		if (!$toFetch--) {
+			//$this->resultSetMethod("updateState", ResultSet::PARAMS_FETCHED);
+			$toFetch = $this->resultSet("columnCount");
+			if (!$toFetch) {
+				$this->prepareFields();
+			} else {
+				$this->parseCallback = [$this, "prepareFields"];
+			}
+			return;
+		}
+
+		$this->resultSet("params")[] = $this->parseColumnDefinition();
+		//$this->resultSetMethod("updateState", ResultSet::PARAMS_FETCHED);
+	}
+
+	private function prepareFields() {
+		$toFetch = &$this->resultSet("columnsToFetch");
+		if (!$toFetch--) {
+			$this->parseCallback = null;
+			$this->resultSetMethod("updateState", ResultSet::COLUMNS_FETCHED);
+			$this->ready();
+
+			return;
+		}
+
+		$this->resultSet("columns")[] = $this->parseColumnDefinition();
+		$this->resultSetMethod("updateState", ResultSet::COLUMNS_FETCHED);
+	}
+
 	/** @see 14.6.4.1.1.2 Column Defintion */
 	private function parseColumnDefinition() {
 		$off = 0;
@@ -654,103 +784,103 @@ class Connection {
 
 		if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
 			get_catalog: {
-				$column["catalog"] = $this->decodeString(substr($this->packet, $off), $intlen, $len);
+				$column["catalog"] = DataTypes::decodeString(substr($this->packet, $off), $intlen, $len);
 				$off += $intlen + $len;
 				// goto get_schema;
 			}
 
 			get_schema: {
-				$column["schema"] = $this->decodeString(substr($this->packet, $off), $intlen, $len);
+				$column["schema"] = DataTypes::decodeString(substr($this->packet, $off), $intlen, $len);
 				$off += $intlen + $len;
 				// goto get_table_41;
 			}
 
 			get_table_41: {
-				$column["table"] = $this->decodeString(substr($this->packet, $off), $intlen, $len);
+				$column["table"] = DataTypes::decodeString(substr($this->packet, $off), $intlen, $len);
 				$off += $intlen + $len;
 				// goto get_original_table;
 			}
 
 			get_original_table: {
-				$column["original_table"] = $this->decodeString(substr($this->packet, $off), $intlen, $len);
+				$column["original_table"] = DataTypes::decodeString(substr($this->packet, $off), $intlen, $len);
 				$off += $intlen + $len;
 				// goto get_name_41;
 			}
 
 			get_name_41: {
-				$column["name"] = $this->decodeString(substr($this->packet, $off), $intlen, $len);
+				$column["name"] = DataTypes::decodeString(substr($this->packet, $off), $intlen, $len);
 				$off += $intlen + $len;
 				// goto get_original_name;
 			}
 
 			get_original_name: {
-				$column["original_name"] = $this->decodeString(substr($this->packet, $off), $intlen, $len);
+				$column["original_name"] = DataTypes::decodeString(substr($this->packet, $off), $intlen, $len);
 				$off += $intlen + $len;
 				// goto get_fixlen_len;
 			}
 
 			get_fixlen_len: {
-				$fixlen = $this->decodeInt(substr($this->packet, $off), $len);
+				$fixlen = DataTypes::decodeInt(substr($this->packet, $off), $len);
 				$off += $len;
 				// goto get_fixlen;
 			}
 
 			get_fixlen: {
 				$len = 0;
-				$column["charset"] = $this->decode_int16(substr($this->packet, $off + $len));
+				$column["charset"] = DataTypes::decode_int16(substr($this->packet, $off + $len));
 				$len += 2;
-				$column["columnlen"] = $this->decode_int32(substr($this->packet, $off + $len));
+				$column["columnlen"] = DataTypes::decode_int32(substr($this->packet, $off + $len));
 				$len += 4;
 				$column["type"] = ord($this->packet[$off + $len]);
 				$len += 1;
-				$column["flags"] = $this->decode_int16(substr($this->packet, $off + $len));
+				$column["flags"] = DataTypes::decode_int16(substr($this->packet, $off + $len));
 				$len += 2;
 				$column["decimals"] = ord($this->packet[$off + $len]);
 				$len += 1;
 
-				$off += $len;
+				$off += $fixlen;
 				// goto field_fetch;
 			}
 		} else {
 			get_table_320: {
-				$column["table"] = $this->decodeString(substr($this->packet, $off), $intlen, $len);
+				$column["table"] = DataTypes::decodeString(substr($this->packet, $off), $intlen, $len);
 				$off += $intlen + $len;
 				// goto get_name_320;
 			}
 
 			get_name_320: {
-				$column["name"] = $this->decodeString(substr($this->packet, $off), $intlen, $len);
+				$column["name"] = DataTypes::decodeString(substr($this->packet, $off), $intlen, $len);
 				$off += $intlen + $len;
 				// goto get_columnlen_len;
 			}
 
 			get_columnlen_len: {
-				$collen = $this->decodeInt(substr($this->packet, $off), $len);
+				$collen = DataTypes::decodeInt(substr($this->packet, $off), $len);
 				$off += $len;
 				// goto get_columnlen;
 			}
 
 			get_columnlen: {
-				$column["columnlen"] = $this->decode_intByLen(substr($this->packet, $off), $collen);
+				$column["columnlen"] = DataTypes::decode_intByLen(substr($this->packet, $off), $collen);
 				$off += $collen;
 				// goto type_len;
 			}
 
 			get_type_len: {
-				$typelen = $this->decodeInt(substr($this->packet, $off), $len);
+				$typelen = DataTypes::decodeInt(substr($this->packet, $off), $len);
 				$off += $len;
 				// goto get_type;
 			}
 
 			get_type: {
-				$column["type"] = $this->decode_intByLen(substr($this->packet, $off), $typelen);
+				$column["type"] = DataTypes::decode_intByLen(substr($this->packet, $off), $typelen);
 				$off += $typelen;
 				// goto get_flaglen;
 			}
 
 			get_flaglen: {
 				$len = 1;
-				$flaglen = $this->capabilities & self::CLIENT_LONG_FLAG ? $this->decodeInt(substr($this->packet, $off), $len) : ord($this->packet[$off]);
+				$flaglen = $this->capabilities & self::CLIENT_LONG_FLAG ? DataTypes::decodeInt(substr($this->packet, $off), $len) : ord($this->packet[$off]);
 				$off += $len;
 				// goto get_flags;
 			}
@@ -758,7 +888,7 @@ class Connection {
 			get_flags: {
 				if ($flaglen > 2) {
 					$len = 2;
-					$column["flags"] = $this->decode_int16(substr($this->packet, $off));
+					$column["flags"] = DataTypes::decode_int16(substr($this->packet, $off));
 				} else {
 					$len = 1;
 					$column["flags"] = ord($this->packet[$off]);
@@ -771,7 +901,7 @@ class Connection {
 
 		field_fetch: {
 			if ($off < $this->packetSize) {
-				$column["defaults"] = $this->decodeString(substr($this->packet, $off));
+				$column["defaults"] = DataTypes::decodeString(substr($this->packet, $off));
 			}
 			// goto finished;
 		}
@@ -782,7 +912,7 @@ class Connection {
 	}
 
 	/** @see 14.6.4.1.1.3 Resultset Row */
-	private function handleResultsetRow() {
+	private function handleTextResultsetRow() {
 		switch ($type = ord($this->packet)) {
 			case self::OK_PACKET:
 				$this->parseOk();
@@ -816,11 +946,110 @@ class Connection {
 				$fields[] = null;
 				$off += 1;
 			} else {
-				$fields[] = $this->decodeString(substr($this->packet, $off), $intlen, $len);
+				$fields[] = DataTypes::decodeString(substr($this->packet, $off), $intlen, $len);
 				$off += $intlen + $len;
 			}
 		}
 		$this->resultSetMethod("rowFetched", $fields);
+	}
+
+	/** @see 14.7.2 Binary Protocol Resultset Row */
+	private function handleBinaryResultsetRow() {
+		if (ord($this->packet) == self::EOF_PACKET) {
+			$this->parseEof();
+			$future = &$this->resultSet("next");
+			if ($this->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
+				$this->parseCallback = [$this, "handleQuery"];
+				$this->futures[] = $future ?: $future = new Future($this->reactor);
+			} else {
+				if ($future) {
+					$future->succeed(null);
+				} else {
+					$future = new Success(null);
+				}
+				$this->parseCallback = null;
+			}
+			$this->ready();
+			$this->resultSetMethod("updateState", ResultSet::ROWS_FETCHED);
+			return;
+		}
+
+		$off = 1; // skip first byte
+
+		$columnCount = $this->resultSet("columnCount");
+		$columns = $this->resultSet("columns");
+		$fields = [];
+
+		for ($i = 0; $i < $columnCount; $i++) {
+			if (ord($this->packet[$off + (($i + 2) >> 3)]) & (($i + 2) % 8)) {
+				$fields[$i] = null;
+			}
+		}
+		$off += ($columnCount + 9) >> 3;
+
+		for ($i = 0; $off < $this->packetSize; $i++) {
+			$fields[] = DataTypes::decodeBinary($columns[$i]["type"], substr($this->packet, $off), $len);
+			$off += $len;
+		}
+		$this->resultSetMethod("rowFetched", $fields);
+	}
+
+	/** @see 14.7.4.1 COM_STMT_PREPARE Response */
+	private function handlePrepare() {
+		switch (ord($this->packet)) {
+			case self::OK_PACKET:
+				break;
+			case self::ERR_PACKET:
+				$this->handleError();
+				break;
+			default:
+				throw new \UnexpectedValueException("Unexpected value for first byte of COM_STMT_PREPARE Response");
+		}
+		$off = 1;
+
+		stmt_id: {
+			$stmtId = DataTypes::decode_int32(substr($this->packet, $off));
+			$off += 4;
+
+			// goto get_columns;
+		}
+
+		get_columns: {
+			$columns = DataTypes::decode_int16(substr($this->packet, $off));
+			$off += 2;
+
+			// gotoo get_params;
+		}
+
+		get_params: {
+			$params = DataTypes::decode_int16(substr($this->packet, $off));
+			$off += 2;
+
+			// goto skip_filler;
+		}
+
+		skip_filler: {
+			$off += 1;
+
+			// goto warning_count;
+		}
+
+		warning_count: {
+			$this->warnings = DataTypes::decode_int16(substr($this->packet, $off));
+
+			// goto finish;
+		}
+
+		finish: {
+			$resultset = new Stmt($this->reactor, $this, $stmtId, $columns, $params);
+			$this->bindResultSet($resultset);
+			$this->getFuture()->succeed($resultset);
+			if ($params) {
+				$this->parseCallback = [$this, "prepareParams"];
+			} else {
+				$this->prepareParams();
+			}
+		}
 	}
 
 	private function readStatistics() {
@@ -848,7 +1077,9 @@ class Connection {
 		}
 
 		for ($i = 0; $i < $this->outBuflen; $i++) fwrite(STDERR, dechex(ord($this->outBuf[$i]))." ");
-		var_dump($this->outBuf);
+		$r = range("\0", "\x19");
+		unset($r[10], $r[9]);
+		var_dump(str_replace($r, "", $this->outBuf));
 
 		$bytes = @fwrite($this->socket, $this->outBuf);
 		$this->outBuflen -= $bytes;
@@ -930,9 +1161,10 @@ class Connection {
 
 			if ($this->packetSize > 0) {
 				$this->packet = substr($this->inBuf, 0, $this->packetSize);
-				//var_dump($this->inBuf);
 				$this->inBuf = substr($this->inBuf, $this->packetSize);
 				$this->inBuflen -= $this->packetSize;
+				$print = substr_replace(pack("V", $this->packetSize), chr($this->seqId), 3, 1);
+				for ($i = 0; $i < 4; $i++) fwrite(STDERR, dechex(ord($print[$i]))." ");
 				for ($i = 0; $i < $this->packetSize; $i++) fwrite(STDERR, dechex(ord($this->packet[$i]))." ");
 				var_dump($this->packet);
 				if ($this->parseCallback) {
@@ -1196,7 +1428,7 @@ class Connection {
 			$auth = "";
 		}
 		if ($this->capabilities & self::CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA) {
-			$payload .= $this->encodeInt(strlen($auth));
+			$payload .= DataTypes::encodeInt(strlen($auth));
 			$payload .= $auth;
 		} elseif ($this->capabilities & self::CLIENT_SECURE_CONNECTION) {
 			$payload .= chr(strlen($auth));
@@ -1232,90 +1464,6 @@ class Connection {
 			$this->reactor->enable($this->writeWatcher);
 			$this->watcherEnabled = true;
 		}
-	}
-
-	private function decodeNullString($str, &$len = 0) {
-		return substr($str, 0, $len = strpos($str, "\0"));
-	}
-
-	private function decodeString($str, &$intlen = 0, &$len = 0) {
-		$len = $this->decodeInt($str, $intlen);
-		return substr($str, $intlen, $len);
-	}
-
-	private function decodeInt($str, &$len = 0) {
-		$int = ord($str);
-		if ($int < 0xfb) {
-			$len = 1;
-			return $int;
-		} elseif ($int == 0xfc) {
-			$len = 3;
-			return $this->decode_int16(substr($str, 1));
-		} elseif ($int == 0xfd) {
-			$len = 4;
-			return $this->decode_int24(substr($str, 1));
-		} elseif ($int == 0xfe) {
-			$len = 9;
-			return $this->decode_int64(substr($str, 1));
-		} else {
-			// If that happens connection is borked...
-			throw new \RangeException("$int is not in ranges [0x00, 0xfa] or [0xfc, 0xfe]");
-		}
-	}
-
-	private function decode_intByLen($str, $len) {
-		$int = 0;
-		while ($len--) {
-			$int = ($int << 8) + ord($str[$len]);
-		}
-		return $int;
-	}
-
-	private function decode_int8($str) {
-		return ord($str);
-	}
-
-	private function decode_int16($str) {
-		return unpack("v", $str)[1];
-	}
-
-	private function decode_int24($str) {
-		return unpack("V", substr($str, isset($int), 3) . "\x00")[1];
-	}
-
-	private function decode_int32($str) {
-		return unpack("V", $str)[1];
-	}
-
-	private function decode_int64($str) {
-		$int = unpack("V2", substr($str, isset($int), 8));
-		return $int[2] + ($int[1] << 32);
-	}
-
-	private function encodeInt($int) {
-		if ($int < 0xfb) {
-			return chr($int);
-		} elseif ($int < (1 << 16)) {
-			return "\xfc".$this->encode_int16($int);
-		} elseif ($int < (1 << 24)) {
-			return "\xfd".$this->encode_int24($int);
-		} elseif ($int < (1 << 62) * 4) {
-			return "\xfe".$this->encode_int64($int);
-		} else {
-			throw new \OutOfRangeException("encodeInt doesn't allow integers bigger than 2^64 - 1 (current: $int)");
-		}
-	}
-
-	private function encode_int16($int) {
-		return pack("v", $int);
-	}
-
-	private function encode_int24($int) {
-		return substr(pack("V", $int), 0, 3);
-	}
-
-	private function encode_int64($int) {
-		return pack("VV", $int & 0xfffffff, $int >> 32);
 	}
 }
 

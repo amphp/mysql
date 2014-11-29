@@ -7,15 +7,16 @@ use Amp\Success;
 
 class ResultSet {
 	private $columnCount;
-	private $columns;
+	private $columns = [];
 	private $reactor;
 	private $columnsToFetch;
-	private $rows;
+	private $rows = null;
 	private $fetchedRows = 0;
 	private $userFetched = 0;
 	private $futures = [self::SINGLE_ROW_FETCH => [], self::COLUMNS_FETCHED => [], self::ROWS_FETCHED => []];
 	private $state = self::UNFETCHED;
 	private $next;
+	private $conn; // when doing something on $conn, it must be checked if still same connection, else throw Exception! @TODO {or redo query, fetch???}
 
 	const UNFETCHED = 0;
 	const COLUMNS_FETCHED = 1;
@@ -32,8 +33,8 @@ class ResultSet {
 	}
 
 	public function getFields() {
-		if ($this->state == self::COLUMNS_FETCHED) {
-			return new Success($this->rows);
+		if ($this->state >= self::COLUMNS_FETCHED) {
+			return new Success($this->columns);
 		} else {
 			$future = new Future($this->reactor);
 			$this->futures[self::COLUMNS_FETCHED][] = [$future, &$this->columns];
@@ -41,14 +42,30 @@ class ResultSet {
 		}
 	}
 
-	public function fetchAll() {
+	private function genericFetchAll($cb) {
 		if ($this->state == self::ROWS_FETCHED) {
-			return new Success($this->rows);
+			return new Success($cb($this->rows));
 		} else {
 			$future = new Future($this->reactor);
-			$this->futures[self::ROWS_FETCHED][] = [$future, &$this->rows];
+			$this->futures[self::ROWS_FETCHED][] = [$future, &$this->rows, $cb];
 			return $future;
 		}
+	}
+
+	public function fetchAll() {
+		return $this->genericFetchAll(function($rows) {
+			return $rows;
+		});
+	}
+
+	// @TODO better name?
+	public function fetchAllObj() {
+		return $this->genericFetchAll(function($rows) {
+			$names = array_column($this->columns, "name");
+			return (object) array_map(function($row) use ($names) {
+				return array_combine($names, $row);
+			}, $rows);
+		});
 	}
 
 	public function fetchRow() {
@@ -66,9 +83,10 @@ class ResultSet {
 		if (empty($this->futures[$state])) {
 			return;
 		}
-		foreach ($this->futures[$state] as $entry) {
-			$entry[0]->succeed($entry[1]);
+		foreach ($this->futures[$state] as list($future, $rows, $cb)) {
+			$future->succeed($cb ? $cb($rows) : $rows);
 		}
+		$this->futures[$state] = [];
 	}
 
 	private function rowFetched($row) {
@@ -82,7 +100,7 @@ class ResultSet {
 
 	public function __debugInfo() {
 		$tmp = clone $this;
-		unset($tmp->reactor, $tmp->next);
+		unset($tmp->reactor, $tmp->next, $tmp->conn);
 		foreach ($tmp->futures as &$type) {
 			foreach ($type as &$entry) {
 				if (is_array($entry)) {
@@ -96,7 +114,8 @@ class ResultSet {
 		return $tmp;
 	}
 
-	public function next () {
+	public function next() {
 		return $this->next ?: $this->next = new Future($this->reactor);
 	}
+
 }
