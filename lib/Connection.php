@@ -672,7 +672,7 @@ class Connection {
 		return $cb($prop, $val);
 	}
 
-	private function &resultSetMethod($method) {
+	private function resultSetMethod($method) {
 		$args = func_get_args();
 		unset($args[0]);
 		$cb = $this->resultSetMethod;
@@ -682,7 +682,7 @@ class Connection {
 	private function bindResultSet($resultSet) {
 		$class = get_class($resultSet);
 		$this->resultSet = \Closure::bind(function &($prop, $val = NAN) { if (!@is_nan($val)) $this->prop = $val; return $this->$prop; }, $resultSet, $class);
-		$this->resultSetMethod = \Closure::bind(function &($method, $args) { return call_user_func_array([$this, $method], $args); }, $resultSet, $class);
+		$this->resultSetMethod = \Closure::bind(function ($method, $args) { call_user_func_array([$this, $method], $args); }, $resultSet, $class);
 	}
 
 	/** @see 14.6.4.1.1 Text Resultset */
