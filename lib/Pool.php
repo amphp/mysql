@@ -66,7 +66,7 @@ class Pool {
 			$this->addConnection();
 		}
 
-		if (list($key, $conn) = current($this->ready)) {
+		if (list($key, $conn) = each($this->ready)) {
 			unset($this->ready[$key]);
 			return $conn;
 		}
