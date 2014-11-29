@@ -340,7 +340,7 @@ class Connection {
 			foreach ($data as $paramId => $param) {
 				if ($param === null) {
 					$off = $nullOff + ($paramId >> 3);
-					$payload[$off] = $payload[$off] | (1 << ($paramId % 8));
+					$payload[$off] = $payload[$off] | chr(1 << ($paramId % 8));
 				} else {
 					$bound = 1;
 				}
