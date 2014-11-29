@@ -36,6 +36,10 @@ class Stmt {
 		return $this->conn->execute($this->stmtId, $data);
 	}
 
+	public function close() {
+		return $this->conn->closeStmt($this->stmtId);
+	}
+
 	public function getFields() {
 		if ($this->state >= ResultSet::COLUMNS_FETCHED) {
 			return new Success($this->columns);

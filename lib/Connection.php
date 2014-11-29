@@ -369,6 +369,15 @@ class Connection {
 		return $future; // do not use $this->startCommand(), that might unexpectedly reset the seqId!
 	}
 
+	public function closeStmt($stmtId) {
+		$payload = "\x19";
+		$payload .= DataTypes::encode_int32($stmtId);
+		$this->appendTask(function () use ($payload) {
+			$this->seqId = -1;
+			$this->sendPacket($payload);
+		});
+	}
+
 	public function onRead() {
 		$this->inBuf .= $bytes = @fread($this->socket, $this->readGranularity);
 		if ($bytes != "") {
@@ -1076,10 +1085,13 @@ class Connection {
 			$this->outBuflen += 4 + $len;
 		}
 
-		for ($i = 0; $i < $this->outBuflen; $i++) fwrite(STDERR, dechex(ord($this->outBuf[$i]))." ");
-		$r = range("\0", "\x19");
-		unset($r[10], $r[9]);
-		var_dump(str_replace($r, "", $this->outBuf));
+		if (defined("MYSQL_DEBUG")) {
+			for ($i = 0; $i < $this->outBuflen; $i++)
+				fwrite(STDERR, dechex(ord($this->outBuf[$i])) . " ");
+			$r = range("\0", "\x19");
+			unset($r[10], $r[9]);
+			var_dump(str_replace($r, "", $this->outBuf));
+		}
 
 		$bytes = @fwrite($this->socket, $this->outBuf);
 		$this->outBuflen -= $bytes;
@@ -1163,10 +1175,14 @@ class Connection {
 				$this->packet = substr($this->inBuf, 0, $this->packetSize);
 				$this->inBuf = substr($this->inBuf, $this->packetSize);
 				$this->inBuflen -= $this->packetSize;
-				$print = substr_replace(pack("V", $this->packetSize), chr($this->seqId), 3, 1);
-				for ($i = 0; $i < 4; $i++) fwrite(STDERR, dechex(ord($print[$i]))." ");
-				for ($i = 0; $i < $this->packetSize; $i++) fwrite(STDERR, dechex(ord($this->packet[$i]))." ");
-				var_dump($this->packet);
+				if (defined("MYSQL_DEBUG")) {
+					$print = substr_replace(pack("V", $this->packetSize), chr($this->seqId), 3, 1);
+					for ($i = 0; $i < 4; $i++)
+						fwrite(STDERR, dechex(ord($print[$i])) . " ");
+					for ($i = 0; $i < $this->packetSize; $i++)
+						fwrite(STDERR, dechex(ord($this->packet[$i])) . " ");
+					var_dump($this->packet);
+				}
 				if ($this->parseCallback) {
 					$cb = $this->parseCallback;
 					$cb();
