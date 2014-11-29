@@ -691,7 +691,7 @@ class Connection {
 
 	/** @see 14.6.4.1.1 Text Resultset */
 	private function handleQuery() {
-		$this->getFuture()->succeed($resultSet = new ResultSet($this->reactor));
+		$this->getFuture()->succeed($resultSet = new ResultSet($this->reactor, $this->connInfo));
 		$this->bindResultSet($resultSet);
 		$this->parseCallback = [$this, "handleTextColumnDefinition"];
 		$this->resultSetMethod("setColumns", ord($this->packet));
@@ -699,7 +699,7 @@ class Connection {
 
 	/** @see 14.7.1 Binary Protocol Resultset */
 	private function handleExecute() {
-		$this->getFuture()->succeed($resultSet = new ResultSet($this->reactor));
+		$this->getFuture()->succeed($resultSet = new ResultSet($this->reactor, $this->connInfo));
 		$this->bindResultSet($resultSet);
 		$this->parseCallback = [$this, "handleBinaryColumnDefinition"];
 		$this->resultSetMethod("setColumns", ord($this->packet));

@@ -14,7 +14,7 @@ class Stmt {
 	private $reactor;
 	private $columnsToFetch;
 	private $futures = [];
-	private $conn;
+	private $conn; // when doing something on $conn, it must be checked if still same connection, else throw Exception! @TODO {or redo query, fetch???}
 
 	private $state = ResultSet::UNFETCHED;
 
@@ -56,6 +56,10 @@ class Stmt {
 		}
 		$this->futures = [];
 		$this->state = ResultSet::COLUMNS_FETCHED;
+	}
+
+	public function connInfo() {
+		return $this->conn->getConnInfo();
 	}
 
 	public function __destruct() {

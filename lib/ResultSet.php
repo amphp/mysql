@@ -16,7 +16,7 @@ class ResultSet {
 	private $futures = [self::SINGLE_ROW_FETCH => [], self::COLUMNS_FETCHED => [], self::ROWS_FETCHED => []];
 	private $state = self::UNFETCHED;
 	private $next;
-	private $conn; // when doing something on $conn, it must be checked if still same connection, else throw Exception! @TODO {or redo query, fetch???}
+	private $connInfo;
 
 	const UNFETCHED = 0;
 	const COLUMNS_FETCHED = 1;
@@ -24,8 +24,9 @@ class ResultSet {
 
 	const SINGLE_ROW_FETCH = 255;
 
-	public function __construct(\Amp\Reactor $reactor) {
+	public function __construct(\Amp\Reactor $reactor, ConnectionState $state) {
 		$this->reactor = $reactor;
+		$this->connInfo = $state;
 	}
 
 	private function setColumns($columns) {
@@ -108,9 +109,13 @@ class ResultSet {
 		}
 	}
 
+	public function getConnInfo() {
+		return clone $this->connInfo;
+	}
+
 	public function __debugInfo() {
 		$tmp = clone $this;
-		unset($tmp->reactor, $tmp->next, $tmp->conn);
+		unset($tmp->reactor, $tmp->next);
 		foreach ($tmp->futures as &$type) {
 			foreach ($type as &$entry) {
 				if (is_array($entry)) {
