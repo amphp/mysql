@@ -337,9 +337,10 @@ class Connection {
 			$bound = 0;
 			$types = "";
 			$values = "";
-			foreach (array_values($data) as $paramId => $param) {
+			foreach ($data as $paramId => $param) {
 				if ($param === null) {
-					$payload[$nullOff + ($paramId >> 3)] |= 1 << ($paramId % 8);
+					$off = $nullOff + ($paramId >> 3);
+					$payload[$off] = $payload[$off] | (1 << ($paramId % 8));
 				} else {
 					$bound = 1;
 				}
@@ -355,7 +356,7 @@ class Connection {
 			}
 		}
 		$future = new Future($this->reactor);
-		$this->appendTask(function () use ($payload, &$future) {
+		$this->appendTask(function () use ($payload, $future) {
 			$this->seqId = -1;
 			$this->futures[] = $future;
 			$this->sendPacket($payload);
@@ -371,6 +372,18 @@ class Connection {
 			$this->seqId = -1;
 			$this->sendPacket($payload);
 		});
+	}
+
+	public function resetStmt($stmtId) {
+		$payload = "\x1a";
+		$payload .= DataTypes::encode_int32($stmtId);
+		$future = new Future($this->reactor);
+		$this->appendTask(function () use ($payload, $future) {
+			$this->seqId = -1;
+			$this->futures[] = $future;
+			$this->sendPacket($payload);
+		});
+		return $future;
 	}
 
 	public function onRead() {

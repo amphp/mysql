@@ -42,6 +42,10 @@ class Stmt {
 		}
 	}
 
+	public function reset() {
+		$this->conn->resetStmt($this->stmtId);
+	}
+
 	public function getFields() {
 		if ($this->state >= ResultSet::COLUMNS_FETCHED) {
 			return new Success($this->columns);
