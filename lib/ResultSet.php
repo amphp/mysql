@@ -42,6 +42,16 @@ class ResultSet {
 		}
 	}
 
+	public function rowCount() {
+		if ($this->state == self::ROWS_FETCHED) {
+			return new Success(count($this->rows));
+		} else {
+			$future = new Future($this->reactor);
+			$this->futures[self::ROWS_FETCHED][] = [$future, null, function () { return count($this->rows); }];
+			return $future;
+		}
+	}
+
 	private function genericFetchAll($cb) {
 		if ($this->state == self::ROWS_FETCHED) {
 			return new Success($cb($this->rows));
