@@ -37,7 +37,9 @@ class Stmt {
 	}
 
 	public function close() {
-		return $this->conn->closeStmt($this->stmtId);
+		if ($this->conn instanceof Connection) { // might be already dtored
+			$this->conn->closeStmt($this->stmtId);
+		}
 	}
 
 	public function getFields() {
@@ -54,6 +56,10 @@ class Stmt {
 		}
 		$this->futures = [];
 		$this->state = ResultSet::COLUMNS_FETCHED;
+	}
+
+	public function __destruct() {
+		$this->close();
 	}
 
 	public function __debugInfo() {

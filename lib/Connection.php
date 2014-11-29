@@ -31,6 +31,7 @@ class Connection {
 	private $protocol;
 	private $seqId = -1;
 	private $packetSize;
+	private $packetType;
 	private $readLen = 0;
 	private $strlen;
 	private $socket;
@@ -56,23 +57,12 @@ class Connection {
 	private $db;
 	private $oldDb = NULL;
 
-	protected $affectedRows;
-	protected $insertId;
-	protected $statusFlags;
-	protected $warnings;
-	protected $statusInfo;
-	protected $sessionState = [];
-	protected $capabilities = 0;
-	protected $errorMsg;
-	protected $errorCode;
-	protected $errorState; // begins with "#"
-	protected $packetType;
-	protected $serverVersion;
 	protected $connectionId;
 	protected $authPluginData;
+	protected $capabilities = 0;
 	protected $serverCapabilities = 0;
-	protected $charset;
 	protected $authPluginName;
+	protected $connInfo;
 
 	protected $connectionState = self::UNCONNECTED;
 
@@ -112,6 +102,7 @@ class Connection {
 		$this->pass = $pass;
 		$this->db = $db;
 		$this->ready = $ready;
+		$this->connInfo = new ConnectionState;
 	}
 
 	private function ready() {
@@ -164,6 +155,10 @@ class Connection {
 		} else {
 			$callback();
 		}
+	}
+
+	public function getConnInfo() {
+		return clone $this->connInfo;
 	}
 
 	private function startCommand($future = null) {
@@ -415,7 +410,7 @@ class Connection {
 		$off = 1;
 
 		err_packet: {
-			$this->errorCode = DataTypes::decode_int16(substr($this->packet, $off, 2));
+			$this->connInfo->errorCode = DataTypes::decode_int16(substr($this->packet, $off, 2));
 			$off += 2;
 			if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
 				// goto get_err_state;
@@ -425,14 +420,14 @@ class Connection {
 		}
 
 		get_err_state: {
-			$this->errorState = substr($this->packet, $off, 6);
+			$this->connInfo->errorState = substr($this->packet, $off, 6);
 
 			$off += 6;
 			// goto fetch_err_msg;
 		}
 
 		fetch_err_msg: {
-			$this->errorMsg = substr($this->packet, $off);
+			$this->connInfo->errorMsg = substr($this->packet, $off);
 
 			// goto finished;
 		}
@@ -447,7 +442,7 @@ class Connection {
 			} elseif ($this->connectionState == self::ESTABLISHED) {
 				// connection failure
 				$this->closeSocket();
-				$this->getFuture()->fail(new \Exception("Could not connect to {$this->resolvedHost}: {$this->errorState} {$this->errorMsg}"));
+				$this->getFuture()->fail(new \Exception("Could not connect to {$this->resolvedHost}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
 			}
 		}
 	}
@@ -457,13 +452,13 @@ class Connection {
 		$off = 1;
 
 		ok_packet: {
-			$this->affectedRows = DataTypes::decodeInt(substr($this->packet, $off), $intlen);
+			$this->connInfo->affectedRows = DataTypes::decodeInt(substr($this->packet, $off), $intlen);
 			$off += $intlen;
 			// goto get_last_insert_id;
 		}
 
 		get_last_insert_id: {
-			$this->insertId = DataTypes::decodeInt(substr($this->packet, $off), $intlen);
+			$this->connInfo->insertId = DataTypes::decodeInt(substr($this->packet, $off), $intlen);
 			$off += $intlen;
 			if ($this->capabilities & (self::CLIENT_PROTOCOL_41 | self::CLIENT_TRANSACTIONS)) {
 				// goto get_status_flags;
@@ -473,26 +468,26 @@ class Connection {
 		}
 
 		get_status_flags: {
-			$this->statusFlags = DataTypes::decode_int16(substr($this->packet, $off));
+			$this->connInfo->statusFlags = DataTypes::decode_int16(substr($this->packet, $off));
 			$off += 2;
 			// goto get_warning_count;
 		}
 
 		get_warning_count: {
-			$this->warnings = DataTypes::decode_int16(substr($this->packet, $off));
+			$this->connInfo->warnings = DataTypes::decode_int16(substr($this->packet, $off));
 			$off += 2;
 			// goto fetch_status_info;
 		}
 
 		fetch_status_info: {
 			if ($this->capabilities & self::CLIENT_SESSION_TRACK) {
-				$this->statusInfo = DataTypes::decodeString(substr($this->packet, $off), $intlen, $strlen);
+				$this->connInfo->statusInfo = DataTypes::decodeString(substr($this->packet, $off), $intlen, $strlen);
 				$off += $intlen + $strlen;
-				if ($this->statusFlags & StatusFlags::SERVER_SESSION_STATE_CHANGED) {
+				if ($this->connInfo->statusFlags & StatusFlags::SERVER_SESSION_STATE_CHANGED) {
 					goto fetch_state_changes;
 				}
 			} else {
-				$this->statusInfo = substr($this->packet, $off);
+				$this->connInfo->statusInfo = substr($this->packet, $off);
 			}
 			goto finished;
 		}
@@ -505,13 +500,13 @@ class Connection {
 
 				switch ($type = DataTypes::decode_int8(substr($sessionState, $len))) {
 					case SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES:
-						$this->sessionState[SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES][DataTypes::decodeString($data, $intlen, $strlen)] = DataTypes::decodeString(substr($data, $intlen + $strlen));
+						$this->connInfo->sessionState[SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES][DataTypes::decodeString($data, $intlen, $strlen)] = DataTypes::decodeString(substr($data, $intlen + $strlen));
 						break;
 					case SessionStateTypes::SESSION_TRACK_SCHEMA:
-						$this->sessionState[SessionStateTypes::SESSION_TRACK_SCHEMA] = DataTypes::decodeString($data);
+						$this->connInfo->sessionState[SessionStateTypes::SESSION_TRACK_SCHEMA] = DataTypes::decodeString($data);
 						break;
 					case SessionStateTypes::SESSION_TRACK_STATE_CHANGE:
-						$this->sessionState[SessionStateTypes::SESSION_TRACK_STATE_CHANGE] = DataTypes::decodeString($data);
+						$this->connInfo->sessionState[SessionStateTypes::SESSION_TRACK_STATE_CHANGE] = DataTypes::decodeString($data);
 						break;
 					default:
 						throw new \UnexpectedValueException("$type is not a valid mysql session state type");
@@ -530,7 +525,7 @@ class Connection {
 
 	private function handleOk() {
 		$this->parseOk();
-		$this->getFuture()->succeed(true);
+		$this->getFuture()->succeed($this->getConnInfo());
 		$this->ready();
 	}
 
@@ -540,7 +535,7 @@ class Connection {
 
 		eof_packet: {
 			if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
-				$this->warnings = DataTypes::decode_int16(substr($this->packet, $off));
+				$this->connInfo->warnings = DataTypes::decode_int16(substr($this->packet, $off));
 				$off += 2;
 				// goto get_eof_status_flags;
 			} else {
@@ -549,7 +544,7 @@ class Connection {
 		}
 
 		get_eof_status_flags: {
-			$this->statusFlags = DataTypes::decode_int16(substr($this->packet, $off));
+			$this->connInfo->statusFlags = DataTypes::decode_int16(substr($this->packet, $off));
 			// goto finished;
 		}
 
@@ -560,7 +555,7 @@ class Connection {
 
 	private function handleEof() {
 		$this->parseEof();
-		$this->getFuture()->succeed(true);
+		$this->getFuture()->succeed($this->getConnInfo());
 		$this->ready();
 	}
 
@@ -577,7 +572,7 @@ class Connection {
 		}
 
 		fetch_server_version: {
-			$this->serverVersion = DataTypes::decodeNullString(substr($this->packet, $off), $len);
+			$this->connInfo->serverVersion = DataTypes::decodeNullString(substr($this->packet, $off), $len);
 			$off += $len + 1;
 			// goto get_connection_id;
 		}
@@ -610,13 +605,13 @@ class Connection {
 		}
 
 		charset: {
-			$this->charset = ord(substr($this->packet, $off));
+			$this->connInfo->charset = ord(substr($this->packet, $off));
 			$off += 1;
 			// goto handshake_status_flags;
 		}
 
 		handshake_status_flags: {
-			$this->statusFlags = DataTypes::decode_int16(substr($this->packet, $off));
+			$this->connInfo->statusFlags = DataTypes::decode_int16(substr($this->packet, $off));
 			$off += 2;
 			// goto read_capability_flags2;
 		}
@@ -931,7 +926,7 @@ class Connection {
 					$this->parseEof();
 				}
 				$future = &$this->resultSet("next");
-				if ($this->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
+				if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
 					$this->parseCallback = [$this, "handleQuery"];
 					$this->futures[] = $future ?: $future = new Future($this->reactor);
 				} else {
@@ -967,7 +962,7 @@ class Connection {
 		if (ord($this->packet) == self::EOF_PACKET) {
 			$this->parseEof();
 			$future = &$this->resultSet("next");
-			if ($this->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
+			if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
 				$this->parseCallback = [$this, "handleQuery"];
 				$this->futures[] = $future ?: $future = new Future($this->reactor);
 			} else {
@@ -1044,7 +1039,7 @@ class Connection {
 		}
 
 		warning_count: {
-			$this->warnings = DataTypes::decode_int16(substr($this->packet, $off));
+			$this->connInfo->warnings = DataTypes::decode_int16(substr($this->packet, $off));
 
 			// goto finish;
 		}
@@ -1433,7 +1428,7 @@ class Connection {
 		$payload = "";
 		$payload .= pack("V", $this->capabilities);
 		$payload .= pack("V", 1 << 24 - 1); // max-packet size
-		$payload .= chr($this->charset); // @TODO: Use correct charset?!
+		$payload .= chr($this->connInfo->charset); // @TODO: Use correct charset?!
 		$payload .= str_repeat("\0", 23); // reserved
 		$payload .= $this->user."\0";
 		if ($this->capabilities & self::CLIENT_PLUGIN_AUTH) {
