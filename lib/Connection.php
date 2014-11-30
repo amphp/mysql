@@ -41,6 +41,7 @@ class Connection {
 	private $writeWatcher = NULL;
 	private $watcherEnabled = false;
 	private $authPluginDataLen;
+	private $query;
 	private $parseCallback = null;
 	private $packetCallback = null;
 
@@ -93,6 +94,7 @@ class Connection {
 	const ESTABLISHED = 1;
 	const READY = 2;
 	const QUITTING = 3;
+	const CLOSED = 4;
 
 	public function __construct(Reactor $reactor, Connector $connector, ConnectionConfig $config, $host, $resolvedHost, $user, $pass, $db = null) {
 		$this->reactor = $reactor;
@@ -104,6 +106,18 @@ class Connection {
 		$this->db = $db;
 		$this->config = $config;
 		$this->connInfo = new ConnectionState;
+	}
+
+	public function alive() {
+		return $this->connectionState == self::READY;
+	}
+
+	public function close() {
+		$this->closeSocket();
+	}
+
+	public function getConfig() {
+		return $this->config;
 	}
 
 	private function ready() {
@@ -310,6 +324,7 @@ class Connection {
 
 	/** @see 14.7.4 COM_STMT_PREPARE */
 	public function prepare($query, $future = null) {
+		$this->query = $query;
 		$this->sendPacket("\x16$query");
 		$this->parseCallback = [$this, "handlePrepare"];
 		return $this->startCommand($future);
@@ -338,7 +353,7 @@ class Connection {
 		$payload .= DataTypes::encode_int32(1);
 		$paramCount = count($params);
 		$args = array_slice($data + array_fill(0, $paramCount, null), 0, $paramCount);
-		$bound = !empty($data);
+		$bound = !empty($data) || !empty($prebound);
 		$types = "";
 		$values = "";
 		if ($paramCount) {
@@ -1081,7 +1096,7 @@ class Connection {
 		}
 
 		finish: {
-			$resultset = new Stmt($this->reactor, $this, $stmtId, $columns, $params);
+			$resultset = new Stmt($this->reactor, $this, $this->query, $stmtId, $columns, $params);
 			$this->bindResultSet($resultset);
 			$this->getFuture()->succeed($resultset);
 			if ($params) {
@@ -1105,7 +1120,7 @@ class Connection {
 			$this->writeWatcher = null;
 		}
 		fclose($this->socket);
-		$this->connectionState = self::UNCONNECTED;
+		$this->connectionState = self::CLOSED;
 	}
 
 	public function onWrite() {
