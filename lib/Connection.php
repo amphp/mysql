@@ -1266,7 +1266,7 @@ class Connection {
 					}
 					/* intentionally missing break */
 				case self::EXTRA_AUTH_PACKET:
-					if ($this->state !== self::READY) {
+					if ($this->state === self::ESTABLISHED) {
 						/** @see 14.2.5 Connection Phase Packets (AuthMoreData) */
 						// @TODO ... 14.2.2.2
 						break;
