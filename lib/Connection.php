@@ -204,6 +204,8 @@ class Connection {
 	public function query($query, $future = null) {
 		$this->sendPacket("\x03$query");
 		$this->packetCallback = [$this, "handleQuery"];
+		var_dump("query");
+		debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
 		return $this->startCommand($future);
 	}
 
@@ -1248,6 +1250,8 @@ class Connection {
 		}
 
 		payload: {
+			$cb = $this->packetCallback;
+			$this->packetCallback = null;
 			switch ($this->packetType) {
 				case self::OK_PACKET:
 					$this->connectionState = self::READY;
@@ -1276,14 +1280,12 @@ class Connection {
 					if ($this->writeWatcher === NULL) {
 						$this->established();
 						$this->handleHandshake();
-					} elseif ($this->packetCallback) {
-						$cb = $this->packetCallback;
+					} elseif ($cb) {
 						$cb();
 					} else {
 						throw new \UnexpectedValueException("Unexpected packet type: {$this->packetType}");
 					}
 			}
-			$this->packetCallback = null;
 			goto finished;
 		}
 

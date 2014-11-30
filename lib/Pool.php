@@ -154,7 +154,9 @@ class Pool {
 
 	public function close() {
 		foreach ($this->connections as $conn) {
-			$conn->close();
+			if ($conn->alive()) {
+				$conn->closeConnection();
+			}
 		}
 	}
 }
