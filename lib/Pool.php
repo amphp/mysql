@@ -83,6 +83,8 @@ class Pool {
 			}
 		}
 
+		$this->addConnection();
+
 		return $this->virtualConnection;
 	}
 

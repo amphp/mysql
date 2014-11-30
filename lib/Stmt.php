@@ -43,12 +43,18 @@ class Stmt {
 					}
 				} else {
 					$this->conn = $stmt->conn;
-					$this->stmtId = $stmt->conn;
+					$this->stmtId = $stmt->stmtId;
 					foreach ($this->prebound as $paramId => $msg) {
 						$this->conn->bindParam($this->stmtId, $paramId, $msg);
 					}
 					while (list($method, $args) = $this->virtualConn->getCall()) {
 						$future = array_pop($args);
+						if (isset($args[0])) {
+							$args[0] = $this->stmtId;
+						}
+						if ($method == "execute") {
+							$args[1] = &$this->params;
+						}
 						call_user_func_array([$this->conn(), $method], $args)->when(function($error, $result) use ($future) {
 							if ($error) {
 								$future->fail($error);
