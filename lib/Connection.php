@@ -354,11 +354,11 @@ class Connection {
 		$payload .= chr(0); // cursor flag // @TODO cursor types?!
 		$payload .= DataTypes::encode_int32(1);
 		$paramCount = count($params);
-		$args = array_slice($data + array_fill(0, $paramCount, null), 0, $paramCount);
 		$bound = !empty($data) || !empty($prebound);
 		$types = "";
 		$values = "";
 		if ($paramCount) {
+			$args = array_slice($data + array_fill(0, $paramCount, null), 0, $paramCount);
 			$nullOff = strlen($payload);
 			$payload .= str_repeat("\0", ($paramCount + 7) >> 3);
 			foreach ($args as $paramId => $param) {
