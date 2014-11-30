@@ -33,6 +33,17 @@ class Pool {
 		$this->addConnection();
 	}
 
+	public function setCharset($charset, $collate) {
+		$this->ready = [];
+		foreach ($this->connections as $conn) {
+			if ($conn->alive()) {
+				$conn->setCharset($charset, $collate);
+			}
+		}
+		// @TODO map the damn charsets/collates to a binary value...
+		$this->config->charset = 0x21; // utf8...
+	}
+
 	public function useExceptions($set) {
 		$this->exceptions = $set;
 	}

@@ -185,6 +185,10 @@ class Connection {
 		return $this->futures[] = $future ?: new Future($this->reactor);
 	}
 
+	private function setCharset($charset, $collate) {
+		return $this->query("SET NAMES '$charset' COLLATE '$collate'");
+	}
+
 	/** @see 14.6.2 COM_QUIT */
 	public function closeConnection($future = null) {
 		$this->sendPacket("\x01");
@@ -1490,7 +1494,7 @@ class Connection {
 		$payload = "";
 		$payload .= pack("V", $this->capabilities);
 		$payload .= pack("V", 1 << 24 - 1); // max-packet size
-		$payload .= chr($this->connInfo->charset); // @TODO: Use correct charset?!
+		$payload .= chr($this->config->charset);
 		$payload .= str_repeat("\0", 23); // reserved
 		$payload .= $this->user."\0";
 		if ($this->capabilities & self::CLIENT_PLUGIN_AUTH) {
