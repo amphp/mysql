@@ -15,6 +15,7 @@ class Pool {
 	private $ready = [];
 	private $connectionFuture;
 	private $virtualConnection;
+	private $config = true;
 
 	public function __construct($host, $user, $pass, $db = null, \Amp\Reactor $reactor = null) {
 		$this->reactor = $reactor ?: \Amp\reactor();
@@ -24,7 +25,13 @@ class Pool {
 		$this->pass = $pass;
 		$this->db = $db;
 		$this->virtualConnection = new VirtualConnection($this->reactor);
+		$this->config = new ConnectionConfig;
+		$this->config->ready = function ($conn) { $this->ready($conn); };
 		$this->addConnection();
+	}
+
+	public function useExceptions($set) {
+		$this->exceptions = $set;
 	}
 
 	private function resolveHost($host) {
@@ -44,7 +51,7 @@ class Pool {
 	}
 
 	private function addConnection() {
-		$this->connections[] = $conn = new Connection($this->reactor, $this->connector, function () use (&$conn) { $this->ready($conn); }, $this->host, $this->resolvedHost, $this->user, $this->pass, $this->db);
+		$this->connections[] = $conn = new Connection($this->reactor, $this->connector, $this->config, $this->host, $this->resolvedHost, $this->user, $this->pass, $this->db);
 		$this->connectionFuture = $conn->connect();
 	}
 

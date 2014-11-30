@@ -75,7 +75,7 @@ class ResultSet {
 			$names = array_column($this->columns, "name");
 			return (object) array_map(function($row) use ($names) {
 				return array_combine($names, $row);
-			}, $rows);
+			}, $rows ?: []);
 		});
 	}
 

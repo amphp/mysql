@@ -13,6 +13,7 @@ class Stmt {
 	private $stmtId;
 	private $reactor;
 	private $columnsToFetch;
+	private $prebound = [];
 	private $futures = [];
 	private $conn; // when doing something on $conn, it must be checked if still same connection, else throw Exception! @TODO {or redo query, fetch???}
 
@@ -28,16 +29,17 @@ class Stmt {
 
 	public function bind($paramId, $data) {
 		// @TODO validate $paramId
+		$this->prebound[$paramId] = true;
 		$this->conn->bindParam($this->stmtId, $paramId, $data);
 	}
 
 	public function execute($data = null) {
 		// @TODO validate $data here
-		return $this->conn->execute($this->stmtId, $data);
+		return $this->conn->execute($this->stmtId, $this->prebound, $data);
 	}
 
 	public function close() {
-		if ($this->conn instanceof Connection) { // might be already dtored
+		if (isset($this->conn) && $this->conn instanceof Connection) { // might be already dtored
 			$this->conn->closeStmt($this->stmtId);
 		}
 	}

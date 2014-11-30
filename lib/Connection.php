@@ -16,6 +16,7 @@ use Nbsock\Connector;
  * 14.4 Compression
  * option for exceptions
  * large packets (>= 1 << 24 bytes)
+ * use better Exceptions...
  */
 
 class Connection {
@@ -45,7 +46,7 @@ class Connection {
 
 	private $reactor;
 	private $connector;
-	private $ready;
+	private $config;
 	private $futures = [];
 	private $onReady = [];
 	private $resultSet = null;
@@ -93,7 +94,7 @@ class Connection {
 	const READY = 2;
 	const QUITTING = 3;
 
-	public function __construct(Reactor $reactor, Connector $connector, callable $ready, $host, $resolvedHost, $user, $pass, $db = null) {
+	public function __construct(Reactor $reactor, Connector $connector, ConnectionConfig $config, $host, $resolvedHost, $user, $pass, $db = null) {
 		$this->reactor = $reactor;
 		$this->connector = $connector;
 		$this->host = $host;
@@ -101,19 +102,21 @@ class Connection {
 		$this->user = $user;
 		$this->pass = $pass;
 		$this->db = $db;
-		$this->ready = $ready;
+		$this->config = $config;
 		$this->connInfo = new ConnectionState;
 	}
 
 	private function ready() {
 		if (empty($this->futures)) {
 			if (empty($this->onReady)) {
-				$cb = $this->ready;
-			} else {
+				$cb = $this->config->ready;
+			} elseif (empty($this->out)) {
 				list($key, $cb) = each($this->onReady);
 				unset($this->onReady[$key]);
 			}
-			$cb();
+			if (isset($cb) && is_callable($cb)) {
+				$cb($this);
+			}
 		}
 	}
 
@@ -136,6 +139,7 @@ class Connection {
 		$this->inBuf = "";
 		$this->inBuflen = 0;
 		$this->out = [];
+		$this->seqId = -1;
 
 		$this->reactor->cancel($this->readWatcher);
 		$this->readWatcher = $this->reactor->onReadable($this->socket, [$this, "onRead"]);
@@ -163,6 +167,7 @@ class Connection {
 
 	private function startCommand($future = null) {
 		$this->seqId = -1;
+		//$this->out[] = null;
 		return $this->futures[] = $future ?: new Future($this->reactor);
 	}
 
@@ -214,7 +219,6 @@ class Connection {
 			$promise->when($when);
 		};
 		$this->listFields($table, $like)->when($when);
-		$this->seqId = -1;
 
 		return $future;
 	}
@@ -318,25 +322,27 @@ class Connection {
 		$payload .= DataTypes::encode_int16($paramId);
 		$payload .= $data;
 		$this->appendTask(function () use ($payload) {
-			$this->seqId = -1;
+			$this->out[] = null;
 			$this->sendPacket($payload);
+			$this->ready();
 		});
 	}
 
 	/** @see 14.7.6 COM_STMT_EXECUTE */
 	// @TODO what to do with the prebound params?! (bindParam())
-	public function execute($stmtId, $data = []) {
+	/* prebound params: null-bit set, type MYSQL_TYPE_LONG_BLOB, no value */
+	public function execute($stmtId, $prebound, $data = []) {
 		$payload = "\x17";
 		$payload .= DataTypes::encode_int32($stmtId);
 		$payload .= chr(0); // cursor flag // @TODO cursor types?!
 		$payload .= DataTypes::encode_int32(1);
 		$params = count($data);
+		$bound = 1;
+		$types = "";
+		$values = "";
 		if ($params) {
 			$nullOff = strlen($payload);
 			$payload .= str_repeat("\0", ($params + 7) >> 3);
-			$bound = 0;
-			$types = "";
-			$values = "";
 			foreach ($data as $paramId => $param) {
 				if ($param === null) {
 					$off = $nullOff + ($paramId >> 3);
@@ -345,19 +351,23 @@ class Connection {
 					$bound = 1;
 				}
 				list($unsigned, $type, $value) = DataTypes::encodeBinary($param);
-				$types .= chr($type);
+				if (isset($prebound[$paramId])) {
+					$types .= chr(DataTypes::MYSQL_TYPE_LONG_BLOB);
+				} else {
+					$types .= chr($type);
+				}
 				$types .= $unsigned?"\x80":"\0";
 				$values .= $value;
 			}
-			$payload .= chr($bound);
-			if ($bound) {
-				$payload .= $types;
-				$payload .= $values;
-			}
+		}
+		$payload .= chr($bound);
+		if ($bound) {
+			$payload .= $types;
+			$payload .= $values;
 		}
 		$future = new Future($this->reactor);
 		$this->appendTask(function () use ($payload, $future) {
-			$this->seqId = -1;
+			$this->out[] = null;
 			$this->futures[] = $future;
 			$this->sendPacket($payload);
 			$this->packetCallback = [$this, "handleExecute"];
@@ -369,8 +379,9 @@ class Connection {
 		$payload = "\x19";
 		$payload .= DataTypes::encode_int32($stmtId);
 		$this->appendTask(function () use ($payload) {
-			$this->seqId = -1;
+			$this->out[] = null;
 			$this->sendPacket($payload);
+			$this->ready();
 		});
 	}
 
@@ -379,7 +390,7 @@ class Connection {
 		$payload .= DataTypes::encode_int32($stmtId);
 		$future = new Future($this->reactor);
 		$this->appendTask(function () use ($payload, $future) {
-			$this->seqId = -1;
+			$this->out[] = null;
 			$this->futures[] = $future;
 			$this->sendPacket($payload);
 		});
@@ -394,15 +405,8 @@ class Connection {
 			$this->readLen += $len;
 			$this->unreadlen = $this->inBuflen;
 			$this->inBuflen += $len;
-			try {
-				if ($this->parse() === true) {
-					//$this->handlePacket();
-				}
-			} catch (\Exception $e) {
-				foreach ($this->futures as $future) {
-					$future->fail($e);
-				}
-			}
+
+			$this->parse();
 		} else {
 			// Gone away...
 			// @TODO restart connection; throw error? remove from ready Connections
@@ -450,7 +454,11 @@ class Connection {
 			$this->packetCallback = $this->parseCallback = null;
 			if ($this->connectionState == self::READY) {
 				// normal error
-				$this->getFuture()->succeed(false);
+				if ($this->config->exceptions) {
+					$this->getFuture()->fail(new \Exception("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
+				} else {
+					$this->getFuture()->succeed(false);
+				}
 				$this->ready();
 			} elseif ($this->connectionState == self::ESTABLISHED) {
 				// connection failure
@@ -1087,7 +1095,14 @@ class Connection {
 
 	public function onWrite() {
 		if ($this->outBuflen == 0) {
-			$out = current($this->out);
+			while (1) {
+				$out = current($this->out);
+				if ($out !== null || empty($this->out)) {
+					break;
+				}
+				$this->seqId = -1;
+				unset($this->out[key($this->out)]);
+			}
 			$len = strlen($out);
 			$this->outBuf = substr_replace(pack("V", $len), chr(++$this->seqId), 3, 1) . $out; // expects $len < (1 << 24) - 1
 			$this->outBuflen += 4 + $len;
@@ -1098,7 +1113,7 @@ class Connection {
 				fwrite(STDERR, dechex(ord($this->outBuf[$i])) . " ");
 			$r = range("\0", "\x19");
 			unset($r[10], $r[9]);
-			var_dump(str_replace($r, "", $this->outBuf));
+			var_dump(str_replace($r, ".", $this->outBuf));
 		}
 
 		$bytes = @fwrite($this->socket, $this->outBuf);
