@@ -396,8 +396,10 @@ class Connection {
 		$payload = "\x19";
 		$payload .= DataTypes::encode_int32($stmtId);
 		$this->appendTask(function () use ($payload) {
-			$this->out[] = null;
-			$this->sendPacket($payload);
+			if ($this->connectionState === self::READY) {
+				$this->out[] = null;
+				$this->sendPacket($payload);
+			}
 			$this->ready();
 		});
 	}
