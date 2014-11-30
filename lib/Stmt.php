@@ -33,9 +33,11 @@ class Stmt {
 		$this->conn->bindParam($this->stmtId, $paramId, $data);
 	}
 
-	public function execute($data = null) {
-		// @TODO validate $data here
-		return $this->conn->execute($this->stmtId, $this->prebound, $data);
+	public function execute($data = []) {
+		if (count($data + $this->prebound) != count($this->params)) {
+			throw new \Exception("Required arguments for executing prepared statement mismatch");
+		}
+		return $this->conn->execute($this->stmtId, $this->params, $this->prebound, $data);
 	}
 
 	public function close() {
@@ -46,6 +48,11 @@ class Stmt {
 
 	public function reset() {
 		$this->conn->resetStmt($this->stmtId);
+	}
+
+	// @TODO not necessary, see cursor?!
+	public function fetch() {
+		return $this->conn->fetchStmt($this->stmtId);
 	}
 
 	public function getFields() {

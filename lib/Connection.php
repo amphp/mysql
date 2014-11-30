@@ -331,19 +331,20 @@ class Connection {
 	/** @see 14.7.6 COM_STMT_EXECUTE */
 	// @TODO what to do with the prebound params?! (bindParam())
 	/* prebound params: null-bit set, type MYSQL_TYPE_LONG_BLOB, no value */
-	public function execute($stmtId, $prebound, $data = []) {
+	public function execute($stmtId, $params, $prebound, $data = []) {
 		$payload = "\x17";
 		$payload .= DataTypes::encode_int32($stmtId);
 		$payload .= chr(0); // cursor flag // @TODO cursor types?!
 		$payload .= DataTypes::encode_int32(1);
-		$params = count($data);
-		$bound = 1;
+		$paramCount = count($params);
+		$args = array_slice($data + array_fill(0, $paramCount, null), 0, $paramCount);
+		$bound = !empty($data);
 		$types = "";
 		$values = "";
-		if ($params) {
+		if ($paramCount) {
 			$nullOff = strlen($payload);
-			$payload .= str_repeat("\0", ($params + 7) >> 3);
-			foreach ($data as $paramId => $param) {
+			$payload .= str_repeat("\0", ($paramCount + 7) >> 3);
+			foreach ($args as $paramId => $param) {
 				if ($param === null) {
 					$off = $nullOff + ($paramId >> 3);
 					$payload[$off] = $payload[$off] | chr(1 << ($paramId % 8));
@@ -383,6 +384,20 @@ class Connection {
 			$this->sendPacket($payload);
 			$this->ready();
 		});
+	}
+
+	public function fetchStmt($stmtId) {
+		$payload = "\x1c";
+		$payload .= DataTypes::encode_int32($stmtId);
+		$payload .= DataTypes::encode_int32(1);
+		$future = new Future($this->reactor);
+		$this->appendTask(function () use ($payload, $future) {
+			$this->out[] = null;
+			$this->futures[] = $future;
+			$this->sendPacket($payload);
+			$this->ready();
+		});
+		return $future;
 	}
 
 	public function resetStmt($stmtId) {
