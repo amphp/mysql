@@ -5,4 +5,5 @@ namespace Mysql;
 class ConnectionConfig {
 	public $ready = null;
 	public $exceptions = true;
+	public $restore;
 }

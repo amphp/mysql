@@ -1,6 +1,7 @@
 <?php
 
 namespace Mysql;
+use Amp\Success;
 
 /**
  * @TODO limit?
@@ -8,6 +9,7 @@ namespace Mysql;
 
 class Pool {
 	private $host;
+	private $resolvedHost;
 	private $db;
 	private $user;
 	private $connector;
@@ -26,7 +28,8 @@ class Pool {
 		$this->db = $db;
 		$this->virtualConnection = new VirtualConnection($this->reactor);
 		$this->config = new ConnectionConfig;
-		$this->config->ready = function ($conn) { $this->ready($conn); };
+		$this->config->ready = function($conn) { $this->ready($conn); };
+		$this->config->restore = function() { return $this->getReadyConnection(); };
 		$this->addConnection();
 	}
 
@@ -73,9 +76,11 @@ class Pool {
 			$this->addConnection();
 		}
 
-		if (list($key, $conn) = each($this->ready)) {
+		while (list($key, $conn) = each($this->ready)) {
 			unset($this->ready[$key]);
-			return $conn;
+			if ($conn->alive()) {
+				return $conn;
+			}
 		}
 
 		return $this->virtualConnection;
@@ -141,5 +146,15 @@ class Pool {
 
 	public function prepare($query) {
 		return $this->getReadyConnection()->prepare($query);
+	}
+
+	public function __destruct() {
+		$this->close();
+	}
+
+	public function close() {
+		foreach ($this->connections as $conn) {
+			$conn->close();
+		}
 	}
 }

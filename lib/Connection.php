@@ -481,7 +481,7 @@ class Connection {
 
 
 		finished: {
-			$this->packetCallback = $this->parseCallback = null;
+			$this->parseCallback = null;
 			if ($this->connectionState == self::READY) {
 				// normal error
 				if ($this->config->exceptions) {
@@ -1283,6 +1283,7 @@ class Connection {
 						throw new \UnexpectedValueException("Unexpected packet type: {$this->packetType}");
 					}
 			}
+			$this->packetCallback = null;
 			goto finished;
 		}
 
