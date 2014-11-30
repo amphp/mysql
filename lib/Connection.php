@@ -124,7 +124,7 @@ class Connection {
 		if (empty($this->futures)) {
 			if (empty($this->onReady)) {
 				$cb = $this->config->ready;
-			} elseif (empty($this->out)) {
+			} else {
 				list($key, $cb) = each($this->onReady);
 				unset($this->onReady[$key]);
 			}
@@ -204,8 +204,6 @@ class Connection {
 	public function query($query, $future = null) {
 		$this->sendPacket("\x03$query");
 		$this->packetCallback = [$this, "handleQuery"];
-		var_dump("query");
-		debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
 		return $this->startCommand($future);
 	}
 
@@ -348,43 +346,44 @@ class Connection {
 	/** @see 14.7.6 COM_STMT_EXECUTE */
 	// @TODO what to do with the prebound params?! (bindParam())
 	/* prebound params: null-bit set, type MYSQL_TYPE_LONG_BLOB, no value */
-	public function execute($stmtId, $params, $prebound, $data = []) {
-		$payload = "\x17";
-		$payload .= DataTypes::encode_int32($stmtId);
-		$payload .= chr(0); // cursor flag // @TODO cursor types?!
-		$payload .= DataTypes::encode_int32(1);
-		$paramCount = count($params);
-		$bound = !empty($data) || !empty($prebound);
-		$types = "";
-		$values = "";
-		if ($paramCount) {
-			$args = array_slice($data + array_fill(0, $paramCount, null), 0, $paramCount);
-			$nullOff = strlen($payload);
-			$payload .= str_repeat("\0", ($paramCount + 7) >> 3);
-			foreach ($args as $paramId => $param) {
-				if ($param === null) {
-					$off = $nullOff + ($paramId >> 3);
-					$payload[$off] = $payload[$off] | chr(1 << ($paramId % 8));
-				} else {
-					$bound = 1;
-				}
-				list($unsigned, $type, $value) = DataTypes::encodeBinary($param);
-				if (isset($prebound[$paramId])) {
-					$types .= chr(DataTypes::MYSQL_TYPE_LONG_BLOB);
-				} else {
-					$types .= chr($type);
-				}
-				$types .= $unsigned?"\x80":"\0";
-				$values .= $value;
-			}
-		}
-		$payload .= chr($bound);
-		if ($bound) {
-			$payload .= $types;
-			$payload .= $values;
-		}
+	public function execute($stmtId, &$params, $prebound, $data = []) {
 		$future = new Future($this->reactor);
-		$this->appendTask(function () use ($payload, $future) {
+		$this->appendTask(function () use ($stmtId, &$params, $prebound, $data, $future) {
+			$payload = "\x17";
+			$payload .= DataTypes::encode_int32($stmtId);
+			$payload .= chr(0); // cursor flag // @TODO cursor types?!
+			$payload .= DataTypes::encode_int32(1);
+			$paramCount = count($params);
+			$bound = !empty($data) || !empty($prebound);
+			$types = "";
+			$values = "";
+			if ($paramCount) {
+				$args = array_slice($data + array_fill(0, $paramCount, null), 0, $paramCount);
+				$nullOff = strlen($payload);
+				$payload .= str_repeat("\0", ($paramCount + 7) >> 3);
+				foreach ($args as $paramId => $param) {
+					if ($param === null) {
+						$off = $nullOff + ($paramId >> 3);
+						$payload[$off] = $payload[$off] | chr(1 << ($paramId % 8));
+					} else {
+						$bound = 1;
+					}
+					list($unsigned, $type, $value) = DataTypes::encodeBinary($param);
+					if (isset($prebound[$paramId])) {
+						$types .= chr(DataTypes::MYSQL_TYPE_LONG_BLOB);
+					} else {
+						$types .= chr($type);
+					}
+					$types .= $unsigned?"\x80":"\0";
+					$values .= $value;
+				}
+			}
+			$payload .= chr($bound);
+			if ($bound) {
+				$payload .= $types;
+				$payload .= $values;
+			}
+
 			$this->out[] = null;
 			$this->futures[] = $future;
 			$this->sendPacket($payload);
