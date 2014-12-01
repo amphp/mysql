@@ -181,7 +181,9 @@ class Connection {
 
 	private function startCommand($future = null) {
 		$this->seqId = -1;
-		//$this->out[] = null;
+		$payload = array_pop($this->out);
+		$this->out[] = null;
+		$this->out[] = $payload;
 		return $this->futures[] = $future ?: new Future($this->reactor);
 	}
 
