@@ -1186,7 +1186,7 @@ class Connection {
 			if ($bytes == 0) {
 				// @TODO handle gone away
 			} else {
-				$this->outBuf = substr($this->outBuf, $this->outBuflen);
+				$this->outBuf = substr($this->outBuf, $bytes);
 			}
 		}
 	}
@@ -1230,6 +1230,7 @@ class Connection {
 		determine_packet_len: {
 			if (isset($int)) {
 				if ($this->lastIn) {
+					$this->packet = "";
 					$this->packetSize = $int;
 				} else {
 					$this->packetSize += $int;
@@ -1255,27 +1256,34 @@ class Connection {
 		}
 
 		fetch_packet: {
-			if ($this->inBuflen < $this->packetSize) {
+			if ($this->inBuflen < ($this->packetSize & 0xffffff)) {
 				goto more_data_needed;
 			}
 
-			$this->lastIn = ($this->packetSize + 1) % (1 << 24) != 0;
+			$this->lastIn = $this->packetSize % 0xffffff != 0;
+
+			if ($this->lastIn) {
+				$size = $this->packetSize % 0xffffff;
+			} else {
+				$size = 0xffffff;
+			}
+			$this->packet .= substr($this->inBuf, 0, $size);
+			$this->inBuf = substr($this->inBuf, $size);
+			$this->inBuflen -= $size;
 
 			if (!$this->lastIn) {
-				goto more_data_needed;
+				$this->state = ParseState::START;
+				goto determine_packet_len;
 			}
 
 			if ($this->packetSize > 0) {
-				$this->packet = substr($this->inBuf, 0, $this->packetSize);
-				$this->inBuf = substr($this->inBuf, $this->packetSize);
-				$this->inBuflen -= $this->packetSize;
 				if (defined("MYSQL_DEBUG")) {
 					$print = substr_replace(pack("V", $this->packetSize), chr($this->seqId), 3, 1);
 					for ($i = 0; $i < 4; $i++)
 						fwrite(STDERR, dechex(ord($print[$i])) . " ");
 					for ($i = 0; $i < min(200, $this->packetSize); $i++)
 						fwrite(STDERR, dechex(ord($this->packet[$i])) . " ");
-					print " len: ".strlen($this->packet)." ";
+					print "len: ".strlen($this->packet)." ";
 					var_dump(substr($this->packet, 0, 200));
 				}
 				if ($this->parseCallback) {
