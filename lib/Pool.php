@@ -15,6 +15,7 @@ class Pool {
 	private $connector;
 	private $connections = [];
 	private $ready = [];
+	private $readyMap = [];
 	private $connectionFuture;
 	private $virtualConnection;
 	private $config = true;
@@ -30,6 +31,7 @@ class Pool {
 		$this->config = new ConnectionConfig;
 		$this->config->ready = function($conn) { $this->ready($conn); };
 		$this->config->restore = function() { return $this->getReadyConnection(); };
+		$this->config->busy = function($conn) { unset($this->ready[$this->readyMap[spl_object_hash($conn)]]); };
 		$this->addConnection();
 	}
 
@@ -74,6 +76,9 @@ class Pool {
 			call_user_func_array([$conn, $method], $args);
 		} else {
 			$this->ready[] = $conn;
+			end($this->ready);
+			$this->readyMap[spl_object_hash($conn)] = key($this->ready);
+			reset($this->ready);
 		}
 	}
 

@@ -171,6 +171,10 @@ class Connection {
 		if ($this->packetCallback || $this->parseCallback || !empty($this->onReady)) {
 			$this->onReady[] = $callback;
 		} else {
+			$cb = $this->config->busy;
+			if (isset($cb)) {
+				$cb($this);
+			}
 			$callback();
 		}
 	}
@@ -181,9 +185,9 @@ class Connection {
 
 	private function startCommand($future = null) {
 		$this->seqId = -1;
-		$payload = array_pop($this->out);
+		/*$payload = array_pop($this->out);
 		$this->out[] = null;
-		$this->out[] = $payload;
+		$this->out[] = $payload;*/
 		return $this->futures[] = $future ?: new Future($this->reactor);
 	}
 
@@ -745,12 +749,13 @@ class Connection {
 
 	private function bindResultSet($resultSet) {
 		$class = get_class($resultSet);
-		$this->resultSet = \Closure::bind(function &($prop, $val = NAN) { if (!@is_nan($val)) $this->prop = $val; return $this->$prop; }, $resultSet, $class);
+		$this->resultSet = \Closure::bind(function &($prop, $val = NAN) { if (!@is_nan($val)) $this->$prop = $val; return $this->$prop; }, $resultSet, $class);
 		$this->resultSetMethod = \Closure::bind(function ($method, $args) { call_user_func_array([$this, $method], $args); }, $resultSet, $class);
 	}
 
 	/** @see 14.6.4.1.1 Text Resultset */
 	private function handleQuery() {
+		$this->parseCallback = true; // ensure that parseCallback is set for verification in self::appendTask()
 		$this->getFuture()->succeed($resultSet = new ResultSet($this->reactor, $this->connInfo));
 		$this->bindResultSet($resultSet);
 		$this->parseCallback = [$this, "handleTextColumnDefinition"];
@@ -759,6 +764,7 @@ class Connection {
 
 	/** @see 14.7.1 Binary Protocol Resultset */
 	private function handleExecute() {
+		$this->parseCallback = true; // ensure that parseCallback is set for verification in self::appendTask()
 		$this->getFuture()->succeed($resultSet = new ResultSet($this->reactor, $this->connInfo));
 		$this->bindResultSet($resultSet);
 		$this->parseCallback = [$this, "handleBinaryColumnDefinition"];
