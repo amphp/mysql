@@ -65,7 +65,7 @@ class ResultSet {
 
 	public function fetchAll() {
 		return $this->genericFetchAll(function($rows) {
-			return $rows;
+			return $rows ?: [];
 		});
 	}
 
