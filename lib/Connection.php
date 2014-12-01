@@ -23,8 +23,10 @@ class Connection {
 	private $out = [];
 	private $outBuf;
 	private $outBuflen = 0;
+	private $lastOut = true;
 	private $inBuf;
 	private $inBuflen = 0;
+	private $lastIn = true;
 	private $packet;
 	private $unreadlen;
 	private $state = ParseState::START;
@@ -1149,29 +1151,43 @@ class Connection {
 				unset($this->out[key($this->out)]);
 			}
 			$len = strlen($out);
+			if ($len >= (1 << 24) - 1) {
+				$this->out[key($this->out)] = substr($out, (1 << 24) - 1);
+				$out = substr($out, 0, (1 << 24) - 1);
+				$len = (1 << 24) - 1;
+				$this->lastOut = false;
+			} else {
+				$this->lastOut = true;
+			}
 			$this->outBuf = substr_replace(pack("V", $len), chr(++$this->seqId), 3, 1) . $out; // expects $len < (1 << 24) - 1
 			$this->outBuflen += 4 + $len;
-		}
 
-		if (defined("MYSQL_DEBUG")) {
-			for ($i = 0; $i < $this->outBuflen; $i++)
-				fwrite(STDERR, dechex(ord($this->outBuf[$i])) . " ");
-			$r = range("\0", "\x19");
-			unset($r[10], $r[9]);
-			var_dump(str_replace($r, ".", $this->outBuf));
+			if (defined("MYSQL_DEBUG")) {
+				for ($i = 0; $i < min($this->outBuflen, 200); $i++)
+					fwrite(STDERR, dechex(ord($this->outBuf[$i])) . " ");
+				$r = range("\0", "\x19");
+				unset($r[10], $r[9]);
+				print "len: ".strlen($this->outBuf)." ";
+				var_dump(str_replace($r, ".", substr($this->outBuf, 0, 200)));
+			}
 		}
 
 		$bytes = @fwrite($this->socket, $this->outBuf);
 		$this->outBuflen -= $bytes;
 		if ($this->outBuflen == 0) {
-			unset($this->out[key($this->out)]);
-			if (empty($this->out)) {
-				$this->reactor->disable($this->writeWatcher);
-				$this->watcherEnabled = false;
+			if ($this->lastOut) {
+				unset($this->out[key($this->out)]);
+				if (empty($this->out)) {
+					$this->reactor->disable($this->writeWatcher);
+					$this->watcherEnabled = false;
+				}
 			}
 		} else {
-			// @TODO handle gone away
-			$this->outBuf = substr($this->outBuf, $this->outBuflen);
+			if ($bytes == 0) {
+				// @TODO handle gone away
+			} else {
+				$this->outBuf = substr($this->outBuf, $this->outBuflen);
+			}
 		}
 	}
 
@@ -1213,7 +1229,11 @@ class Connection {
 
 		determine_packet_len: {
 			if (isset($int)) {
-				$this->packetSize = $int;
+				if ($this->lastIn) {
+					$this->packetSize = $int;
+				} else {
+					$this->packetSize += $int;
+				}
 				unset($int);
 				$this->state = ParseState::PARSE_SEQ_ID;
 				goto parse_seq_id;
@@ -1239,6 +1259,12 @@ class Connection {
 				goto more_data_needed;
 			}
 
+			$this->lastIn = ($this->packetSize + 1) % (1 << 24) != 0;
+
+			if (!$this->lastIn) {
+				goto more_data_needed;
+			}
+
 			if ($this->packetSize > 0) {
 				$this->packet = substr($this->inBuf, 0, $this->packetSize);
 				$this->inBuf = substr($this->inBuf, $this->packetSize);
@@ -1247,9 +1273,10 @@ class Connection {
 					$print = substr_replace(pack("V", $this->packetSize), chr($this->seqId), 3, 1);
 					for ($i = 0; $i < 4; $i++)
 						fwrite(STDERR, dechex(ord($print[$i])) . " ");
-					for ($i = 0; $i < $this->packetSize; $i++)
+					for ($i = 0; $i < min(200, $this->packetSize); $i++)
 						fwrite(STDERR, dechex(ord($this->packet[$i])) . " ");
-					var_dump($this->packet);
+					print " len: ".strlen($this->packet)." ";
+					var_dump(substr($this->packet, 0, 200));
 				}
 				if ($this->parseCallback) {
 					$cb = $this->parseCallback;
