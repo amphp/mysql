@@ -264,6 +264,6 @@ class DataTypes {
 	}
 
 	public static function encode_int64($int) {
-		return pack("VV", $int & 0xfffffff, $int >> 32);
+		return pack("VV", $int & 0xffffffff, $int >> 32);
 	}
 }
