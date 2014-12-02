@@ -13,9 +13,6 @@ use Nbsock\Connector;
  * Auth switch request??
  * COM_CHANGE_USER
  * 14.3 alternative auths
- * 14.4 Compression
- * option for exceptions
- * large packets (>= 1 << 24 bytes)
  * use better Exceptions...
  */
 
@@ -24,21 +21,20 @@ class Connection {
 	private $outBuf;
 	private $outBuflen = 0;
 	private $lastOut = true;
-	private $inBuf;
-	private $inBuflen = 0;
+	private $compressionBuf;
+	private $compressionBuflen = 0;
+	private $mysqlBuf;
+	private $mysqlBuflen = 0;
 	private $lastIn = true;
 	private $packet;
-	private $unreadlen;
 	private $state = ParseState::START;
 	private $oldState;
 	private $protocol;
 	private $seqId = -1;
 	private $packetSize;
 	private $packetType;
-	private $readLen = 0;
-	private $strlen;
 	private $socket;
-	private $readGranularity = 4096;
+	private $readGranularity = 8192;
 	private $readWatcher;
 	private $writeWatcher = NULL;
 	private $watcherEnabled = false;
@@ -74,6 +70,7 @@ class Connection {
 
 	const CLIENT_LONG_FLAG = 0x00000004;
 	const CLIENT_CONNECT_WITH_DB = 0x00000008;
+	const CLIENT_COMPRESS = 0x00000020;
 	const CLIENT_PROTOCOL_41 = 0x00000200;
 	const CLIENT_TRANSACTIONS = 0x00002000;
 	const CLIENT_SECURE_CONNECTION = 0x00008000;
@@ -152,8 +149,8 @@ class Connection {
 
 	public function onInit() {
 		// reset internal state
-		$this->inBuf = "";
-		$this->inBuflen = 0;
+		$this->compressionBuf = $this->mysqlBuf = "";
+		$this->compressionBuflen = $this->mysqlBuflen = 0;
 		$this->out = [];
 		$this->seqId = -1;
 
@@ -443,15 +440,14 @@ class Connection {
 	}
 
 	public function onRead() {
-		$this->inBuf .= $bytes = @fread($this->socket, $this->readGranularity);
+		$bytes = @fread($this->socket, $this->readGranularity);
 		if ($bytes != "") {
-			$len = strlen($bytes);
-
-			$this->readLen += $len;
-			$this->unreadlen = $this->inBuflen;
-			$this->inBuflen += $len;
-
-			$this->parse();
+			if ($this->capabilities & self::CLIENT_COMPRESS) {
+				$bytes = $this->parseCompression($bytes);
+			}
+			if ($bytes != "") {
+				$this->parseMysql($bytes);
+			}
 		} else {
 			// Gone away...
 			// @TODO restart connection; throw error? remove from ready Connections
@@ -1191,72 +1187,55 @@ class Connection {
 		}
 	}
 
+	/** @see 14.4 Compression */
+	private function parseCompression($inBuf) {
+		// @TODO everything for compression :-)
+		return $inBuf;
+	}
+
 	/**
 	 * @see 14.1.2 MySQL Packet
 	 * @see 14.1.3 Generic Response Packets
 	 */
-	private function parse() {
+	private function parseMySQL($inBuf) {
+		$this->mysqlBuf .= $inBuf;
+		$this->mysqlBuflen += strlen($inBuf);
+
 		start: {
 			switch ($this->state) {
 				case ParseState::START:
-					goto determine_packet_len;
-				case ParseState::PARSE_SEQ_ID:
-					goto parse_seq_id;
+					goto determine_header;
 				case ParseState::FETCH_PACKET:
 					goto fetch_packet;
-				case ParseState::DECODE_INT:
-					goto decode_int;
-				case ParseState::DECODE_INT8:
-					goto decode_int8;
-				case ParseState::DECODE_INT16:
-					goto decode_int16;
-				case ParseState::DECODE_INT24:
-					goto decode_int24;
-				case ParseState::DECODE_INT64:
-					goto decode_int64;
-				case ParseState::DECODE_STRING:
-					goto decode_string_parse;
-				case ParseState::DECODE_STRING_WAIT:
-					goto decode_string_wait;
-				case ParseState::DECODE_EOF_STRING:
-					goto decode_eof_string_wait;
-				case ParseState::DECODE_NULL_STRING:
-					goto decode_null_string_wait;
 				default:
 					throw new \UnexpectedValueException("{$this->state} is not a valid ParseState constant");
 			}
 		}
 
-		determine_packet_len: {
-			if (isset($int)) {
-				if ($this->lastIn) {
-					$this->packet = "";
-					$this->packetSize = $int;
-				} else {
-					$this->packetSize += $int;
-				}
-				unset($int);
-				$this->state = ParseState::PARSE_SEQ_ID;
-				goto parse_seq_id;
-			} else {
-				goto decode_int24;
+		determine_header: {
+			if ($this->mysqlBuflen < 4) {
+				goto more_data_needed;
 			}
-		}
 
-		parse_seq_id: {
-			if (isset($int)) {
-				$this->seqId = $int;
-				unset($int);
-				$this->readLen -= 4;
-				$this->state = ParseState::FETCH_PACKET;
-				goto start;
+			$len = DataTypes::decode_int24($this->mysqlBuf);
+			if ($this->lastIn) {
+				$this->packet = "";
+				$this->packetSize = $len;
 			} else {
-				goto decode_int8;
+				$this->packetSize += $len;
 			}
+
+			$this->seqId = ord($this->mysqlBuf[3]);
+
+			$this->mysqlBuf = substr($this->mysqlBuf, 4);
+			$this->mysqlBuflen -= 4;
+			$this->state = ParseState::FETCH_PACKET;
+
+			// goto fetch_packet;
 		}
 
 		fetch_packet: {
-			if ($this->inBuflen < ($this->packetSize & 0xffffff)) {
+			if ($this->mysqlBuflen < ($this->packetSize & 0xffffff)) {
 				goto more_data_needed;
 			}
 
@@ -1267,13 +1246,13 @@ class Connection {
 			} else {
 				$size = 0xffffff;
 			}
-			$this->packet .= substr($this->inBuf, 0, $size);
-			$this->inBuf = substr($this->inBuf, $size);
-			$this->inBuflen -= $size;
+			$this->packet .= substr($this->mysqlBuf, 0, $size);
+			$this->mysqlBuf = substr($this->mysqlBuf, $size);
+			$this->mysqlBuflen -= $size;
 
 			if (!$this->lastIn) {
 				$this->state = ParseState::START;
-				goto determine_packet_len;
+				goto determine_header;
 			}
 
 			if ($this->packetSize > 0) {
@@ -1292,7 +1271,7 @@ class Connection {
 					goto finished;
 				} else {
 					$this->packetType = ord($this->packet);
-					goto payload;
+					// goto payload;
 				}
 			}
 		}
@@ -1337,157 +1316,9 @@ class Connection {
 			goto finished;
 		}
 
-		decode_int: {
-			if ($this->inBuflen < 1) {
-				goto more_data_needed;
-			}
-
-			$int = ord($this->inBuf);
-			if ($int < 0xfb) {
-				$this->inBuf = substr($this->inBuf, 1);
-				$this->inBuflen -= 1;
-				goto start;
-			} elseif ($int == 0xfc) {
-				goto decode_int16;
-			} elseif ($int == 0xfd) {
-				goto decode_int24;
-			} elseif ($int == 0xfe) {
-				goto decode_int64;
-			} else {
-				// If that happens connection is borked...
-				throw new \RangeException("$int is not in ranges [0x00, 0xfa] or [0xfc, 0xfe]");
-			}
-		}
-
-		decode_int8: {
-			if ($this->inBuflen < 1) {
-				goto more_data_needed;
-			}
-
-			$int = ord($this->inBuf);
-			$this->inBuf = substr($this->inBuf, 1);
-			$this->inBuflen -= 1;
-			goto start;
-		}
-
-		decode_int16: {
-			$intlen = isset($int) + 2;
-			if ($this->inBuflen < $intlen) {
-				goto more_data_needed;
-			}
-
-			$int = unpack("v", substr($this->inBuf, isset($int), 2))[1];
-			$this->inBuf = substr($this->inBuf, $intlen);
-			$this->inBuflen -= $intlen;
-			goto start;
-		}
-
-		decode_int24: {
-			$intlen = isset($int) + 3;
-			if ($this->inBuflen < $intlen) {
-				goto more_data_needed;
-			}
-
-			$int = unpack("V", substr($this->inBuf, isset($int), 3) . "\x00")[1];
-			$this->inBuf = substr($this->inBuf, $intlen);
-			$this->inBuflen -= $intlen;
-			goto start;
-		}
-
-		decode_int32: {
-			if ($this->inBuflen < 4) {
-				goto more_data_needed;
-			}
-
-			$int = unpack("V", substr($this->inBuf, 0, 4))[1];
-			$this->inBuf = substr($this->inBuf, 4);
-			$this->inBuflen -= 4;
-			goto start;
-		}
-
-		decode_int64: {
-			$intlen = isset($int) + 8;
-			if ($this->inBuflen < $intlen) {
-				goto more_data_needed;
-			}
-
-			$int = unpack("V2", substr($this->inBuf, isset($int), 8));
-			$int = $int[2] + ($int[1] << 32);
-			$this->inBuf = substr($this->inBuf, $intlen);
-			$this->inBuflen -= $intlen;
-			goto start;
-		}
-
-		decode_eof_string: {
-			$this->oldState = $this->state;
-			$this->state = ParseState::DECODE_EOF_STRING;
-			goto decode_eof_string_wait;
-		}
-
-		decode_eof_string_wait: {
-			if ($this->readLen < $this->packetSize) {
-				goto more_data_needed;
-			}
-
-			$this->strlen = $this->inBuflen - ($this->readLen - $this->packetSize);
-			$string = substr($this->inBuf, 0, $this->strlen);
-			$this->inBuf = substr($this->inBuf, $this->strlen);
-			$this->inBuflen -= $this->strlen;
-			$this->state = $this->oldState;
-			goto start;
-		}
-
-		decode_string: {
-			$this->oldState = $this->state;
-			$this->state = ParseState::DECODE_STRING;
-			goto decode_string_parse;
-		}
-
-		decode_string_parse: {
-			if (isset($int)) {
-				$this->strlen = $int;
-				unset($int);
-				$this->state = ParseState::DECODE_STRING_WAIT;
-				goto decode_string_wait;
-			} else {
-				goto decode_int;
-			}
-		}
-
-		decode_string_wait: {
-			if ($this->inBuflen < $this->strlen) {
-				goto more_data_needed;
-			}
-
-			$string = substr($this->inBuf, 0, $this->strlen);
-			$this->inBuf = substr($this->inBuf, $this->strlen);
-			$this->inBuflen -= $this->strlen;
-			$this->state = $this->oldState;
-			goto start;
-		}
-
-		decode_null_string: {
-			$this->oldState = $this->state;
-			$this->state = ParseState::DECODE_NULL_STRING;
-			goto decode_null_string_wait;
-		}
-
-		decode_null_string_wait: {
-			if (($this->strlen = strpos($this->inBuf, "\0", $this->strlen)) === false) {
-				$this->strlen = $this->inBuflen;
-				goto more_data_needed;
-			}
-
-			$this->inBuflen -= $this->strlen + 1;
-			$string = substr($this->inBuf, 0, $this->strlen); // without NULL byte
-			$this->inBuf = substr($this->inBuf, $this->strlen + 1);
-			$this->state = $this->oldState;
-			goto start;
-		}
-
 		finished: {
 			$this->state = ParseState::START;
-			if ($this->inBuflen > 0) {
+			if ($this->mysqlBuflen > 0) {
 				goto start;
 			}
 			return true;
@@ -1589,17 +1420,7 @@ class Connection {
 
 class ParseState {
 	const START = 0;
-	const DECODE_INT = 1;
-	const DECODE_INT8 = 2;
-	const DECODE_INT16 = 3;
-	const DECODE_INT24 = 4;
-	const DECODE_INT64 = 5;
-	const DECODE_STRING = 6;
-	const DECODE_STRING_WAIT = 7;
-	const DECODE_NULL_STRING = 8;
-	const DECODE_EOF_STRING = 9;
-	const PARSE_SEQ_ID = 10;
-	const FETCH_PACKET = 11;
+	const FETCH_PACKET = 1;
 }
 
 /** @see 14.1.3.4 Status Flags */
