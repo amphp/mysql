@@ -110,12 +110,14 @@ class Stmt {
 		}
 	}
 
-	private function updateState() {
-		foreach ($this->futures as $future) {
-			$future->succeed($this->columns);
+	private function updateState($state) {
+		if ($state == ResultSet::COLUMNS_FETCHED) {
+			foreach ($this->futures as $future) {
+				$future->succeed($this->columns);
+			}
+			$this->futures = [];
+			$this->state = ResultSet::COLUMNS_FETCHED;
 		}
-		$this->futures = [];
-		$this->state = ResultSet::COLUMNS_FETCHED;
 	}
 
 	public function connInfo() {

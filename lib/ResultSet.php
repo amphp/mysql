@@ -91,6 +91,9 @@ class ResultSet {
 
 	private function updateState($state) {
 		$this->state = $state;
+		if ($state == self::ROWS_FETCHED) {
+			$this->rowFetched(null);
+		}
 		if (empty($this->futures[$state])) {
 			return;
 		}
