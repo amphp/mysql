@@ -225,7 +225,7 @@ class DataTypes {
 	}
 
 	public static function decode_int24($str) {
-		return unpack("V", substr($str, isset($int), 3) . "\x00")[1];
+		return unpack("V", substr($str, 0, 3) . "\x00")[1];
 	}
 
 	public static function decode_int32($str) {
@@ -233,8 +233,8 @@ class DataTypes {
 	}
 
 	public static function decode_int64($str) {
-		$int = unpack("V2", substr($str, isset($int), 8));
-		return $int[2] + ($int[1] << 32);
+		$int = unpack("V2", $str);
+		return $int[1] + ($int[2] << 32);
 	}
 
 	public static function encodeInt($int) {
