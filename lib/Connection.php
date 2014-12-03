@@ -20,17 +20,20 @@ class Connection {
 	private $out = [];
 	private $outBuf;
 	private $outBuflen = 0;
-	private $lastOut = true;
+	private $uncompressedOut = "";
 	private $compressionBuf;
 	private $compressionBuflen = 0;
 	private $mysqlBuf;
 	private $mysqlBuflen = 0;
 	private $lastIn = true;
 	private $packet;
-	private $state = ParseState::START;
-	private $oldState;
+	private $compressionSize;
+	private $uncompressedSize;
+	private $mysqlState = ParseState::START;
+	private $compressionState = ParseState::START;
 	private $protocol;
 	private $seqId = -1;
+	private $compressionId = -1;
 	private $packetSize;
 	private $packetType;
 	private $socket;
@@ -67,6 +70,7 @@ class Connection {
 	protected $connectionState = self::UNCONNECTED;
 
 	const MAX_PACKET_SIZE = 0xffffff;
+	const MAX_UNCOMPRESSED_BUFLEN = 0xfffffb;
 
 	const CLIENT_LONG_FLAG = 0x00000004;
 	const CLIENT_CONNECT_WITH_DB = 0x00000008;
@@ -152,7 +156,7 @@ class Connection {
 		$this->compressionBuf = $this->mysqlBuf = "";
 		$this->compressionBuflen = $this->mysqlBuflen = 0;
 		$this->out = [];
-		$this->seqId = -1;
+		$this->seqId = $this->compressionId = -1;
 
 		$this->reactor->cancel($this->readWatcher);
 		$this->readWatcher = $this->reactor->onReadable($this->socket, [$this, "onRead"]);
@@ -183,7 +187,7 @@ class Connection {
 	}
 
 	private function startCommand($future = null) {
-		$this->seqId = -1;
+		$this->seqId = $this->compressionId = -1;
 		/*$payload = array_pop($this->out);
 		$this->out[] = null;
 		$this->out[] = $payload;*/
@@ -439,26 +443,13 @@ class Connection {
 		return $future;
 	}
 
-	public function onRead() {
-		$bytes = @fread($this->socket, $this->readGranularity);
-		if ($bytes != "") {
-			if ($this->capabilities & self::CLIENT_COMPRESS) {
-				$bytes = $this->parseCompression($bytes);
-			}
-			if ($bytes != "") {
-				$this->parseMysql($bytes);
-			}
-		} else {
-			// Gone away...
-			// @TODO restart connection; throw error? remove from ready Connections
-			var_dump("Gone away?!");
-			$this->closeSocket();
-		}
-	}
-
 	private function established() {
 		// @TODO flags to use?
 		$this->capabilities |= self::CLIENT_SESSION_TRACK | self::CLIENT_TRANSACTIONS | self::CLIENT_PROTOCOL_41 | self::CLIENT_SECURE_CONNECTION | self::CLIENT_MULTI_RESULTS | self::CLIENT_PS_MULTI_RESULTS | self::CLIENT_MULTI_STATEMENTS;
+
+		if (extension_loaded("zlib")) {
+			$this->capabilities |= self::CLIENT_COMPRESS;
+		}
 
 		$this->writeWatcher = $this->reactor->onWritable($this->socket, [$this, "onWrite"], $enableNow = false);
 	}
@@ -717,7 +708,7 @@ class Connection {
 
 		do_handshake: {
 			$this->sendHandshake();
-			$this->state = ParseState::START;
+			$this->mysqlState = ParseState::START;
 			return NULL;
 		}
 	}
@@ -799,9 +790,9 @@ class Connection {
 				$this->parseCallback = null;
 				$this->handleError();
 			} else {
-				$this->parseCallback = [$this, $cbMethod];
+				$cb = $this->parseCallback = [$this, $cbMethod];
 				if ($this->capabilities & self::CLIENT_DEPRECATE_EOF) {
-					$this->handleTextResultsetRow();
+					$cb();
 				} else {
 					$this->parseEof();
 					// we don't need the EOF packet, skip!
@@ -1136,49 +1127,93 @@ class Connection {
 		$this->connectionState = self::CLOSED;
 	}
 
+	private function compilePacket() {
+		while (1) {
+			$pending = current($this->out);
+			unset($this->out[key($this->out)]);
+			if ($pending !== null || empty($this->out)) {
+				break;
+			}
+			$this->seqId = $this->compressionId = -1;
+		}
+		if ($pending == "") {
+			return $pending;
+		}
+
+		$packet = "";
+		do {
+			$len = strlen($pending);
+			if ($len >= (1 << 24) - 1) {
+				$out = substr($pending, 0, (1 << 24) - 1);
+				$pending = substr($pending, (1 << 24) - 1);
+				$len = (1 << 24) - 1;
+			} else {
+				$out = $pending;
+				$pending = "";
+			}
+			$packet .= substr_replace(pack("V", $len), chr(++$this->seqId), 3, 1) . $out; // expects $len < (1 << 24) - 1
+		} while ($pending != "");
+
+		if (defined("MYSQL_DEBUG")) {
+			for ($i = 0; $i < min(strlen($packet), 200); $i++)
+				fwrite(STDERR, dechex(ord($packet[$i])) . " ");
+			$r = range("\0", "\x19");
+			unset($r[10], $r[9]);
+			print "len: ".strlen($packet)." ";
+			var_dump(str_replace($r, ".", substr($packet, 0, 200)));
+		}
+
+		return $packet;
+	}
+
+	private function compressPacket($packet) {
+		$packet = $this->uncompressedOut.$packet;
+
+		if ($packet == "") {
+			return "";
+		}
+
+		$len = strlen($packet);
+		while ($len < self::MAX_UNCOMPRESSED_BUFLEN && !empty($this->out)) {
+			$packet .= $this->compilePacket();
+			$len = strlen($this->uncompressedOut);
+		}
+
+		$this->uncompressedOut = substr($packet, self::MAX_UNCOMPRESSED_BUFLEN);
+		$packet = substr($packet, 0, self::MAX_UNCOMPRESSED_BUFLEN);
+		$len = strlen($packet);
+
+		$deflated = zlib_encode($packet, ZLIB_ENCODING_DEFLATE);
+		if ($len < strlen($deflated)) {
+			$out = substr_replace(pack("V", strlen($packet)), chr(++$this->compressionId), 3, 1) . "\0\0\0" . $packet;
+		} else {
+			$out = substr_replace(pack("V", strlen($deflated)), chr(++$this->compressionId), 3, 1) . substr(pack("V", $len), 0, 3) . $deflated;
+		}
+
+		return $out;
+	}
+
 	public function onWrite() {
 		if ($this->outBuflen == 0) {
-			while (1) {
-				$out = current($this->out);
-				if ($out !== null || empty($this->out)) {
-					break;
-				}
-				$this->seqId = -1;
-				unset($this->out[key($this->out)]);
-			}
-			$len = strlen($out);
-			if ($len >= (1 << 24) - 1) {
-				$this->out[key($this->out)] = substr($out, (1 << 24) - 1);
-				$out = substr($out, 0, (1 << 24) - 1);
-				$len = (1 << 24) - 1;
-				$this->lastOut = false;
-			} else {
-				$this->lastOut = true;
-			}
-			$this->outBuf = substr_replace(pack("V", $len), chr(++$this->seqId), 3, 1) . $out; // expects $len < (1 << 24) - 1
-			$this->outBuflen += 4 + $len;
+			$doCompress = ($this->capabilities & self::CLIENT_COMPRESS) && $this->connectionState >= self::READY;
 
-			if (defined("MYSQL_DEBUG")) {
-				for ($i = 0; $i < min($this->outBuflen, 200); $i++)
-					fwrite(STDERR, dechex(ord($this->outBuf[$i])) . " ");
-				$r = range("\0", "\x19");
-				unset($r[10], $r[9]);
-				print "len: ".strlen($this->outBuf)." ";
-				var_dump(str_replace($r, ".", substr($this->outBuf, 0, 200)));
+			$packet = $this->compilePacket();
+			if ($doCompress) {
+				$packet = $this->compressPacket($packet);
+			}
+
+			$this->outBuf = $packet;
+			$this->outBuflen = strlen($packet);
+
+			if ($this->outBuflen == 0) {
+				$this->reactor->disable($this->writeWatcher);
+				$this->watcherEnabled = false;
 			}
 		}
 
 		$bytes = @fwrite($this->socket, $this->outBuf);
 		$this->outBuflen -= $bytes;
-		if ($this->outBuflen == 0) {
-			if ($this->lastOut) {
-				unset($this->out[key($this->out)]);
-				if (empty($this->out)) {
-					$this->reactor->disable($this->writeWatcher);
-					$this->watcherEnabled = false;
-				}
-			}
-		} else {
+		if ($this->outBuflen > 0) {
 			if ($bytes == 0) {
 				// @TODO handle gone away
 			} else {
@@ -1187,28 +1222,105 @@ class Connection {
 		}
 	}
 
+	public function onRead() {
+		$bytes = @fread($this->socket, $this->readGranularity);
+		if ($bytes != "") {
+			if (($this->capabilities & self::CLIENT_COMPRESS) && $this->connectionState >= self::READY) {
+				$bytes = $this->parseCompression($bytes);
+			}
+			if ($bytes != "") {
+				$this->parseMysql($bytes);
+			}
+		} else {
+			// Gone away...
+			// @TODO restart connection; throw error? remove from ready Connections
+			var_dump("Gone away?!");
+			$this->closeSocket();
+		}
+	}
+
 	/** @see 14.4 Compression */
 	private function parseCompression($inBuf) {
-		// @TODO everything for compression :-)
-		return $inBuf;
+		$this->compressionBuf .= $inBuf;
+		$this->compressionBuflen += strlen($inBuf);
+		$inflated = "";
+
+		start: {
+			switch ($this->compressionState) {
+				case ParseState::START:
+					goto determine_header;
+				case ParseState::FETCH_PACKET:
+					goto fetch_packet;
+				default:
+					throw new \UnexpectedValueException("{$this->compressionState} is not a valid ParseState constant");
+			}
+		}
+
+		determine_header: {
+			if ($this->compressionBuflen < 4) {
+				goto more_data_needed;
+			}
+
+			$this->compressionSize = DataTypes::decode_int24($this->compressionBuf);
+
+			$this->compressionId = ord($this->mysqlBuf[3]);
+
+			$this->uncompressedSize = DataTypes::decode_int24(substr($this->compressionBuf, 4, 3));
+
+			$this->compressionBuf = substr($this->compressionBuf, 7);
+			$this->compressionBuflen -= 7;
+			$this->compressionState = ParseState::FETCH_PACKET;
+
+			// goto fetch_packet;
+		}
+
+		fetch_packet: {
+			if ($this->compressionBuflen < $this->compressionSize) {
+				goto more_data_needed;
+			}
+
+			if ($this->compressionSize > 0) {
+				if ($this->uncompressedSize == 0) {
+					$inflated .= substr($this->compressionBuf, 0, $this->compressionSize);
+				} else {
+					$inflated .= zlib_decode(substr($this->compressionBuf, 0, $this->compressionSize), $this->uncompressedSize);
+				}
+				$this->compressionBuf = substr($this->compressionBuf, $this->compressionSize);
+				$this->compressionBuflen -= $this->compressionSize;
+			}
+
+			// goto finished;
+		}
+
+		finished: {
+			$this->compressionState = ParseState::START;
+			if ($this->compressionBuflen > 0) {
+				goto start;
+			}
+			return $inflated;
+		}
+
+		more_data_needed: {
+			return $inflated;
+		}
 	}
 
 	/**
 	 * @see 14.1.2 MySQL Packet
 	 * @see 14.1.3 Generic Response Packets
 	 */
-	private function parseMySQL($inBuf) {
+	private function parseMysql($inBuf) {
 		$this->mysqlBuf .= $inBuf;
 		$this->mysqlBuflen += strlen($inBuf);
 
 		start: {
-			switch ($this->state) {
+			switch ($this->mysqlState) {
 				case ParseState::START:
 					goto determine_header;
 				case ParseState::FETCH_PACKET:
 					goto fetch_packet;
 				default:
-					throw new \UnexpectedValueException("{$this->state} is not a valid ParseState constant");
+					throw new \UnexpectedValueException("{$this->mysqlState} is not a valid ParseState constant");
 			}
 		}
 
@@ -1218,18 +1330,20 @@ class Connection {
 			}
 
 			$len = DataTypes::decode_int24($this->mysqlBuf);
+
 			if ($this->lastIn) {
 				$this->packet = "";
 				$this->packetSize = $len;
 			} else {
 				$this->packetSize += $len;
 			}
+			$this->lastIn = $len != 0xffffff;
 
 			$this->seqId = ord($this->mysqlBuf[3]);
 
 			$this->mysqlBuf = substr($this->mysqlBuf, 4);
 			$this->mysqlBuflen -= 4;
-			$this->state = ParseState::FETCH_PACKET;
+			$this->mysqlState = ParseState::FETCH_PACKET;
 
 			// goto fetch_packet;
 		}
@@ -1239,19 +1353,18 @@ class Connection {
 				goto more_data_needed;
 			}
 
-			$this->lastIn = $this->packetSize % 0xffffff != 0;
-
 			if ($this->lastIn) {
 				$size = $this->packetSize % 0xffffff;
 			} else {
 				$size = 0xffffff;
 			}
+
 			$this->packet .= substr($this->mysqlBuf, 0, $size);
 			$this->mysqlBuf = substr($this->mysqlBuf, $size);
 			$this->mysqlBuflen -= $size;
 
 			if (!$this->lastIn) {
-				$this->state = ParseState::START;
+				$this->mysqlState = ParseState::START;
 				goto determine_header;
 			}
 
@@ -1317,7 +1430,7 @@ class Connection {
 		}
 
 		finished: {
-			$this->state = ParseState::START;
+			$this->mysqlState = ParseState::START;
 			if ($this->mysqlBuflen > 0) {
 				goto start;
 			}
