@@ -104,7 +104,9 @@ class ResultSet {
 	}
 
 	private function rowFetched($row) {
-		$this->rows[$this->fetchedRows++] = $row;
+		if ($row !== null) {
+			$this->rows[$this->fetchedRows++] = $row;
+		}
 		list($key, $entry) = each($this->futures[self::SINGLE_ROW_FETCH]);
 		if ($key !== null) {
 			unset($this->futures[self::SINGLE_ROW_FETCH][$key]);
