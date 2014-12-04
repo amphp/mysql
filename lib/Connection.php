@@ -744,19 +744,17 @@ class Connection {
 
 	/** @see 14.6.4.1.1 Text Resultset */
 	private function handleQuery() {
-		$this->parseCallback = true; // ensure that parseCallback is set for verification in self::appendTask()
+		$this->parseCallback = [$this, "handleTextColumnDefinition"];
 		$this->getFuture()->succeed($resultSet = new ResultSet($this->reactor, $this->connInfo));
 		$this->bindResultSet($resultSet);
-		$this->parseCallback = [$this, "handleTextColumnDefinition"];
 		$this->resultSetMethod("setColumns", ord($this->packet));
 	}
 
 	/** @see 14.7.1 Binary Protocol Resultset */
 	private function handleExecute() {
-		$this->parseCallback = true; // ensure that parseCallback is set for verification in self::appendTask()
+		$this->parseCallback = [$this, "handleBinaryColumnDefinition"];
 		$this->getFuture()->succeed($resultSet = new ResultSet($this->reactor, $this->connInfo));
 		$this->bindResultSet($resultSet);
-		$this->parseCallback = [$this, "handleBinaryColumnDefinition"];
 		$this->resultSetMethod("setColumns", ord($this->packet));
 	}
 
@@ -1410,7 +1408,7 @@ class Connection {
 					}
 					/* intentionally missing break */
 				case self::EXTRA_AUTH_PACKET:
-					if ($this->mysqlState === self::ESTABLISHED) {
+					if ($this->connectionState === self::ESTABLISHED) {
 						/** @see 14.2.5 Connection Phase Packets (AuthMoreData) */
 						// @TODO ... 14.2.2.2
 						break;
