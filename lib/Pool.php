@@ -1,7 +1,6 @@
 <?php
 
 namespace Mysql;
-use Amp\Success;
 
 /**
  * @TODO limit?
@@ -35,19 +34,19 @@ class Pool {
 		$this->addConnection();
 	}
 
-	public function setCharset($charset, $collate) {
+	public function setCharset($charset, $collate = "") {
 		$this->ready = [];
+		$this->config->charset = $charset;
+		$this->config->collate = $collate;
 		foreach ($this->connections as $conn) {
 			if ($conn->alive()) {
 				$conn->setCharset($charset, $collate);
 			}
 		}
-		// @TODO map the damn charsets/collates to a binary value...
-		$this->config->charset = 0x21; // utf8...
 	}
 
 	public function useExceptions($set) {
-		$this->exceptions = $set;
+		$this->config->exceptions = $set;
 	}
 
 	private function resolveHost($host) {
@@ -69,6 +68,15 @@ class Pool {
 	private function addConnection() {
 		$this->connections[] = $conn = new Connection($this->reactor, $this->connector, $this->config, $this->host, $this->resolvedHost, $this->user, $this->pass, $this->db);
 		$this->connectionFuture = $conn->connect();
+		$this->connectionFuture->when(function($error) use ($conn) {
+			if ($error) {
+				return;
+			}
+
+			if ($this->config->charset != "utf8" && ($this->config->collate == "" || $this->config->collate == "utf8_general_ci")) {
+				$conn->setCharset($this->config->charset, $this->config->collate);
+			}
+		});
 	}
 
 	private function ready($conn) {

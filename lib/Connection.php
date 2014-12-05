@@ -7,9 +7,8 @@ use Amp\Success;
 use Nbsock\Connector;
 
 /* @TODO
- * Character Set(s)
  * CLIENT_SSL (14.2.5 / 14.5)
- * fallback old ath?
+ * fallback old auth?
  * Auth switch request??
  * COM_CHANGE_USER
  * 14.3 alternative auths
@@ -194,8 +193,13 @@ class Connection {
 		return $this->futures[] = $future ?: new Future($this->reactor);
 	}
 
-	private function setCharset($charset, $collate) {
-		return $this->query("SET NAMES '$charset' COLLATE '$collate'");
+	public function setCharset($charset, $collate) {
+		$query = "SET NAMES '$charset'".($collate == "" ? "" : " COLLATE '$collate'");
+		$future = new Future($this->reactor);
+		$this->appendTask(function() use ($query, $future) {
+			$this->query($query, $future);
+		});
+		return $future;
 	}
 
 	/** @see 14.6.2 COM_QUIT */
@@ -1479,7 +1483,7 @@ class Connection {
 		$payload = "";
 		$payload .= pack("V", $this->capabilities);
 		$payload .= pack("V", 1 << 24 - 1); // max-packet size
-		$payload .= chr($this->config->charset);
+		$payload .= chr($this->config->binCharset);
 		$payload .= str_repeat("\0", 23); // reserved
 		$payload .= $this->user."\0";
 		if ($this->capabilities & self::CLIENT_PLUGIN_AUTH) {
