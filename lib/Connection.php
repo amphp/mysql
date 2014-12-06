@@ -89,8 +89,8 @@ class Connection {
 	const OK_PACKET = 0x00;
 	const EXTRA_AUTH_PACKET = 0x01;
 	const LOCAL_INFILE_REQUEST = 0xfb;
-	const ERR_PACKET = 0xff;
 	const EOF_PACKET = 0xfe;
+	const ERR_PACKET = 0xff;
 
 	const UNCONNECTED = 0;
 	const ESTABLISHED = 1;
@@ -1414,7 +1414,15 @@ class Connection {
 				case self::EXTRA_AUTH_PACKET:
 					if ($this->connectionState === self::ESTABLISHED) {
 						/** @see 14.2.5 Connection Phase Packets (AuthMoreData) */
-						// @TODO ... 14.2.2.2
+						switch ($this->authPluginName) {
+							case "sha256_password":
+								$key = substr($this->packet, 1);
+								$this->config->key[$this->resolvedHost] = $key;
+								$this->sendHandshake();
+								break;
+							default:
+								throw new \Exception("Unexpected EXTRA_AUTH_PACKET in authentication phase for method {$this->authPluginName}");
+						}
 						break;
 					}
 					/* intentionally missing break */
@@ -1449,10 +1457,15 @@ class Connection {
 		return $hash ^ sha1(substr($scramble, 0, 20) . sha1($hash, 1), 1);
 	}
 
+	private function sha256Auth($pass, $scramble, $key) {
+		openssl_public_encrypt($pass ^ str_repeat($scramble, ceil(strlen($pass) / strlen($scramble))), $auth, $key, OPENSSL_PKCS1_OAEP_PADDING);
+		return $auth;
+	}
+
 	private function authSwitchRequest() {
 		$this->parseCallback = null;
 		switch (ord($this->packet)) {
-			case 0xfe:
+			case self::EOF_PACKET:
 				if ($this->packetSize == 1) {
 					break;
 				}
@@ -1487,7 +1500,29 @@ class Connection {
 		$payload .= str_repeat("\0", 23); // reserved
 		$payload .= $this->user."\0";
 		if ($this->capabilities & self::CLIENT_PLUGIN_AUTH) {
-			$auth = ""; // @TODO AUTH
+			switch ($this->authPluginName) {
+				case "mysql_native_password":
+					$auth = $this->secureAuth($this->pass, $this->authPluginData);
+					break;
+				case "mysql_clear_password":
+					$auth = $this->pass;
+					break;
+				case "sha256_password":
+					if ($this->pass === "") {
+						$auth = "";
+					} else {
+						if (isset($this->config->key[$this->resolvedHost])) {
+							$auth = $this->sha256Auth($this->pass, $this->authPluginData, $this->config->key[$this->resolvedHost]);
+						} else {
+							$auth = "\x1";
+						}
+					}
+					break;
+				case "mysql_old_password":
+					throw new \Exception("mysql_old_password is outdated and insecure. Intentionally not implemented!");
+				default:
+					throw new \Exception("Invalid (or unimplemented?) auth method requested by server: {$this->authPluginName}");
+			}
 		} elseif ($this->pass !== "") {
 			$auth = $this->secureAuth($this->pass, $this->authPluginData);
 		} else {
