@@ -3,6 +3,12 @@
 namespace Mysql;
 
 class ConnectionConfig {
+	public $host;
+	public $resolvedHost;
+	public $user;
+	public $pass;
+	public $db = null;
+
 	public $ready = null;
 	public $busy = null;
 	public $exceptions = true;

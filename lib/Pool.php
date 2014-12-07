@@ -2,36 +2,51 @@
 
 namespace Mysql;
 
-/**
- * @TODO limit?
- */
-
 class Pool {
-	private $host;
-	private $resolvedHost;
-	private $db;
-	private $user;
 	private $connector;
 	private $connections = [];
+	private $connectionMap = [];
 	private $ready = [];
 	private $readyMap = [];
 	private $connectionFuture;
 	private $virtualConnection;
 	private $config = true;
+	private $limit;
 
-	public function __construct($host, $user, $pass, $db = null, \Amp\Reactor $reactor = null) {
+	public function __construct($connStr, \Amp\Reactor $reactor = null) {
 		$this->reactor = $reactor ?: \Amp\reactor();
 		$this->connector = new \Nbsock\Connector($this->reactor);
-		$this->resolveHost($host);
-		$this->user = $user;
-		$this->pass = $pass;
-		$this->db = $db;
-		$this->virtualConnection = new VirtualConnection($this->reactor);
+
+		$db = null;
+		$limit = INF;
+
+		// well, yes. I *had* to document that behavior change. Future me, feel free to kill me ;-)
+		foreach (explode(";", $connStr) as $param) {
+			if (PHP_VERSION_ID < 70000) {
+				list($$key, $key) = array_reverse(explode("=", $param, 2));
+			} else {
+				list($key, $$key) = explode("=", $param, 2);
+			}
+		}
+		if (!isset($host, $user, $pass)) {
+			throw new \Exception("Required parameters host, user and pass need to be passed in connection string");
+		}
+
 		$this->config = new ConnectionConfig;
+		$this->resolveHost($host);
+		$this->config->user = $user;
+		$this->config->pass = $pass;
+		$this->config->db = $db;
+		$this->limit = $limit;
+		$this->initLocal();
+		$this->addConnection();
+	}
+
+	private function initLocal() {
+		$this->virtualConnection = new VirtualConnection($this->reactor);
 		$this->config->ready = function($conn) { $this->ready($conn); };
 		$this->config->restore = function() { return $this->getReadyConnection(); };
 		$this->config->busy = function($conn) { unset($this->ready[$this->readyMap[spl_object_hash($conn)]]); };
-		$this->addConnection();
 	}
 
 	public function setCharset($charset, $collate = "") {
@@ -53,20 +68,26 @@ class Pool {
 		$index = strpos($host, ':');
 
 		if($index === false) {
-			$this->host = $host;
-			$this->resolvedHost = "tcp://$host:3306";
+			$this->config->host = $host;
+			$this->config->resolvedHost = "tcp://$host:3306";
 		} else if($index === 0) {
-			$this->host = "localhost";
-			$this->resolvedHost = "tcp://localhost:" . (int) substr($host, 1);
+			$this->config->host = "localhost";
+			$this->config->resolvedHost = "tcp://localhost:" . (int) substr($host, 1);
 		} else {
 			list($host, $port) = explode(':', $host, 2);
-			$this->host = $host;
-			$this->resolvedHost = "tcp://$host:" . (int) $port;
+			$this->config->host = $host;
+			$this->config->resolvedHost = "tcp://$host:" . (int) $port;
 		}
 	}
 
 	private function addConnection() {
-		$this->connections[] = $conn = new Connection($this->reactor, $this->connector, $this->config, $this->host, $this->resolvedHost, $this->user, $this->pass, $this->db);
+		if (count($this->connections) >= $this->limit) {
+			return;
+		}
+
+		$this->connections[] = $conn = new Connection($this->reactor, $this->connector, $this->config);
+		end($this->connections);
+		$this->connectionMap[spl_object_hash($conn)] = key($this->connections);
 		$this->connectionFuture = $conn->connect();
 		$this->connectionFuture->when(function($error) use ($conn) {
 			if ($error) {
@@ -172,6 +193,22 @@ class Pool {
 
 	public function prepare($query) {
 		return $this->getReadyConnection()->prepare($query);
+	}
+
+	// @TODO really use this?
+	public function getConnection() {
+		$pool = clone $this;
+		$pool->limit = 0;
+		$pool->config = clone $pool->config;
+		$pool->initLocal();
+		return $this->getReadyConnection()->getThis()->when(function($error, $conn) use ($pool) {
+			$hash = spl_object_hash($conn);
+			unset($this->connections[$this->connectionMap[$hash]], $this->connectionMap[$hash]);
+			$pool->limit = 1;
+			$pool->connections = [$conn];
+			$pool->connectionMap[$hash] = 0;
+			$pool->ready($conn);
+		});
 	}
 
 	public function __destruct() {

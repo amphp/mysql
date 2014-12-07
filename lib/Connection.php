@@ -52,11 +52,6 @@ class Connection {
 	private $onReady = [];
 	private $resultSet = null;
 	private $resultSetMethod;
-	private $host;
-	private $resolvedHost;
-	private $user;
-	private $pass;
-	private $db;
 	private $oldDb = NULL;
 
 	protected $connectionId;
@@ -75,6 +70,7 @@ class Connection {
 	const CLIENT_CONNECT_WITH_DB = 0x00000008;
 	const CLIENT_COMPRESS = 0x00000020;
 	const CLIENT_PROTOCOL_41 = 0x00000200;
+	const CLIENT_SSL = 0x00000800;
 	const CLIENT_TRANSACTIONS = 0x00002000;
 	const CLIENT_SECURE_CONNECTION = 0x00008000;
 	const CLIENT_MULTI_STATEMENTS = 0x00010000;
@@ -98,14 +94,9 @@ class Connection {
 	const QUITTING = 3;
 	const CLOSED = 4;
 
-	public function __construct(Reactor $reactor, Connector $connector, ConnectionConfig $config, $host, $resolvedHost, $user, $pass, $db = null) {
+	public function __construct(Reactor $reactor, Connector $connector, ConnectionConfig $config) {
 		$this->reactor = $reactor;
 		$this->connector = $connector;
-		$this->host = $host;
-		$this->resolvedHost = $resolvedHost;
-		$this->user = $user;
-		$this->pass = $pass;
-		$this->db = $db;
 		$this->config = $config;
 		$this->connInfo = new ConnectionState;
 	}
@@ -120,6 +111,13 @@ class Connection {
 
 	public function getConfig() {
 		return $this->config;
+	}
+
+	public function getThis($future = null) {
+		if ($future) {
+			return $future->succeed($this);
+		}
+		return new Success($this);
 	}
 
 	private function ready() {
@@ -138,7 +136,7 @@ class Connection {
 
 	public function connect() {
 		$future = new Future($this->reactor);
-		$this->connector->connect($this->resolvedHost)->when(function ($error, $socket) use ($future) {
+		$this->connector->connect($this->config->resolvedHost)->when(function ($error, $socket) use ($future) {
 			if ($error) {
 				$future->fail($error);
 			} else {
@@ -211,8 +209,8 @@ class Connection {
 
 	/** @see 14.6.3 COM_INIT_DB */
 	public function useDb($db, $future = null) {
-		$this->oldDb = $this->db;
-		$this->db = $db;
+		$this->oldDb = $this->config->db;
+		$this->config->db = $db;
 		$this->sendPacket("\x02$db");
 		return $this->startCommand($future);
 	}
@@ -313,13 +311,13 @@ class Connection {
 	/** @see 14.6.18 COM_CHANGE_USER */
 	/* @TODO broken, my test server doesn't support that command, can't test now
 	public function changeUser($user, $pass, $db = null, $future = null) {
-		$this->user = $user;
-		$this->pass = $pass;
-		$this->db = $db;
+		$this->config->user = $user;
+		$this->config->pass = $pass;
+		$this->config->db = $db;
 		$payload = "\x11";
 
 		$payload .= "$user\0";
-		$auth = $this->secureAuth($this->pass, $this->authPluginData);
+		$auth = $this->secureAuth($this->config->pass, $this->authPluginData);
 		if ($this->capabilities & self::CLIENT_SECURE_CONNECTION) {
 			$payload .= ord($auth).$auth;
 		} else {
@@ -499,7 +497,7 @@ class Connection {
 			} elseif ($this->connectionState == self::ESTABLISHED) {
 				// connection failure
 				$this->closeSocket();
-				$this->getFuture()->fail(new \Exception("Could not connect to {$this->resolvedHost}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
+				$this->getFuture()->fail(new \Exception("Could not connect to {$this->config->resolvedHost}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
 			}
 		}
 	}
@@ -1417,7 +1415,7 @@ class Connection {
 						switch ($this->authPluginName) {
 							case "sha256_password":
 								$key = substr($this->packet, 1);
-								$this->config->key[$this->resolvedHost] = $key;
+								$this->config->key[$this->config->resolvedHost] = $key;
 								$this->sendHandshake();
 								break;
 							default:
@@ -1472,7 +1470,7 @@ class Connection {
 				$len = strpos($this->packet, "\0");
 				$pluginName = substr($this->packet, 0, $len); // @TODO mysql_native_pass only now...
 				$authPluginData = substr($this->packet, $len + 1);
-				$this->sendPacket($this->secureAuth($this->pass, $authPluginData));
+				$this->sendPacket($this->secureAuth($this->config->pass, $authPluginData));
 				break;
 			case self::ERR_PACKET:
 				$this->handleError();
@@ -1487,7 +1485,7 @@ class Connection {
 	 * @see 14.3 Authentication Method
 	 */
 	private function sendHandshake() {
-		if ($this->db !== null) {
+		if ($this->config->db !== null) {
 			$this->capabilities |= self::CLIENT_CONNECT_WITH_DB;
 		}
 
@@ -1498,21 +1496,21 @@ class Connection {
 		$payload .= pack("V", 1 << 24 - 1); // max-packet size
 		$payload .= chr($this->config->binCharset);
 		$payload .= str_repeat("\0", 23); // reserved
-		$payload .= $this->user."\0";
+		$payload .= $this->config->user."\0";
 		if ($this->capabilities & self::CLIENT_PLUGIN_AUTH) {
 			switch ($this->authPluginName) {
 				case "mysql_native_password":
-					$auth = $this->secureAuth($this->pass, $this->authPluginData);
+					$auth = $this->secureAuth($this->config->pass, $this->authPluginData);
 					break;
 				case "mysql_clear_password":
-					$auth = $this->pass;
+					$auth = $this->config->pass;
 					break;
 				case "sha256_password":
-					if ($this->pass === "") {
+					if ($this->config->pass === "") {
 						$auth = "";
 					} else {
-						if (isset($this->config->key[$this->resolvedHost])) {
-							$auth = $this->sha256Auth($this->pass, $this->authPluginData, $this->config->key[$this->resolvedHost]);
+						if (isset($this->config->key[$this->config->resolvedHost])) {
+							$auth = $this->sha256Auth($this->config->pass, $this->authPluginData, $this->config->key[$this->config->resolvedHost]);
 						} else {
 							$auth = "\x1";
 						}
@@ -1523,8 +1521,8 @@ class Connection {
 				default:
 					throw new \Exception("Invalid (or unimplemented?) auth method requested by server: {$this->authPluginName}");
 			}
-		} elseif ($this->pass !== "") {
-			$auth = $this->secureAuth($this->pass, $this->authPluginData);
+		} elseif ($this->config->pass !== "") {
+			$auth = $this->secureAuth($this->config->pass, $this->authPluginData);
 		} else {
 			$auth = "";
 		}
@@ -1538,7 +1536,7 @@ class Connection {
 			$payload .= "$auth\0";
 		}
 		if ($this->capabilities & self::CLIENT_CONNECT_WITH_DB) {
-			$payload .= "{$this->db}\0";
+			$payload .= "{$this->config->db}\0";
 		}
 		if ($this->capabilities & self::CLIENT_PLUGIN_AUTH) {
 			$payload .= "\0"; // @TODO AUTH
