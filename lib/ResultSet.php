@@ -8,7 +8,6 @@ use Amp\Success;
 class ResultSet {
 	private $columnCount;
 	private $columns = [];
-	private $reactor;
 	private $columnsToFetch;
 	private $rows = null;
 	private $fetchedRows = 0;
@@ -24,8 +23,7 @@ class ResultSet {
 
 	const SINGLE_ROW_FETCH = 255;
 
-	public function __construct(\Amp\Reactor $reactor, ConnectionState $state) {
-		$this->reactor = $reactor;
+	public function __construct(ConnectionState $state) {
 		$this->connInfo = $state;
 	}
 
@@ -37,7 +35,7 @@ class ResultSet {
 		if ($this->state >= self::COLUMNS_FETCHED) {
 			return new Success($this->columns);
 		} else {
-			$future = new Future($this->reactor);
+			$future = new Future;
 			$this->futures[self::COLUMNS_FETCHED][] = [$future, &$this->columns];
 			return $future;
 		}
@@ -47,7 +45,7 @@ class ResultSet {
 		if ($this->state == self::ROWS_FETCHED) {
 			return new Success(count($this->rows));
 		} else {
-			$future = new Future($this->reactor);
+			$future = new Future;
 			$this->futures[self::ROWS_FETCHED][] = [$future, null, function () { return count($this->rows); }];
 			return $future;
 		}
@@ -57,7 +55,7 @@ class ResultSet {
 		if ($this->state == self::ROWS_FETCHED) {
 			return new Success($cb($this->rows));
 		} else {
-			$future = new Future($this->reactor);
+			$future = new Future;
 			$this->futures[self::ROWS_FETCHED][] = [$future, &$this->rows, $cb];
 			return $future;
 		}
@@ -85,7 +83,7 @@ class ResultSet {
 		} elseif ($this->state == self::ROWS_FETCHED) {
 			return new Success(null);
 		} else {
-			return $this->futures[self::SINGLE_ROW_FETCH][] = new Future($this->reactor);
+			return $this->futures[self::SINGLE_ROW_FETCH][] = new Future;
 		}
 	}
 
@@ -120,7 +118,7 @@ class ResultSet {
 
 	public function __debugInfo() {
 		$tmp = clone $this;
-		unset($tmp->reactor, $tmp->next);
+		unset($tmp->next);
 		foreach ($tmp->futures as &$type) {
 			foreach ($type as &$entry) {
 				if (is_array($entry)) {
@@ -131,11 +129,11 @@ class ResultSet {
 			}
 		}
 
-		return $tmp;
+		return (array) $tmp;
 	}
 
 	public function next() {
-		return $this->next ?: $this->next = new Future($this->reactor);
+		return $this->next ?: $this->next = new Future;
 	}
 
 }

@@ -135,7 +135,7 @@ class Connection {
 	}
 
 	public function connect() {
-		$future = new Future($this->reactor);
+		$future = new Future;
 		$this->connector->connect($this->config->resolvedHost)->when(function ($error, $socket) use ($future) {
 			if ($error) {
 				$future->fail($error);
@@ -188,12 +188,12 @@ class Connection {
 		/*$payload = array_pop($this->out);
 		$this->out[] = null;
 		$this->out[] = $payload;*/
-		return $this->futures[] = $future ?: new Future($this->reactor);
+		return $this->futures[] = $future ?: new Future;
 	}
 
 	public function setCharset($charset, $collate) {
 		$query = "SET NAMES '$charset'".($collate == "" ? "" : " COLLATE '$collate'");
-		$future = new Future($this->reactor);
+		$future = new Future;
 		$this->appendTask(function() use ($query, $future) {
 			$this->query($query, $future);
 		});
@@ -231,7 +231,7 @@ class Connection {
 
 	public function listAllFields($table, $like = "%", $future = null) {
 		if (!$future) {
-			$future = new Future($this->reactor);
+			$future = new Future;
 		}
 
 		$columns = [];
@@ -362,7 +362,7 @@ class Connection {
 	// @TODO what to do with the prebound params?! (bindParam())
 	/* prebound params: null-bit set, type MYSQL_TYPE_LONG_BLOB, no value */
 	public function execute($stmtId, &$params, $prebound, $data = []) {
-		$future = new Future($this->reactor);
+		$future = new Future;
 		$this->appendTask(function () use ($stmtId, &$params, $prebound, $data, $future) {
 			$payload = "\x17";
 			$payload .= DataTypes::encode_int32($stmtId);
@@ -423,7 +423,7 @@ class Connection {
 		$payload = "\x1c";
 		$payload .= DataTypes::encode_int32($stmtId);
 		$payload .= DataTypes::encode_int32(1);
-		$future = new Future($this->reactor);
+		$future = new Future;
 		$this->appendTask(function () use ($payload, $future) {
 			$this->out[] = null;
 			$this->futures[] = $future;
@@ -436,7 +436,7 @@ class Connection {
 	public function resetStmt($stmtId) {
 		$payload = "\x1a";
 		$payload .= DataTypes::encode_int32($stmtId);
-		$future = new Future($this->reactor);
+		$future = new Future;
 		$this->appendTask(function () use ($payload, $future) {
 			$this->out[] = null;
 			$this->futures[] = $future;
@@ -747,7 +747,7 @@ class Connection {
 	/** @see 14.6.4.1.1 Text Resultset */
 	private function handleQuery() {
 		$this->parseCallback = [$this, "handleTextColumnDefinition"];
-		$this->getFuture()->succeed($resultSet = new ResultSet($this->reactor, $this->connInfo));
+		$this->getFuture()->succeed($resultSet = new ResultSet($this->connInfo));
 		$this->bindResultSet($resultSet);
 		$this->resultSetMethod("setColumns", ord($this->packet));
 	}
@@ -755,7 +755,7 @@ class Connection {
 	/** @see 14.7.1 Binary Protocol Resultset */
 	private function handleExecute() {
 		$this->parseCallback = [$this, "handleBinaryColumnDefinition"];
-		$this->getFuture()->succeed($resultSet = new ResultSet($this->reactor, $this->connInfo));
+		$this->getFuture()->succeed($resultSet = new ResultSet($this->connInfo));
 		$this->bindResultSet($resultSet);
 		$this->resultSetMethod("setColumns", ord($this->packet));
 	}
@@ -770,7 +770,7 @@ class Connection {
 			$this->getFuture()->succeed(null);
 			$this->ready();
 		} else {
-			$this->getFuture()->succeed([$this->parseColumnDefinition(), $this->futures[] = new Future($this->reactor)]);
+			$this->getFuture()->succeed([$this->parseColumnDefinition(), $this->futures[] = new Future]);
 		}
 	}
 
@@ -983,7 +983,7 @@ class Connection {
 				$future = &$this->resultSet("next");
 				if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
 					$this->parseCallback = [$this, "handleQuery"];
-					$this->futures[] = $future ?: $future = new Future($this->reactor);
+					$this->futures[] = $future ?: $future = new Future;
 				} else {
 					if ($future) {
 						$future->succeed(null);
@@ -1019,7 +1019,7 @@ class Connection {
 			$future = &$this->resultSet("next");
 			if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
 				$this->parseCallback = [$this, "handleQuery"];
-				$this->futures[] = $future ?: $future = new Future($this->reactor);
+				$this->futures[] = $future ?: $future = new Future;
 			} else {
 				if ($future) {
 					$future->succeed(null);
@@ -1100,7 +1100,7 @@ class Connection {
 		}
 
 		finish: {
-			$resultset = new Stmt($this->reactor, $this, $this->query, $stmtId, $columns, $params);
+			$resultset = new Stmt($this, $this->query, $stmtId, $columns, $params);
 			$this->bindResultSet($resultset);
 			$this->getFuture()->succeed($resultset);
 			if ($params) {

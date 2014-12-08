@@ -12,7 +12,6 @@ class Stmt {
 	private $params = [];
 	private $query;
 	private $stmtId;
-	private $reactor;
 	private $columnsToFetch;
 	private $prebound = [];
 	private $futures = [];
@@ -21,8 +20,7 @@ class Stmt {
 
 	private $state = ResultSet::UNFETCHED;
 
-	public function __construct(\Amp\Reactor $reactor, Connection $conn, $query, $stmtId, $columns, $params) {
-		$this->reactor = $reactor;
+	public function __construct(Connection $conn, $query, $stmtId, $columns, $params) {
 		$this->conn = $conn;
 		$this->query = $query;
 		$this->stmtId = $stmtId;
@@ -65,7 +63,7 @@ class Stmt {
 					}
 				}
 			});
-			return $this->virtualConn = new VirtualConnection($this->reactor);
+			return $this->virtualConn = new VirtualConnection;
 		}
 		throw new \Exception("Connection went away, no way provided to restore connection via callable in ConnectionConfig::ready");
 	}
@@ -106,7 +104,7 @@ class Stmt {
 		if ($this->state >= ResultSet::COLUMNS_FETCHED) {
 			return new Success($this->columns);
 		} else {
-			return $this->futures[] = new Future($this->reactor);
+			return $this->futures[] = new Future;
 		}
 	}
 
@@ -130,11 +128,11 @@ class Stmt {
 
 	public function __debugInfo() {
 		$tmp = clone $this;
-		unset($tmp->reactor, $tmp->conn);
+		unset($tmp->conn);
 		foreach ($tmp->futures as &$future) {
 			$future = null;
 		}
 
-		return $tmp;
+		return (array) $tmp;
 	}
 }

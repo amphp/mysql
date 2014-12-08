@@ -7,11 +7,6 @@ use Amp\Reactor;
 
 class VirtualConnection {
 	private $call = [];
-	private $reactor;
-
-	public function __construct(Reactor $reactor) {
-		$this->reactor = $reactor;
-	}
 
 	public function getCall() {
 		$cur = current($this->call);
@@ -23,7 +18,7 @@ class VirtualConnection {
 	}
 
 	public function __call($func, $args) {
-		$future = new Future($this->reactor);
+		$future = new Future;
 		$this->call[] = [$func, array_merge($args, [$future])];
 		return $future;
 	}

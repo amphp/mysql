@@ -14,7 +14,7 @@ class Pool {
 	private $limit;
 
 	public function __construct($connStr, \Amp\Reactor $reactor = null) {
-		$this->reactor = $reactor ?: \Amp\reactor();
+		$this->reactor = $reactor ?: \Amp\getReactor();
 		$this->connector = new \Nbsock\Connector($this->reactor);
 
 		$db = null;
@@ -43,7 +43,7 @@ class Pool {
 	}
 
 	private function initLocal() {
-		$this->virtualConnection = new VirtualConnection($this->reactor);
+		$this->virtualConnection = new VirtualConnection;
 		$this->config->ready = function($conn) { $this->ready($conn); };
 		$this->config->restore = function() { return $this->getReadyConnection(); };
 		$this->config->busy = function($conn) { unset($this->ready[$this->readyMap[spl_object_hash($conn)]]); };
