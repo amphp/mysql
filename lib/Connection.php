@@ -124,6 +124,7 @@ class Connection {
 		if (empty($this->futures)) {
 			if (empty($this->onReady)) {
 				$cb = $this->config->ready;
+				$this->out[] = null;
 			} else {
 				list($key, $cb) = each($this->onReady);
 				unset($this->onReady[$key]);
