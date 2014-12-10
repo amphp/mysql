@@ -1047,9 +1047,10 @@ class Connection {
 		}
 		$off += ($columnCount + 9) >> 3;
 
-		for ($i = 0; $off < $this->packetSize; $i++) {
-			$fields[] = DataTypes::decodeBinary($columns[$i]["type"], substr($this->packet, $off), $len);
+		for ($field = $i = 0; $off < $this->packetSize; $i++) {
+			$fields[$field] = DataTypes::decodeBinary($columns[$i]["type"], substr($this->packet, $off), $len);
 			$off += $len;
+			while (array_key_exists(++$field, $fields));
 		}
 		$this->resultSetMethod("rowFetched", $fields);
 	}
