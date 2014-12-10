@@ -1047,10 +1047,10 @@ class Connection {
 		}
 		$off += ($columnCount + 9) >> 3;
 
-		for ($field = $i = 0; $off < $this->packetSize; $i++) {
-			$fields[$field] = DataTypes::decodeBinary($columns[$i]["type"], substr($this->packet, $off), $len);
+		for ($i = 0; $off < $this->packetSize; $i++) {
+			while (array_key_exists(++$i, $fields));
+			$fields[$i] = DataTypes::decodeBinary($columns[$i]["type"], substr($this->packet, $off), $len);
 			$off += $len;
-			while (array_key_exists(++$field, $fields));
 		}
 		ksort($fields);
 		$this->resultSetMethod("rowFetched", $fields);
