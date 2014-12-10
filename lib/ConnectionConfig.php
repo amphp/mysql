@@ -8,6 +8,7 @@ class ConnectionConfig {
 	public $user;
 	public $pass;
 	public $db = null;
+	public $ssl;
 
 	public $ready = null;
 	public $busy = null;

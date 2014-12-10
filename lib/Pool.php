@@ -19,6 +19,7 @@ class Pool {
 
 		$db = null;
 		$limit = INF;
+		$ssl = "false";
 
 		// well, yes. I *had* to document that behavior change. Future me, feel free to kill me ;-)
 		foreach (explode(";", $connStr) as $param) {
@@ -37,6 +38,15 @@ class Pool {
 		$this->config->user = $user;
 		$this->config->pass = $pass;
 		$this->config->db = $db;
+		switch ($ssl) {
+			case "true":
+			case "yes":
+			case "ssl":
+				$this->config->ssl = true;
+				break;
+			default:
+				$this->config->ssl = false;
+		}
 		$this->limit = $limit;
 		$this->initLocal();
 		$this->addConnection();

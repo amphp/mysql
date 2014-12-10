@@ -759,6 +759,7 @@ class Connection {
 		$this->getFuture()->succeed($resultSet = new ResultSet($this->connInfo));
 		$this->bindResultSet($resultSet);
 		$this->resultSetMethod("setColumns", ord($this->packet));
+		$this->resultSet("columns", []);
 	}
 
 	private function handleFieldList() {
@@ -1048,7 +1049,7 @@ class Connection {
 		$off += ($columnCount + 9) >> 3;
 
 		for ($i = 0; $off < $this->packetSize; $i++) {
-			while (array_key_exists(++$i, $fields));
+			while (array_key_exists($i, $fields)) $i++;
 			$fields[$i] = DataTypes::decodeBinary($columns[$i]["type"], substr($this->packet, $off), $len);
 			$off += $len;
 		}
@@ -1196,7 +1197,7 @@ class Connection {
 		return $out;
 	}
 
-	public function onWrite() {
+	public function onWrite($reactor, $watcherId, $socket) {
 		if ($this->outBuflen == 0) {
 			$doCompress = ($this->capabilities & self::CLIENT_COMPRESS) && $this->connectionState >= self::READY;
 
@@ -1209,12 +1210,12 @@ class Connection {
 			$this->outBuflen = strlen($packet);
 
 			if ($this->outBuflen == 0) {
-				$this->reactor->disable($this->writeWatcher);
+				$reactor->disable($watcherId);
 				$this->watcherEnabled = false;
 			}
 		}
 
-		$bytes = @fwrite($this->socket, $this->outBuf);
+		$bytes = @fwrite($socket, $this->outBuf);
 		$this->outBuflen -= $bytes;
 		if ($this->outBuflen > 0) {
 			if ($bytes == 0) {
@@ -1487,9 +1488,13 @@ class Connection {
 	 * @see 14.2.5 Connection Phase Packets
 	 * @see 14.3 Authentication Method
 	 */
-	private function sendHandshake() {
+	private function sendHandshake($inSSL = false) {
 		if ($this->config->db !== null) {
 			$this->capabilities |= self::CLIENT_CONNECT_WITH_DB;
+		}
+
+		if ($this->config->ssl) {
+			$this->capabilities |= self::CLIENT_SSL;
 		}
 
 		$this->capabilities &= $this->serverCapabilities;
@@ -1499,6 +1504,38 @@ class Connection {
 		$payload .= pack("V", 1 << 24 - 1); // max-packet size
 		$payload .= chr($this->config->binCharset);
 		$payload .= str_repeat("\0", 23); // reserved
+
+		if (!$inSSL && ($this->capabilities & self::CLIENT_SSL)) {
+			$this->reactor->disable($this->writeWatcher);
+			$this->_sendPacket($payload);
+			$payload = $this->compilePacket();
+			$pending = strlen($payload);
+			$this->reactor->onWritable($this->socket, function ($reactor, $watcherId, $socket) use (&$payload, &$pending) {
+				$pending -= $bytes = @fwrite($socket, $payload);
+				if ($pending > 0) {
+					if ($bytes == 0) {
+						// @TODO handle gone away
+					} else {
+						$payload = substr($payload, $bytes);
+					}
+					return;
+				}
+				$this->reactor->cancel($watcherId);
+				$this->reactor->disable($this->readWatcher);
+				(new \Nbsock\Encryptor($reactor))->enable($socket, ['CN_match' => $this->config->host])->when(function ($error) {
+					if ($error) {
+						$this->getFuture()->fail($error);
+						$this->closeSocket();
+						return;
+					}
+
+					$this->reactor->enable($this->readWatcher);
+					$this->sendHandshake(true);
+				});
+			});
+			return;
+		}
+
 		$payload .= $this->config->user."\0";
 		if ($this->capabilities & self::CLIENT_PLUGIN_AUTH) {
 			switch ($this->authPluginName) {
