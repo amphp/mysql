@@ -1041,7 +1041,7 @@ class Connection {
 		$fields = [];
 
 		for ($i = 0; $i < $columnCount; $i++) {
-			if (ord($this->packet[$off + (($i + 2) >> 3)]) & (($i + 2) % 8)) {
+			if (ord($this->packet[$off + (($i + 2) >> 3)]) & (1 << (($i + 2) % 8))) {
 				$fields[$i] = null;
 			}
 		}
