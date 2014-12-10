@@ -7,12 +7,11 @@ use Amp\Success;
 use Nbsock\Connector;
 
 /* @TODO
- * CLIENT_SSL (14.2.5 / 14.5)
- * fallback old auth?
- * Auth switch request??
- * COM_CHANGE_USER
- * 14.3 alternative auths
+ * named prepared params
+ * 14.2.3 Auth switch request??
+ * 14.2.4 COM_CHANGE_USER
  * use better Exceptions...
+ * generally handle gone away
  */
 
 class Connection {
@@ -186,9 +185,6 @@ class Connection {
 
 	private function startCommand($future = null) {
 		$this->seqId = $this->compressionId = -1;
-		/*$payload = array_pop($this->out);
-		$this->out[] = null;
-		$this->out[] = $payload;*/
 		return $this->futures[] = $future ?: new Future;
 	}
 
@@ -360,7 +356,6 @@ class Connection {
 	}
 
 	/** @see 14.7.6 COM_STMT_EXECUTE */
-	// @TODO what to do with the prebound params?! (bindParam())
 	/* prebound params: null-bit set, type MYSQL_TYPE_LONG_BLOB, no value */
 	public function execute($stmtId, &$params, $prebound, $data = []) {
 		$future = new Future;
@@ -719,7 +714,6 @@ class Connection {
 	/** @see 14.6.4.1.2 LOCAL INFILE Request */
 	private function handleLocalInfileRequest() {
 		// @TODO async file fetch @rdlowrey
-		// @TODO split over multiple packets
 		$file = file_get_contents($this->packet);
 		if ($file != "") {
 			$this->sendPacket($file);
@@ -1493,7 +1487,7 @@ class Connection {
 			$this->capabilities |= self::CLIENT_CONNECT_WITH_DB;
 		}
 
-		if ($this->config->ssl) {
+		if ($this->config->ssl !== null) {
 			$this->capabilities |= self::CLIENT_SSL;
 		}
 
@@ -1506,23 +1500,16 @@ class Connection {
 		$payload .= str_repeat("\0", 23); // reserved
 
 		if (!$inSSL && ($this->capabilities & self::CLIENT_SSL)) {
-			$this->reactor->disable($this->writeWatcher);
 			$this->_sendPacket($payload);
-			$payload = $this->compilePacket();
-			$pending = strlen($payload);
-			$this->reactor->onWritable($this->socket, function ($reactor, $watcherId, $socket) use (&$payload, &$pending) {
-				$pending -= $bytes = @fwrite($socket, $payload);
-				if ($pending > 0) {
-					if ($bytes == 0) {
-						// @TODO handle gone away
-					} else {
-						$payload = substr($payload, $bytes);
-					}
+			$this->reactor->onWritable($this->socket, function ($reactor, $watcherId, $socket) {
+				/* wait until main write watcher has written everything... */
+				if ($this->outBuflen > 0 || !empty($this->out)) {
 					return;
 				}
+
 				$this->reactor->cancel($watcherId);
 				$this->reactor->disable($this->readWatcher);
-				(new \Nbsock\Encryptor($reactor))->enable($socket, ['CN_match' => $this->config->host])->when(function ($error) {
+				(new \Nbsock\Encryptor($reactor))->enable($socket, $this->config->ssl + ['CN_match' => $this->config->host])->when(function ($error) {
 					if ($error) {
 						$this->getFuture()->fail($error);
 						$this->closeSocket();
