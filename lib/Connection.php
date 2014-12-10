@@ -1052,6 +1052,7 @@ class Connection {
 			$off += $len;
 			while (array_key_exists(++$field, $fields));
 		}
+		ksort($fields);
 		$this->resultSetMethod("rowFetched", $fields);
 	}
 
