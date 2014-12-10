@@ -82,7 +82,7 @@ class Stmt {
 		if (count($data + $this->prebound) != $this->paramCount) {
 			throw new \Exception("Required arguments for executing prepared statement mismatch");
 		}
-		return $this->conn()->execute($this->stmtId, $this->params, $this->prebound, $data);
+		return $this->conn()->execute($this->stmtId, $this->query, $this->params, $this->prebound, $data);
 	}
 
 	public function close() {

@@ -215,6 +215,7 @@ class Connection {
 	/** @see 14.6.4 COM_QUERY */
 	public function query($query, $future = null) {
 		$this->sendPacket("\x03$query");
+		$this->query = $query;
 		$this->packetCallback = [$this, "handleQuery"];
 		return $this->startCommand($future);
 	}
@@ -357,9 +358,9 @@ class Connection {
 
 	/** @see 14.7.6 COM_STMT_EXECUTE */
 	/* prebound params: null-bit set, type MYSQL_TYPE_LONG_BLOB, no value */
-	public function execute($stmtId, &$params, $prebound, $data = []) {
+	public function execute($stmtId, $query, &$params, $prebound, $data = []) {
 		$future = new Future;
-		$this->appendTask(function () use ($stmtId, &$params, $prebound, $data, $future) {
+		$this->appendTask(function () use ($stmtId, $query, &$params, $prebound, $data, $future) {
 			$payload = "\x17";
 			$payload .= DataTypes::encode_int32($stmtId);
 			$payload .= chr(0); // cursor flag // @TODO cursor types?!
@@ -394,6 +395,8 @@ class Connection {
 				$payload .= $types;
 				$payload .= $values;
 			}
+
+			$this->query = $query;
 
 			$this->out[] = null;
 			$this->futures[] = $future;
@@ -485,10 +488,11 @@ class Connection {
 			if ($this->connectionState == self::READY) {
 				// normal error
 				if ($this->config->exceptions) {
-					$this->getFuture()->fail(new \Exception("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
+					$this->getFuture()->fail(new \Exception("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}".($this->query != "" ? "\nCurrent query: {$this->query}" : "")));
 				} else {
 					$this->getFuture()->succeed(false);
 				}
+				$this->query = null;
 				$this->ready();
 			} elseif ($this->connectionState == self::ESTABLISHED) {
 				// connection failure
@@ -822,6 +826,7 @@ class Connection {
 		if (!$toFetch--) {
 			$this->parseCallback = null;
 			$this->resultSetMethod("updateState", ResultSet::COLUMNS_FETCHED);
+			$this->query = null;
 			$this->ready();
 
 			return;
@@ -988,6 +993,7 @@ class Connection {
 					}
 					$this->parseCallback = null;
 				}
+				$this->query = null;
 				$this->ready();
 				$this->resultSetMethod("updateState", ResultSet::ROWS_FETCHED);
 				return;
@@ -1024,6 +1030,7 @@ class Connection {
 				}
 				$this->parseCallback = null;
 			}
+			$this->query = null;
 			$this->ready();
 			$this->resultSetMethod("updateState", ResultSet::ROWS_FETCHED);
 			return;
