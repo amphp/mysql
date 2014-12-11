@@ -71,8 +71,8 @@ class ResultSet {
 	public function fetchAllObj() {
 		return $this->genericFetchAll(function($rows) {
 			$names = array_column($this->columns, "name");
-			return (object) array_map(function($row) use ($names) {
-				return array_combine($names, $row);
+			return array_map(function($row) use ($names) {
+				return (object) array_combine($names, $row);
 			}, $rows ?: []);
 		});
 	}
