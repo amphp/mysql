@@ -7,7 +7,6 @@ use Amp\Success;
 use Nbsock\Connector;
 
 /* @TODO
- * named prepared params
  * 14.2.3 Auth switch request??
  * 14.2.4 COM_CHANGE_USER
  * use better Exceptions...
@@ -41,6 +40,7 @@ class Connection {
 	private $watcherEnabled = false;
 	private $authPluginDataLen;
 	private $query;
+	private $named = [];
 	private $parseCallback = null;
 	private $packetCallback = null;
 
@@ -338,6 +338,23 @@ class Connection {
 	/** @see 14.7.4 COM_STMT_PREPARE */
 	public function prepare($query, $future = null) {
 		$this->query = $query;
+		$regex = <<<'REGEX'
+("|'|`)((?:\\\\|\\\1|(?!\1).)*+)\1|(\?)|:([a-zA-Z_]+)
+REGEX;
+
+		$index = 0;
+		$query = preg_replace_callback("~$regex~ms", function($m) use (&$index) {
+			if (!isset($m[3])) {
+				return $m[1] . $m[2] . $m[1];
+			}
+			if ($m[3] === "?") {
+				$index++;
+				return "?";
+			} else {
+				$this->named[$m[4]][] = $index++;
+				return "?";
+			}
+		}, $query);
 		$this->sendPacket("\x16$query");
 		$this->parseCallback = [$this, "handlePrepare"];
 		return $this->startCommand($future);
@@ -1105,7 +1122,8 @@ class Connection {
 		}
 
 		finish: {
-			$resultset = new Stmt($this, $this->query, $stmtId, $columns, $params);
+			$resultset = new Stmt($this, $this->query, $stmtId, $columns, $params, $this->named);
+			$this->named = [];
 			$this->bindResultSet($resultset);
 			$this->getFuture()->succeed($resultset);
 			if ($params) {
@@ -1516,7 +1534,7 @@ class Connection {
 
 				$this->reactor->cancel($watcherId);
 				$this->reactor->disable($this->readWatcher);
-				(new \Nbsock\Encryptor($reactor))->enable($socket, $this->config->ssl + ['CN_match' => $this->config->host])->when(function ($error) {
+				(new \Nbsock\Encryptor($reactor))->enable($socket, $this->config->ssl + ['peer_name' => $this->config->host])->when(function ($error) {
 					if ($error) {
 						$this->getFuture()->fail($error);
 						$this->closeSocket();

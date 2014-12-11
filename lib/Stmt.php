@@ -8,8 +8,11 @@ use Amp\Success;
 class Stmt {
 	private $columnCount;
 	private $paramCount;
+	private $numParamCount;
 	private $columns = [];
 	private $params = [];
+	private $named = [];
+	private $byNamed;
 	private $query;
 	private $stmtId;
 	private $columnsToFetch;
@@ -20,12 +23,19 @@ class Stmt {
 
 	private $state = ResultSet::UNFETCHED;
 
-	public function __construct(Connection $conn, $query, $stmtId, $columns, $params) {
+	public function __construct(Connection $conn, $query, $stmtId, $columns, $params, $named = []) {
 		$this->conn = $conn;
 		$this->query = $query;
 		$this->stmtId = $stmtId;
 		$this->columnCount = $columns;
-		$this->paramCount = $this->columnsToFetch = $params;
+		$this->numParamCount = $this->paramCount = $this->columnsToFetch = $params;
+		$this->byNamed = $named;
+		foreach ($named as $name => $ids) {
+			foreach ($ids as $id) {
+				$this->named[$id] = $name;
+				$this->numParamCount--;
+			}
+		}
 	}
 
 	private function conn() {
@@ -69,8 +79,30 @@ class Stmt {
 	}
 
 	public function bind($paramId, $data) {
-		// @TODO validate $paramId
-		$this->conn()->bindParam($this->stmtId, $paramId, $data);
+		if (is_numeric($paramId)) {
+			if ($paramId >= $this->numParamCount) {
+				throw new \Exception("Parameter id $paramId is not defined for this prepared statement");
+			}
+			$i = $paramId;
+		} else {
+			if (!isset($this->byNamed[$paramId])) {
+				throw new \Exception("Parameter :$paramId is not defined for this prepared statement");
+			}
+			$array = $this->byNamed[$paramId];
+			$i = reset($array);
+		}
+
+		do {
+			$realId = -1;
+			while (isset($this->named[++$realId]) || $i-- > 0) {
+				if (!is_numeric($paramId) && $this->named[$realId] == $paramId) {
+					break;
+				}
+			}
+
+			$this->conn()->bindParam($this->stmtId, $realId, $data);
+		} while (isset($array) && $i = next($array));
+
 		if (isset($this->prebound[$paramId])) {
 			$this->prebound[$paramId] .= $data;
 		} else {
@@ -79,10 +111,31 @@ class Stmt {
 	}
 
 	public function execute($data = []) {
-		if (count($data + $this->prebound) != $this->paramCount) {
+		if (count($data + $this->prebound) != $this->paramCount + count($this->named) - count($this->named, COUNT_RECURSIVE)) {
 			throw new \Exception("Required arguments for executing prepared statement mismatch");
 		}
-		return $this->conn()->execute($this->stmtId, $this->query, $this->params, $this->prebound, $data);
+
+		$prebound = $args = [];
+		for ($unnamed = $i = 0; $i < $this->paramCount; $i++) {
+			if (isset($this->named[$i])) {
+				if (array_key_exists($this->named[$i], $data)) {
+					$args[$i] = $data[$this->named[$i]];
+				} elseif (!isset($this->prebound[$this->named[$i]])) {
+					throw new \Exception("Named parameter {$this->named[$i]} missing for executing prepared statement");
+				} else {
+					$prebound[$i] = $this->prebound[$this->named[$i]];
+				}
+			} elseif (array_key_exists($unnamed, $data)) {
+				$args[$i] = $data[$unnamed];
+				$unnamed++;
+			} elseif (!isset($this->prebound[$unnamed])) {
+				throw new \Exception("Parameter $unnamed for prepared statement missing");
+			} else {
+				$prebound[$i] = $this->prebound[$unnamed++];
+			}
+		}
+
+		return $this->conn()->execute($this->stmtId, $this->query, $this->params, $prebound, $args);
 	}
 
 	public function close() {
