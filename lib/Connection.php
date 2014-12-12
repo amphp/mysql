@@ -51,7 +51,6 @@ class Connection {
 	private $onReady = [];
 	private $resultSet = null;
 	private $resultSetMethod;
-	private $oldDb = NULL;
 
 	protected $connectionId;
 	protected $authPluginData;
@@ -206,7 +205,6 @@ class Connection {
 
 	/** @see 14.6.3 COM_INIT_DB */
 	public function useDb($db, $future = null) {
-		$this->oldDb = $this->config->db;
 		$this->config->db = $db;
 		$this->sendPacket("\x02$db");
 		return $this->startCommand($future);
