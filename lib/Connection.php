@@ -10,7 +10,6 @@ use Nbsock\Connector;
  * 14.2.3 Auth switch request??
  * 14.2.4 COM_CHANGE_USER
  * use better Exceptions...
- * generally handle gone away
  */
 
 class Connection {
@@ -349,11 +348,10 @@ REGEX;
 			}
 			if ($m[3] === "?") {
 				$index++;
-				return "?";
 			} else {
 				$this->named[$m[4]][] = $index++;
-				return "?";
 			}
+			return "?";
 		}, $query);
 		$this->sendPacket("\x16$query");
 		$this->parseCallback = [$this, "handlePrepare"];
@@ -1238,7 +1236,7 @@ REGEX;
 		$this->outBuflen -= $bytes;
 		if ($this->outBuflen > 0) {
 			if ($bytes == 0) {
-				// @TODO handle gone away
+				$this->goneAway();
 			} else {
 				$this->outBuf = substr($this->outBuf, $bytes);
 			}
@@ -1255,10 +1253,18 @@ REGEX;
 				$this->parseMysql($bytes);
 			}
 		} else {
-			// Gone away...
-			// @TODO restart connection; throw error? remove from ready Connections
-			var_dump("Gone away?!");
-			$this->closeSocket();
+			$this->goneAway();
+		}
+	}
+
+	private function goneAway() {
+		foreach ($this->futures as $future) {
+			$future->fail(new \Exception("Connection went away... unable to fulfil this future".($this->query == "" ? "" : "\nCurrent query was {$this->query}")));
+		}
+		$this->closeSocket();
+		if (null !== $cb = $this->config->restore) {
+			$cb();
+			/* @TODO if packet not completely sent, resend? */
 		}
 	}
 
