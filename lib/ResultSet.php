@@ -61,14 +61,13 @@ class ResultSet {
 		}
 	}
 
-	public function fetchAll() {
+	public function fetchRows() {
 		return $this->genericFetchAll(function($rows) {
 			return $rows ?: [];
 		});
 	}
 
-	// @TODO better name?
-	public function fetchAllObj() {
+	public function fetchObjects() {
 		return $this->genericFetchAll(function($rows) {
 			$names = array_column($this->columns, "name");
 			return array_map(function($row) use ($names) {
@@ -77,14 +76,43 @@ class ResultSet {
 		});
 	}
 
-	public function fetchRow() {
+	public function fetchAll() {
+		return $this->genericFetchAll(function($rows) {
+			$names = array_column($this->columns, "name");
+			return array_map(function($row) use ($names) {
+				return array_combine($names, $row) + $row;
+			}, $rows ?: []);
+		});
+	}
+
+	public function genericFetch($cb) {
 		if ($this->userFetched < $this->fetchedRows) {
-			return new Success($this->rows[$this->userFetched++]);
+			return new Success($cb($this->rows[$this->userFetched++]));
 		} elseif ($this->state == self::ROWS_FETCHED) {
 			return new Success(null);
 		} else {
-			return $this->futures[self::SINGLE_ROW_FETCH][] = new Future;
+			$future = new Future;
+			$this->futures[self::SINGLE_ROW_FETCH][] = [$future, null, $cb];
+			return $future;
 		}
+	}
+
+	public function fetchRow() {
+		return $this->genericFetch(function ($row) {
+			return $row;
+		});
+	}
+
+	public function fetchObject() {
+		return $this->genericFetch(function ($row) {
+			return (object) array_combine(array_column($this->columns, "name"), $row);
+		});
+	}
+
+	public function fetch() {
+		return $this->genericFetch(function ($row) {
+			return array_combine(array_column($this->columns, "name"), $row) + $row;
+		});
 	}
 
 	private function updateState($state) {
@@ -105,10 +133,10 @@ class ResultSet {
 		if ($row !== null) {
 			$this->rows[$this->fetchedRows++] = $row;
 		}
-		list($key, $entry) = each($this->futures[self::SINGLE_ROW_FETCH]);
+		list($key, list($entry, , $cb)) = each($this->futures[self::SINGLE_ROW_FETCH]);
 		if ($key !== null) {
 			unset($this->futures[self::SINGLE_ROW_FETCH][$key]);
-			$entry->succeed($row);
+			$entry->succeed($cb($row));
 		}
 	}
 
