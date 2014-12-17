@@ -3,6 +3,7 @@
 namespace Mysql;
 
 class Pool {
+	private $reactor;
 	private $connector;
 	private $connections = [];
 	private $connectionMap = [];
@@ -56,7 +57,13 @@ class Pool {
 		$this->config->busy = function($conn) { unset($this->ready[$this->readyMap[spl_object_hash($conn)]]); };
 	}
 
+	/** First parameter may be collation too, then charset is determined by the prefix of collation */
 	public function setCharset($charset, $collate = "") {
+		if ($collate === "" && false === $off = strpos($charset, "_")) {
+			$collate = $charset;
+			$charset = substr($collate, 0, $off);
+		}
+
 		$this->ready = [];
 		$this->config->charset = $charset;
 		$this->config->collate = $collate;
@@ -101,7 +108,7 @@ class Pool {
 				return;
 			}
 
-			if ($this->config->charset != "utf8" && ($this->config->collate == "" || $this->config->collate == "utf8_general_ci")) {
+			if ($this->config->charset != "utf8mb4" || ($this->config->collate != "" && $this->config->collate != "utf8mb4_general_ci")) {
 				$conn->setCharset($this->config->charset, $this->config->collate);
 			}
 		});

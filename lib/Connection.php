@@ -89,7 +89,7 @@ class Connection {
 	const UNCONNECTED = 0;
 	const ESTABLISHED = 1;
 	const READY = 2;
-	const QUITTING = 3;
+	const CLOSING = 3;
 	const CLOSED = 4;
 
 	public function __construct(Reactor $reactor, Connector $connector, ConnectionConfig $config) {
@@ -199,7 +199,7 @@ class Connection {
 	/** @see 14.6.2 COM_QUIT */
 	public function closeConnection($future = null) {
 		$this->sendPacket("\x01");
-		$this->connectionState = self::QUITTING;
+		$this->connectionState = self::CLOSING;
 		return $this->startCommand($future);
 	}
 
