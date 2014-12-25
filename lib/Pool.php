@@ -59,7 +59,7 @@ class Pool {
 
 	/** First parameter may be collation too, then charset is determined by the prefix of collation */
 	public function setCharset($charset, $collate = "") {
-		if ($collate === "" && false === $off = strpos($charset, "_")) {
+		if ($collate === "" && false !== $off = strpos($charset, "_")) {
 			$collate = $charset;
 			$charset = substr($collate, 0, $off);
 		}
@@ -99,10 +99,10 @@ class Pool {
 			return;
 		}
 
-		$this->connections[] = $conn = new Connection($this->reactor, $this->connector, $this->config);
+		$this->connections[] = $conn = new Connection($this->reactor, $this->config);
 		end($this->connections);
 		$this->connectionMap[spl_object_hash($conn)] = key($this->connections);
-		$this->connectionFuture = $conn->connect();
+		$this->connectionFuture = $conn->connect($this->connector);
 		$this->connectionFuture->when(function($error) use ($conn) {
 			if ($error) {
 				return;
@@ -231,9 +231,7 @@ class Pool {
 
 	public function close() {
 		foreach ($this->connections as $conn) {
-			if ($conn->alive()) {
-				$conn->closeConnection();
-			}
+			$conn->close();
 		}
 	}
 }
