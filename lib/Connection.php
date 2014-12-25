@@ -34,7 +34,7 @@ class Connection {
 	private $packetType;
 	private $socket;
 	private $readGranularity = 8192;
-	private $readWatcher;
+	private $readWatcher = NULL;
 	private $writeWatcher = NULL;
 	private $watcherEnabled = false;
 	private $authPluginDataLen;
@@ -44,7 +44,6 @@ class Connection {
 	private $packetCallback = null;
 
 	private $reactor;
-	private $connector;
 	private $config;
 	private $futures = [];
 	private $onReady = [];
@@ -92,9 +91,8 @@ class Connection {
 	const CLOSING = 3;
 	const CLOSED = 4;
 
-	public function __construct(Reactor $reactor, Connector $connector, ConnectionConfig $config) {
+	public function __construct(Reactor $reactor, ConnectionConfig $config) {
 		$this->reactor = $reactor;
-		$this->connector = $connector;
 		$this->config = $config;
 		$this->connInfo = new ConnectionState;
 	}
@@ -133,9 +131,14 @@ class Connection {
 		}
 	}
 
-	public function connect() {
+	public function connect(Connector $connector) {
 		$future = new Future;
-		$this->connector->connect($this->config->resolvedHost)->when(function ($error, $socket) use ($future) {
+		$connector->connect($this->config->resolvedHost)->when(function ($error, $socket) use ($future) {
+			if ($this->connectionState == self::CLOSED) {
+				fclose($socket);
+				return;
+			}
+
 			if ($error) {
 				$future->fail($error);
 			} else {
@@ -1139,12 +1142,14 @@ REGEX;
 	}
 
 	private function closeSocket() {
-		$this->reactor->cancel($this->readWatcher);
+		if ($this->readWatcher) {
+			$this->reactor->cancel($this->readWatcher);
+			fclose($this->socket);
+		}
 		if ($this->writeWatcher) {
 			$this->reactor->cancel($this->writeWatcher);
 			$this->writeWatcher = null;
 		}
-		fclose($this->socket);
 		$this->connectionState = self::CLOSED;
 	}
 
