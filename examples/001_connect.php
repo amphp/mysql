@@ -4,12 +4,7 @@
  * Generic example for establishing a connection
  */
 
-require '../vendor/autoload.php';
-
-const DB_HOST = "",
-      DB_USER = "",
-      DB_PASS = "",
-      DB_NAME = "";
+require './example_bootstrap.php';
 
 \Amp\run(function() {
 	/* If you want ssl, pass as second argument an array with ssl options (an empty options array is valid too); if null is passed, ssl is not enabled either */
