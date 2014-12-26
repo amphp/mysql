@@ -3,3 +3,4 @@ test.php
 vendor
 composer.lock
 composer.phar
+mysql_config.php
