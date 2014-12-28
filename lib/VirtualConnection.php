@@ -17,6 +17,13 @@ class VirtualConnection {
 		return NULL;
 	}
 
+	public function fail($e) {
+		foreach ($this->call as list(, $args)) {
+			end($args)->fail($e);
+		}
+		$this->call = [];
+	}
+
 	public function __call($func, $args) {
 		$future = new Future;
 		$this->call[] = [$func, array_merge($args, [$future])];

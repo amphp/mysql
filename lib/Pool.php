@@ -53,7 +53,14 @@ class Pool {
 	private function initLocal() {
 		$this->virtualConnection = new VirtualConnection;
 		$this->config->ready = function($conn) { $this->ready($conn); };
-		$this->config->restore = function() { return $this->getReadyConnection(); };
+		/* @TODO ... pending queries ... */
+		$this->config->restore = function($conn, $init) {
+			$this->unmapConnection($conn);
+			if ($init && empty($this->connections)) {
+				$this->virtualConnection->fail(new \Exception("Connection failed"));
+			}
+			return $this->getReadyConnection();
+		};
 		$this->config->busy = function($conn) { unset($this->ready[$this->readyMap[spl_object_hash($conn)]]); };
 	}
 
@@ -95,22 +102,28 @@ class Pool {
 	}
 
 	private function addConnection() {
-		if (count($this->connections) >= $this->limit) {
-			return;
-		}
-
-		$this->connections[] = $conn = new Connection($this->reactor, $this->config);
-		end($this->connections);
-		$this->connectionMap[spl_object_hash($conn)] = key($this->connections);
-		$this->connectionFuture = $conn->connect($this->connector);
-		$this->connectionFuture->when(function($error) use ($conn) {
-			if ($error) {
+		$this->reactor->immediately(function() {
+			if (count($this->connections) >= $this->limit) {
 				return;
 			}
 
-			if ($this->config->charset != "utf8mb4" || ($this->config->collate != "" && $this->config->collate != "utf8mb4_general_ci")) {
-				$conn->setCharset($this->config->charset, $this->config->collate);
-			}
+			$this->connections[] = $conn = new Connection($this->reactor, $this->config);
+			end($this->connections);
+			$this->connectionMap[spl_object_hash($conn)] = key($this->connections);
+			$this->connectionFuture = $conn->connect($this->connector);
+			$this->connectionFuture->when(function ($error) use ($conn) {
+				if ($error) {
+					$this->unmapConnection($conn);
+					if (empty($this->connections)) {
+						$this->virtualConnection->fail($error);
+					}
+					return;
+				}
+
+				if ($this->config->charset != "utf8mb4" || ($this->config->collate != "" && $this->config->collate != "utf8mb4_general_ci")) {
+					$conn->setCharset($this->config->charset, $this->config->collate);
+				}
+			});
 		});
 	}
 
@@ -216,13 +229,17 @@ class Pool {
 		$pool->config = clone $pool->config;
 		$pool->initLocal();
 		return $this->getReadyConnection()->getThis()->when(function($error, $conn) use ($pool) {
-			$hash = spl_object_hash($conn);
-			unset($this->connections[$this->connectionMap[$hash]], $this->connectionMap[$hash]);
+			$this->unmapConnection($conn);
 			$pool->limit = 1;
 			$pool->connections = [$conn];
-			$pool->connectionMap[$hash] = 0;
+			$pool->connectionMap[spl_object_hash($conn)] = 0;
 			$pool->ready($conn);
 		});
+	}
+
+	private function unmapConnection($conn) {
+		$hash = spl_object_hash($conn);
+		unset($this->connections[$this->connectionMap[$hash]], $this->connectionMap[$hash]);
 	}
 
 	public function __destruct() {
@@ -232,6 +249,9 @@ class Pool {
 	public function close() {
 		foreach ($this->connections as $conn) {
 			$conn->close();
+			$this->unmapConnection($conn);
 		}
+		$this->ready = [];
+		$this->readyMap = [];
 	}
 }

@@ -135,17 +135,24 @@ class Connection {
 		$future = new Future;
 		$connector->connect($this->config->resolvedHost)->when(function ($error, $socket) use ($future) {
 			if ($this->connectionState == self::CLOSED) {
-				fclose($socket);
+				$future->succeed(null);
+				if ($socket) {
+					fclose($socket);
+				}
 				return;
 			}
 
 			if ($error) {
 				$future->fail($error);
-			} else {
-				$this->socket = $socket;
-				$this->readWatcher = $this->reactor->onReadable($this->socket, [$this, "onInit"]);
-				$this->futures[] = $future;
+				if ($socket) {
+					fclose($socket);
+				}
+				return;
 			}
+
+			$this->socket = $socket;
+			$this->readWatcher = $this->reactor->onReadable($this->socket, [$this, "onInit"]);
+			$this->futures[] = $future;
 		});
 		return $future;
 	}
@@ -512,7 +519,7 @@ REGEX;
 				}
 				$this->query = null;
 				$this->ready();
-			} elseif ($this->connectionState == self::ESTABLISHED) {
+			} elseif ($this->connectionState < self::READY) {
 				// connection failure
 				$this->closeSocket();
 				$this->getFuture()->fail(new \Exception("Could not connect to {$this->config->resolvedHost}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
@@ -1268,7 +1275,7 @@ REGEX;
 		}
 		$this->closeSocket();
 		if (null !== $cb = $this->config->restore) {
-			$cb();
+			$cb($this, $this->connectionState < self::READY);
 			/* @TODO if packet not completely sent, resend? */
 		}
 	}
