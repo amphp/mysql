@@ -3,7 +3,6 @@
 require './example_bootstrap.php';
 require 'support/generic_table.php';
 
-
 \Amp\run(function() {
 	$db = new \Mysql\Pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME);
 
@@ -20,4 +19,6 @@ require 'support/generic_table.php';
 	$query = (yield $db->query("SELECT a * b FROM tmp"));
 	$objs = (yield $query->fetchObjects());
 	var_dump($objs); // outputs all the rows as objects of the resultset returned by SELECT a * b FROM tmp
+
+	$db->close();
 });

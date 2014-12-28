@@ -10,4 +10,6 @@ require './example_bootstrap.php';
 	list($one) = (yield $query->fetchRow());
 
 	var_dump($one); // should output string(1) "1"
+
+	$db->close();
 });

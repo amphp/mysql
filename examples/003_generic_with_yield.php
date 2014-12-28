@@ -16,4 +16,8 @@ require './example_bootstrap.php';
 
 	/* wait until everything is inserted (in case where we wouldn't have to wait, we also could just  */
 	yield $promises;
+
+	print "Insertion successful (if it wasn't, an exception would have been thrown by now)\n";
+
+	$db->close();
 });

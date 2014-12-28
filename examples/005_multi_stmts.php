@@ -20,4 +20,6 @@ require 'support/generic_table.php';
 		/* be aware that it is *not* optimal to fetch rowCount before fetching data. We only know rowCount when all data has been fetched! So, it has to fetch everything first before knowing rowCount. */
 		var_dump(yield $rows->rowCount());
 	}
+
+	$db->close();
 });

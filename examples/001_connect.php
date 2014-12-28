@@ -16,5 +16,6 @@ require './example_bootstrap.php';
 
 	/* do something with your connection(s) maintained by Pool */
 
+	/* we always close the database here so that there is no read/write watcher anymore and Reactor terminates itself */
 	$db->close();
 });
