@@ -345,7 +345,7 @@ class Connection {
 	}
 
 	/** @see 14.7.4 COM_STMT_PREPARE */
-	public function prepare($query, $future = null) {
+	public function prepare($query, $data = null, $future = null) {
 		$this->query = $query;
 		$regex = <<<'REGEX'
 ("|'|`)((?:\\\\|\\\1|(?!\1).)*+)\1|(\?)|:([a-zA-Z_]+)
@@ -365,7 +365,31 @@ REGEX;
 		}, $query);
 		$this->sendPacket("\x16$query");
 		$this->parseCallback = [$this, "handlePrepare"];
-		return $this->startCommand($future);
+		$future = $this->startCommand($future);
+		if ($data === null) {
+			return $future;
+		}
+
+		$retFuture = new Future;
+		$future->when(function($stmt, $error) use ($retFuture, $data) {
+			if ($error) {
+				$retFuture->fail($error);
+			} else {
+				try {
+					$stmt->execute($data)->when(function ($result, $error) use ($retFuture) {
+						if ($error) {
+							$retFuture->fail($error);
+						} else {
+							$retFuture->succeed($result);
+						}
+					});
+				} catch (\Exception $e) {
+					$retFuture->fail($e);
+				}
+			}
+		});
+
+		return $retFuture;
 	}
 
 	/** @see 14.7.5 COM_STMT_SEND_LONG_DATA */

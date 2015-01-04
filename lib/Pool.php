@@ -218,8 +218,8 @@ class Pool {
 		return $this->getReadyConnection()->resetConnection();
 	}
 
-	public function prepare($query) {
-		return $this->getReadyConnection()->prepare($query);
+	public function prepare($query, $data = null) {
+		return $this->getReadyConnection()->prepare($query, $data);
 	}
 
 	// @TODO really use this?
