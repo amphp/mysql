@@ -371,7 +371,7 @@ REGEX;
 		}
 
 		$retFuture = new Future;
-		$future->when(function($stmt, $error) use ($retFuture, $data) {
+		$future->when(function($error, $stmt) use ($retFuture, $data) {
 			if ($error) {
 				$retFuture->fail($error);
 			} else {
