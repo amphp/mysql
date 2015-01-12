@@ -376,7 +376,7 @@ REGEX;
 				$retFuture->fail($error);
 			} else {
 				try {
-					$stmt->execute($data)->when(function ($result, $error) use ($retFuture) {
+					$stmt->execute($data)->when(function ($error, $result) use ($retFuture) {
 						if ($error) {
 							$retFuture->fail($error);
 						} else {
