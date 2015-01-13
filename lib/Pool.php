@@ -61,7 +61,7 @@ class Pool {
 			}
 			return $this->getReadyConnection();
 		};
-		$this->config->busy = function($conn) { unset($this->ready[$this->readyMap[spl_object_hash($conn)]]); };
+		$this->config->busy = function($conn) { if (isset($this->readyMap[$hash = spl_object_hash($conn)])) unset($this->ready[$this->readyMap[$hash]]); };
 	}
 
 	/** First parameter may be collation too, then charset is determined by the prefix of collation */
