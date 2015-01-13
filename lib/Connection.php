@@ -365,13 +365,12 @@ REGEX;
 		}, $query);
 		$this->sendPacket("\x16$query");
 		$this->parseCallback = [$this, "handlePrepare"];
-		$future = $this->startCommand($future);
 		if ($data === null) {
-			return $future;
+			return $this->startCommand($future);
 		}
 
-		$retFuture = new Future;
-		$future->when(function($error, $stmt) use ($retFuture, $data) {
+		$retFuture = $future ?: new Future;
+		$this->startCommand()->when(function($error, $stmt) use ($retFuture, $data) {
 			if ($error) {
 				$retFuture->fail($error);
 			} else {
