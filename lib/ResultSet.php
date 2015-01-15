@@ -85,9 +85,10 @@ class ResultSet {
 		});
 	}
 
-	public function genericFetch($cb) {
+	public function genericFetch($cb = null) {
 		if ($this->userFetched < $this->fetchedRows) {
-			return new Success($cb($this->rows[$this->userFetched++]));
+			$row = $this->rows[$this->userFetched++];
+			return new Success($cb ? $cb($row) : $row);
 		} elseif ($this->state == self::ROWS_FETCHED) {
 			return new Success(null);
 		} else {
@@ -98,9 +99,7 @@ class ResultSet {
 	}
 
 	public function fetchRow() {
-		return $this->genericFetch(function ($row) {
-			return $row;
-		});
+		return $this->genericFetch();
 	}
 
 	public function fetchObject() {
@@ -136,7 +135,7 @@ class ResultSet {
 		list($key, list($entry, , $cb)) = each($this->futures[self::SINGLE_ROW_FETCH]);
 		if ($key !== null) {
 			unset($this->futures[self::SINGLE_ROW_FETCH][$key]);
-			$entry->succeed($cb($row));
+			$entry->succeed($cb && $row ? $cb($row) : $row);
 		}
 	}
 
