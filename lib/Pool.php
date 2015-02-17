@@ -4,19 +4,18 @@ namespace Mysql;
 
 class Pool {
 	private $reactor;
-	private $connector;
+	private $connector = null;
 	private $connections = [];
 	private $connectionMap = [];
 	private $ready = [];
 	private $readyMap = [];
 	private $connectionFuture;
 	private $virtualConnection;
-	private $config = true;
+	private $config;
 	private $limit;
 
 	public function __construct($connStr, $sslOptions = null, \Amp\Reactor $reactor = null) {
 		$this->reactor = $reactor ?: \Amp\getReactor();
-		$this->connector = new \Nbsock\Connector($this->reactor);
 
 		$db = null;
 		$limit = INF;
@@ -110,7 +109,7 @@ class Pool {
 			$this->connections[] = $conn = new Connection($this->reactor, $this->config);
 			end($this->connections);
 			$this->connectionMap[spl_object_hash($conn)] = key($this->connections);
-			$this->connectionFuture = $conn->connect($this->connector);
+			$this->connectionFuture = $conn->connect($this->connector ?: $this->connector = new \Nbsock\Connector($this->reactor));
 			$this->connectionFuture->when(function ($error) use ($conn) {
 				if ($error) {
 					$this->unmapConnection($conn);
@@ -150,7 +149,7 @@ class Pool {
 
 		while (list($key, $conn) = each($this->ready)) {
 			unset($this->ready[$key]);
-			if ($conn->alive()) {
+			if ($conn->isReady()) {
 				return $conn;
 			}
 		}
@@ -253,5 +252,6 @@ class Pool {
 		}
 		$this->ready = [];
 		$this->readyMap = [];
+		$this->connector = null;
 	}
 }

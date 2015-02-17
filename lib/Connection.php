@@ -98,7 +98,11 @@ class Connection {
 	}
 
 	public function alive() {
-		return $this->connectionState == self::READY;
+		return $this->connectionState <= self::READY;
+	}
+
+	public function isReady() {
+		return $this->connectionState === self::READY;
 	}
 
 	public function close() {
@@ -134,7 +138,7 @@ class Connection {
 	public function connect(Connector $connector) {
 		$future = new Future;
 		$connector->connect($this->config->resolvedHost)->when(function ($error, $socket) use ($future) {
-			if ($this->connectionState == self::CLOSED) {
+			if ($this->connectionState === self::CLOSED) {
 				$future->succeed(null);
 				if ($socket) {
 					fclose($socket);
@@ -177,7 +181,7 @@ class Connection {
 	}
 
 	private function appendTask($callback) {
-		if ($this->packetCallback || $this->parseCallback || !empty($this->onReady)) {
+		if ($this->packetCallback || $this->parseCallback || !empty($this->onReady) || $this->connectionState != self::READY) {
 			$this->onReady[] = $callback;
 		} else {
 			$cb = $this->config->busy;
