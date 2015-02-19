@@ -98,7 +98,11 @@ class Connection {
 	}
 
 	public function alive() {
-		return $this->connectionState == self::READY;
+		return $this->connectionState <= self::READY;
+	}
+
+	public function isReady() {
+		return $this->connectionState === self::READY;
 	}
 
 	public function close() {
@@ -134,18 +138,25 @@ class Connection {
 	public function connect(Connector $connector) {
 		$future = new Future;
 		$connector->connect($this->config->resolvedHost)->when(function ($error, $socket) use ($future) {
-			if ($this->connectionState == self::CLOSED) {
-				fclose($socket);
+			if ($this->connectionState === self::CLOSED) {
+				$future->succeed(null);
+				if ($socket) {
+					fclose($socket);
+				}
 				return;
 			}
 
 			if ($error) {
 				$future->fail($error);
-			} else {
-				$this->socket = $socket;
-				$this->readWatcher = $this->reactor->onReadable($this->socket, [$this, "onInit"]);
-				$this->futures[] = $future;
+				if ($socket) {
+					fclose($socket);
+				}
+				return;
 			}
+
+			$this->socket = $socket;
+			$this->readWatcher = $this->reactor->onReadable($this->socket, [$this, "onInit"]);
+			$this->futures[] = $future;
 		});
 		return $future;
 	}
@@ -170,7 +181,7 @@ class Connection {
 	}
 
 	private function appendTask($callback) {
-		if ($this->packetCallback || $this->parseCallback || !empty($this->onReady)) {
+		if ($this->packetCallback || $this->parseCallback || !empty($this->onReady) || $this->connectionState != self::READY) {
 			$this->onReady[] = $callback;
 		} else {
 			$cb = $this->config->busy;
@@ -338,7 +349,7 @@ class Connection {
 	}
 
 	/** @see 14.7.4 COM_STMT_PREPARE */
-	public function prepare($query, $future = null) {
+	public function prepare($query, $data = null, $future = null) {
 		$this->query = $query;
 		$regex = <<<'REGEX'
 ("|'|`)((?:\\\\|\\\1|(?!\1).)*+)\1|(\?)|:([a-zA-Z_]+)
@@ -358,7 +369,30 @@ REGEX;
 		}, $query);
 		$this->sendPacket("\x16$query");
 		$this->parseCallback = [$this, "handlePrepare"];
-		return $this->startCommand($future);
+		if ($data === null) {
+			return $this->startCommand($future);
+		}
+
+		$retFuture = $future ?: new Future;
+		$this->startCommand()->when(function($error, $stmt) use ($retFuture, $data) {
+			if ($error) {
+				$retFuture->fail($error);
+			} else {
+				try {
+					$stmt->execute($data)->when(function ($error, $result) use ($retFuture) {
+						if ($error) {
+							$retFuture->fail($error);
+						} else {
+							$retFuture->succeed($result);
+						}
+					});
+				} catch (\Exception $e) {
+					$retFuture->fail($e);
+				}
+			}
+		});
+
+		return $retFuture;
 	}
 
 	/** @see 14.7.5 COM_STMT_SEND_LONG_DATA */
@@ -512,7 +546,7 @@ REGEX;
 				}
 				$this->query = null;
 				$this->ready();
-			} elseif ($this->connectionState == self::ESTABLISHED) {
+			} elseif ($this->connectionState < self::READY) {
 				// connection failure
 				$this->closeSocket();
 				$this->getFuture()->fail(new \Exception("Could not connect to {$this->config->resolvedHost}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
@@ -1268,7 +1302,7 @@ REGEX;
 		}
 		$this->closeSocket();
 		if (null !== $cb = $this->config->restore) {
-			$cb();
+			$cb($this, $this->connectionState < self::READY);
 			/* @TODO if packet not completely sent, resend? */
 		}
 	}

@@ -1,11 +1,6 @@
 <?php
 
-require '../vendor/autoload.php';
-
-const DB_HOST = "",
-      DB_USER = "",
-      DB_PASS = "",
-      DB_NAME = "";
+require './example_bootstrap.php';
 
 \Amp\run(function() {
 	$db = new \Mysql\Pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME);
@@ -15,4 +10,6 @@ const DB_HOST = "",
 	list($one) = (yield $query->fetchRow());
 
 	var_dump($one); // should output string(1) "1"
+
+	$db->close();
 });

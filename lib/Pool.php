@@ -4,19 +4,18 @@ namespace Mysql;
 
 class Pool {
 	private $reactor;
-	private $connector;
+	private $connector = null;
 	private $connections = [];
 	private $connectionMap = [];
 	private $ready = [];
 	private $readyMap = [];
 	private $connectionFuture;
 	private $virtualConnection;
-	private $config = true;
+	private $config;
 	private $limit;
 
 	public function __construct($connStr, $sslOptions = null, \Amp\Reactor $reactor = null) {
 		$this->reactor = $reactor ?: \Amp\getReactor();
-		$this->connector = new \Nbsock\Connector($this->reactor);
 
 		$db = null;
 		$limit = INF;
@@ -53,8 +52,15 @@ class Pool {
 	private function initLocal() {
 		$this->virtualConnection = new VirtualConnection;
 		$this->config->ready = function($conn) { $this->ready($conn); };
-		$this->config->restore = function() { return $this->getReadyConnection(); };
-		$this->config->busy = function($conn) { unset($this->ready[$this->readyMap[spl_object_hash($conn)]]); };
+		/* @TODO ... pending queries ... */
+		$this->config->restore = function($conn, $init) {
+			$this->unmapConnection($conn);
+			if ($init && empty($this->connections)) {
+				$this->virtualConnection->fail(new \Exception("Connection failed"));
+			}
+			return $this->getReadyConnection();
+		};
+		$this->config->busy = function($conn) { if (isset($this->readyMap[$hash = spl_object_hash($conn)])) unset($this->ready[$this->readyMap[$hash]]); };
 	}
 
 	/** First parameter may be collation too, then charset is determined by the prefix of collation */
@@ -95,22 +101,28 @@ class Pool {
 	}
 
 	private function addConnection() {
-		if (count($this->connections) >= $this->limit) {
-			return;
-		}
-
-		$this->connections[] = $conn = new Connection($this->reactor, $this->config);
-		end($this->connections);
-		$this->connectionMap[spl_object_hash($conn)] = key($this->connections);
-		$this->connectionFuture = $conn->connect($this->connector);
-		$this->connectionFuture->when(function($error) use ($conn) {
-			if ($error) {
+		$this->reactor->immediately(function() {
+			if (count($this->connections) >= $this->limit) {
 				return;
 			}
 
-			if ($this->config->charset != "utf8mb4" || ($this->config->collate != "" && $this->config->collate != "utf8mb4_general_ci")) {
-				$conn->setCharset($this->config->charset, $this->config->collate);
-			}
+			$this->connections[] = $conn = new Connection($this->reactor, $this->config);
+			end($this->connections);
+			$this->connectionMap[spl_object_hash($conn)] = key($this->connections);
+			$this->connectionFuture = $conn->connect($this->connector ?: $this->connector = new \Nbsock\Connector($this->reactor));
+			$this->connectionFuture->when(function ($error) use ($conn) {
+				if ($error) {
+					$this->unmapConnection($conn);
+					if (empty($this->connections)) {
+						$this->virtualConnection->fail($error);
+					}
+					return;
+				}
+
+				if ($this->config->charset != "utf8mb4" || ($this->config->collate != "" && $this->config->collate != "utf8mb4_general_ci")) {
+					$conn->setCharset($this->config->charset, $this->config->collate);
+				}
+			});
 		});
 	}
 
@@ -131,13 +143,16 @@ class Pool {
 
 	/** @return Connection */
 	protected function &getReadyConnection() {
+		if ($this->limit < 0) {
+			$this->limit *= -1;
+		}
 		if (count($this->ready) < 2) {
 			$this->addConnection();
 		}
 
 		while (list($key, $conn) = each($this->ready)) {
 			unset($this->ready[$key]);
-			if ($conn->alive()) {
+			if ($conn->isReady()) {
 				return $conn;
 			}
 		}
@@ -205,8 +220,8 @@ class Pool {
 		return $this->getReadyConnection()->resetConnection();
 	}
 
-	public function prepare($query) {
-		return $this->getReadyConnection()->prepare($query);
+	public function prepare($query, $data = null) {
+		return $this->getReadyConnection()->prepare($query, $data);
 	}
 
 	// @TODO really use this?
@@ -216,13 +231,17 @@ class Pool {
 		$pool->config = clone $pool->config;
 		$pool->initLocal();
 		return $this->getReadyConnection()->getThis()->when(function($error, $conn) use ($pool) {
-			$hash = spl_object_hash($conn);
-			unset($this->connections[$this->connectionMap[$hash]], $this->connectionMap[$hash]);
+			$this->unmapConnection($conn);
 			$pool->limit = 1;
 			$pool->connections = [$conn];
-			$pool->connectionMap[$hash] = 0;
+			$pool->connectionMap[spl_object_hash($conn)] = 0;
 			$pool->ready($conn);
 		});
+	}
+
+	private function unmapConnection($conn) {
+		$hash = spl_object_hash($conn);
+		unset($this->connections[$this->connectionMap[$hash]], $this->connectionMap[$hash]);
 	}
 
 	public function __destruct() {
@@ -232,6 +251,11 @@ class Pool {
 	public function close() {
 		foreach ($this->connections as $conn) {
 			$conn->close();
+			$this->unmapConnection($conn);
 		}
+		$this->ready = [];
+		$this->readyMap = [];
+		$this->connector = null;
+		$this->limit *= -1;
 	}
 }

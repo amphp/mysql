@@ -1,15 +1,11 @@
 <?php
 
+require '../vendor/autoload.php';
 
-$autoloader = require(__DIR__.'/../vendor/autoload.php');
-
-// Add a PSR-0 classpath for testing
-// $autoloader->add('Example', [realpath('./').'/test/']);
-
-// Add a PSR-4 classpath for testing.
-// $autoloader->addPsr4('Example', [realpath('./').'/test/']);
-
-
+/*
+ * This file is not in VCS - create it if you want to set
+ * the DB credentials without having them commited to VCS.
+ */
 @include_once __DIR__."/../mysql_config.php";
 
 if (!defined('DB_HOST')) {

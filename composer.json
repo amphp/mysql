@@ -1,5 +1,5 @@
 {
-	"name": "amphp/amp-mysql",
+	"name": "amphp/mysql",
 	"description": "description_text",
 	"minimum-stability": "dev",
 	"require": {

@@ -6,7 +6,7 @@
     </php>
 
     <testsuites>
-        <testsuite name="Amp Mysql Test Suite">
+        <testsuite name="Amphp Mysql Test Suite">
             <directory>./</directory>
         </testsuite>
     </testsuites>
