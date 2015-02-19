@@ -8,8 +8,8 @@ php:
 before_script:
   - composer install
   - mysql -e "create database IF NOT EXISTS amptest;" -uroot
-  - echo "<?php const DB_HOST = '127.0.0.1'; const DB_NAME = 'amptest'; const DB_USER = 'travis';" > ./test/mysql_config.php
-  - cat ./test/mysql_config.php
+  - echo "<?php const DB_HOST = '127.0.0.1'; const DB_NAME = 'amptest'; const DB_USER = 'travis';" > ./mysql_config.php
+  - cat ./mysql_config.php
   
   
  
