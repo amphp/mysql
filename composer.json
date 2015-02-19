@@ -3,8 +3,8 @@
 	"description": "description_text",
 	"minimum-stability": "dev",
 	"require": {
-		"amphp/amp": "~0.15",
-		"rdlowrey/nbsock": "~0.5"
+		"amphp/amp": "~0.16",
+		"rdlowrey/nbsock": "~0.6"
 	},
 	"authors": [
 		{
