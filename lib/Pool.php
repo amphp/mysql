@@ -127,8 +127,8 @@ class Pool {
 	}
 
 	private function ready($conn) {
-		if (list($method, $args) = $call = $this->virtualConnection->getCall()) {
-			call_user_func_array([$conn, $method], $args);
+		if (list($future, $method, $args) = $this->virtualConnection->getCall()) {
+			$future->succeed(call_user_func_array([$conn, $method], $args));
 		} else {
 			$this->ready[] = $conn;
 			end($this->ready);

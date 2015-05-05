@@ -112,10 +112,7 @@ class Connection {
 		return $this->config;
 	}
 
-	public function getThis($future = null) {
-		if ($future) {
-			return $future->succeed($this);
-		}
+	public function getThis() {
 		return new Success($this);
 	}
 
@@ -195,9 +192,9 @@ class Connection {
 		return clone $this->connInfo;
 	}
 
-	private function startCommand($future = null) {
+	private function startCommand() {
 		$this->seqId = $this->compressionId = -1;
-		return $this->futures[] = $future ?: new Future;
+		return $this->futures[] = new Future;
 	}
 
 	public function setCharset($charset, $collate) {
@@ -210,36 +207,36 @@ class Connection {
 	}
 
 	/** @see 14.6.2 COM_QUIT */
-	public function closeConnection($future = null) {
+	public function closeConnection() {
 		$this->sendPacket("\x01");
 		$this->connectionState = self::CLOSING;
-		return $this->startCommand($future);
+		return $this->startCommand();
 	}
 
 	/** @see 14.6.3 COM_INIT_DB */
-	public function useDb($db, $future = null) {
+	public function useDb($db) {
 		$this->oldDb = $this->config->db;
 		$this->config->db = $db;
 		$this->sendPacket("\x02$db");
-		return $this->startCommand($future);
+		return $this->startCommand();
 	}
 
 	/** @see 14.6.4 COM_QUERY */
-	public function query($query, $future = null) {
+	public function query($query) {
 		$this->sendPacket("\x03$query");
 		$this->query = $query;
 		$this->packetCallback = [$this, "handleQuery"];
-		return $this->startCommand($future);
+		return $this->startCommand();
 	}
 
 	/** @see 14.6.5 COM_FIELD_LIST */
-	public function listFields($table, $like = "%", $future = null) {
+	public function listFields($table, $like = "%") {
 		$this->sendPacket("\x04$table\0$like");
 		$this->parseCallback = [$this, "handleFieldlist"];
-		return $this->startCommand($future);
+		return $this->startCommand();
 	}
 
-	public function listAllFields($table, $like = "%", $future = null) {
+	public function listAllFields($table, $like = "%") {
 		if (!$future) {
 			$future = new Future;
 		}
@@ -263,64 +260,64 @@ class Connection {
 	}
 
 	/** @see 14.6.6 COM_CREATE_DB */
-	public function createDatabase($db, $future = null) {
+	public function createDatabase($db) {
 		$this->sendPacket("\x05$db");
-		return $this->startCommand($future);
+		return $this->startCommand();
 	}
 
 	/** @see 14.6.7 COM_DROP_DB */
-	public function dropDatabase($db, $future = null) {
+	public function dropDatabase($db) {
 		$this->sendPacket("\x06$db");
-		return $this->startCommand($future);
+		return $this->startCommand();
 	}
 
 	/** @see 14.6.8 COM_REFRESH */
-	public function refresh($subcommand, $future = null) {
+	public function refresh($subcommand) {
 		$this->sendPacket("\x07$subcommand");
-		return $this->startCommand($future);
+		return $this->startCommand();
 	}
 
 	/** @see 14.6.9 COM_SHUTDOWN */
-	public function shutdown($future = null) {
+	public function shutdown() {
 		$this->sendPacket("\x08\x00"); /* SHUTDOWN_DEFAULT / SHUTDOWN_WAIT_ALL_BUFFERS, only one in use */
-		return $this->startCommand($future);
+		return $this->startCommand();
 	}
 
 	/** @see 14.6.10 COM_STATISTICS */
-	public function statistics($future = null) {
+	public function statistics() {
 		$this->sendPacket("\x09");
 		$this->parseCallback = [$this, "readStatistics"];
-		return $this->startCommand($future);
+		return $this->startCommand();
 	}
 
 	/** @see 14.6.11 COM_PROCESS_INFO */
-	public function processInfo($future = null) {
+	public function processInfo() {
 		$this->sendPacket("\x0a");
 		$this->packetCallback = [$this, "handleQuery"];
-		return $this->startCommand($future);
+		return $this->startCommand();
 	}
 
 	/** @see 14.6.13 COM_PROCESS_KILL */
-	public function killProcess($process, $future = null) {
+	public function killProcess($process) {
 		$this->sendPacket("\x0c$process");
-		return $this->startCommand($future);
+		return $this->startCommand();
 	}
 
 	/** @see 14.6.14 COM_DEBUG */
-	public function debugStdout($future = null) {
+	public function debugStdout() {
 		$this->sendPacket("\x0d");
-		return $this->startCommand($future);
+		return $this->startCommand();
 	}
 
 	/** @see 14.6.15 COM_PING */
-	public function ping($future = null) {
+	public function ping() {
 		$this->sendPacket("\x0d");
-		return $this->startCommand($future);
+		return $this->startCommand();
 	}
 
 	/** @see 14.6.18 COM_CHANGE_USER */
 	/* @TODO broken, my test server doesn't support that command, can't test now
-	public function changeUser($user, $pass, $db = null, $future = null) {
+	public function changeUser($user, $pass, $db = null) {
 		$this->config->user = $user;
 		$this->config->pass = $pass;
 		$this->config->db = $db;
@@ -337,18 +334,18 @@ class Connection {
 
 		$this->sendPacket($payload);
 		$this->parseCallback = [$this, "authSwitchRequest"];
-		return $this->startCommand($future);
+		return $this->startCommand();
 	}
 	*/
 
 	/** @see 14.6.19 COM_RESET_CONNECTION */
-	public function resetConnection($future = null) {
+	public function resetConnection() {
 		$this->sendPacket("\x1f");
-		return $this->startCommand($future);
+		return $this->startCommand();
 	}
 
 	/** @see 14.7.4 COM_STMT_PREPARE */
-	public function prepare($query, $data = null, $future = null) {
+	public function prepare($query, $data = null) {
 		$this->query = $query;
 		$regex = <<<'REGEX'
 ("|'|`)((?:\\\\|\\\1|(?!\1).)*+)\1|(\?)|:([a-zA-Z_]+)
@@ -369,10 +366,10 @@ REGEX;
 		$this->sendPacket("\x16$query");
 		$this->parseCallback = [$this, "handlePrepare"];
 		if ($data === null) {
-			return $this->startCommand($future);
+			return $this->startCommand();
 		}
 
-		$retFuture = $future ?: new Future;
+		$retFuture = new Future;
 		$this->startCommand()->when(function($error, $stmt) use ($retFuture, $data) {
 			if ($error) {
 				$retFuture->fail($error);

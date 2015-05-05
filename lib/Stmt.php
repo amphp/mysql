@@ -51,8 +51,7 @@ class Stmt {
 					foreach ($this->prebound as $paramId => $msg) {
 						$this->conn->bindParam($this->stmtId, $paramId, $msg);
 					}
-					while (list($method, $args) = $this->virtualConn->getCall()) {
-						$future = array_pop($args);
+					while (list($future, $method, $args) = $this->virtualConn->getCall()) {
 						if (isset($args[0])) {
 							$args[0] = $this->stmtId;
 						}
