@@ -6,57 +6,40 @@ use Amp\Future;
 use Amp\Success;
 
 class ResultSet {
-	private $columnCount;
-	private $columns = [];
-	private $columnsToFetch;
-	private $rows = null;
-	private $fetchedRows = 0;
-	private $userFetched = 0;
-	private $futures = [self::SINGLE_ROW_FETCH => [], self::COLUMNS_FETCHED => [], self::ROWS_FETCHED => []];
-	private $state = self::UNFETCHED;
-	private $next;
 	private $connInfo;
+	private $result;
 
-	const UNFETCHED = 0;
-	const COLUMNS_FETCHED = 1;
-	const ROWS_FETCHED = 2;
-
-	const SINGLE_ROW_FETCH = 255;
-
-	public function __construct(ConnectionState $state) {
+	public function __construct(ConnectionState $state, ResultProxy $result) {
 		$this->connInfo = $state;
+		$this->result = $result;
 	}
-
-	private function setColumns($columns) {
-		$this->columnCount = $this->columnsToFetch = $columns;
-	}
-
+	
 	public function getFields() {
-		if ($this->state >= self::COLUMNS_FETCHED) {
-			return new Success($this->columns);
+		if ($this->result->state >= ResultProxy::COLUMNS_FETCHED) {
+			return new Success($this->result->columns);
 		} else {
 			$future = new Future;
-			$this->futures[self::COLUMNS_FETCHED][] = [$future, &$this->columns];
+			$this->result->futures[ResultProxy::COLUMNS_FETCHED][] = [$future, &$this->result->columns];
 			return $future;
 		}
 	}
 
 	public function rowCount() {
-		if ($this->state == self::ROWS_FETCHED) {
-			return new Success(count($this->rows));
+		if ($this->result->state == ResultProxy::ROWS_FETCHED) {
+			return new Success(count($this->result->rows));
 		} else {
 			$future = new Future;
-			$this->futures[self::ROWS_FETCHED][] = [$future, null, function () { return count($this->rows); }];
+			$this->result->futures[ResultProxy::ROWS_FETCHED][] = [$future, null, function () { return count($this->result->rows); }];
 			return $future;
 		}
 	}
 
 	private function genericFetchAll($cb) {
-		if ($this->state == self::ROWS_FETCHED) {
-			return new Success($cb($this->rows));
+		if ($this->result->state == ResultProxy::ROWS_FETCHED) {
+			return new Success($cb($this->result->rows));
 		} else {
 			$future = new Future;
-			$this->futures[self::ROWS_FETCHED][] = [$future, &$this->rows, $cb];
+			$this->result->futures[ResultProxy::ROWS_FETCHED][] = [$future, &$this->result->rows, $cb];
 			return $future;
 		}
 	}
@@ -69,7 +52,7 @@ class ResultSet {
 
 	public function fetchObjects() {
 		return $this->genericFetchAll(function($rows) {
-			$names = array_column($this->columns, "name");
+			$names = array_column($this->result->columns, "name");
 			return array_map(function($row) use ($names) {
 				return (object) array_combine($names, $row);
 			}, $rows ?: []);
@@ -78,22 +61,22 @@ class ResultSet {
 
 	public function fetchAll() {
 		return $this->genericFetchAll(function($rows) {
-			$names = array_column($this->columns, "name");
+			$names = array_column($this->result->columns, "name");
 			return array_map(function($row) use ($names) {
 				return array_combine($names, $row) + $row;
 			}, $rows ?: []);
 		});
 	}
 
-	public function genericFetch($cb = null) {
-		if ($this->userFetched < $this->fetchedRows) {
-			$row = $this->rows[$this->userFetched++];
+	public function genericFetch(callable $cb = null) {
+		if ($this->result->userFetched < $this->result->fetchedRows) {
+			$row = $this->result->rows[$this->result->userFetched++];
 			return new Success($cb ? $cb($row) : $row);
-		} elseif ($this->state == self::ROWS_FETCHED) {
+		} elseif ($this->result->state == ResultProxy::ROWS_FETCHED) {
 			return new Success(null);
 		} else {
 			$future = new Future;
-			$this->futures[self::SINGLE_ROW_FETCH][] = [$future, null, $cb];
+			$this->result->futures[ResultProxy::SINGLE_ROW_FETCH][] = [$future, null, $cb];
 			return $future;
 		}
 	}
@@ -104,63 +87,22 @@ class ResultSet {
 
 	public function fetchObject() {
 		return $this->genericFetch(function ($row) {
-			return (object) array_combine(array_column($this->columns, "name"), $row);
+			return (object) array_combine(array_column($this->result->columns, "name"), $row);
 		});
 	}
 
 	public function fetch() {
 		return $this->genericFetch(function ($row) {
-			return array_combine(array_column($this->columns, "name"), $row) + $row;
+			return array_combine(array_column($this->result->columns, "name"), $row) + $row;
 		});
-	}
-
-	private function updateState($state) {
-		$this->state = $state;
-		if ($state == self::ROWS_FETCHED) {
-			$this->rowFetched(null);
-		}
-		if (empty($this->futures[$state])) {
-			return;
-		}
-		foreach ($this->futures[$state] as list($future, $rows, $cb)) {
-			$future->succeed($cb ? $cb($rows) : $rows);
-		}
-		$this->futures[$state] = [];
-	}
-
-	private function rowFetched($row) {
-		if ($row !== null) {
-			$this->rows[$this->fetchedRows++] = $row;
-		}
-		list($key, list($entry, , $cb)) = each($this->futures[self::SINGLE_ROW_FETCH]);
-		if ($key !== null) {
-			unset($this->futures[self::SINGLE_ROW_FETCH][$key]);
-			$entry->succeed($cb && $row ? $cb($row) : $row);
-		}
 	}
 
 	public function getConnInfo() {
 		return clone $this->connInfo;
 	}
 
-	public function __debugInfo() {
-		$tmp = clone $this;
-		unset($tmp->next);
-		foreach ($tmp->futures as &$type) {
-			foreach ($type as &$entry) {
-				if (is_array($entry)) {
-					$entry[0] = null;
-				} else {
-					$entry = null;
-				}
-			}
-		}
-
-		return (array) $tmp;
-	}
-
 	public function next() {
-		return $this->next ?: $this->next = new Future;
+		return $this->result->next ?: $this->result->next = new Future;
 	}
 
 }

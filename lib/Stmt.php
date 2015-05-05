@@ -6,29 +6,25 @@ use Amp\Future;
 use Amp\Success;
 
 class Stmt {
-	private $columnCount;
 	private $paramCount;
 	private $numParamCount;
-	private $columns = [];
 	private $params = [];
 	private $named = [];
 	private $byNamed;
 	private $query;
 	private $stmtId;
-	private $columnsToFetch;
 	private $prebound = [];
-	private $futures = [];
 	private $conn; // when doing something on $conn, it must be checked if still same connection, else throw Exception! @TODO {or redo query, fetch???}
 	private $virtualConn;
 
-	private $state = ResultSet::UNFETCHED;
+	private $result;
 
-	public function __construct(Connection $conn, $query, $stmtId, $columns, $params, $named = []) {
+	public function __construct(Connection $conn, $query, $stmtId, $named, ResultProxy $result) {
 		$this->conn = $conn;
 		$this->query = $query;
 		$this->stmtId = $stmtId;
-		$this->columnCount = $columns;
-		$this->numParamCount = $this->paramCount = $this->columnsToFetch = $params;
+		$this->result = $result;
+		$this->numParamCount = $this->paramCount = $this->result->columnsToFetch;
 		$this->byNamed = $named;
 		foreach ($named as $name => $ids) {
 			foreach ($ids as $id) {
@@ -154,20 +150,12 @@ class Stmt {
 	}
 
 	public function getFields() {
-		if ($this->state >= ResultSet::COLUMNS_FETCHED) {
-			return new Success($this->columns);
+		if ($this->result->state >= ResultProxy::COLUMNS_FETCHED) {
+			return new Success($this->result->columns);
+		} elseif (isset($this->result->futures[ResultProxy::COLUMNS_FETCHED][0])) {
+			return $this->result->futures[ResultProxy::COLUMNS_FETCHED][0][0];
 		} else {
-			return $this->futures[] = new Future;
-		}
-	}
-
-	private function updateState($state) {
-		if ($state == ResultSet::COLUMNS_FETCHED) {
-			foreach ($this->futures as $future) {
-				$future->succeed($this->columns);
-			}
-			$this->futures = [];
-			$this->state = ResultSet::COLUMNS_FETCHED;
+			return $this->result->futures[ResultProxy::COLUMNS_FETCHED][0] = [new Future, &$this->result->columns, null];
 		}
 	}
 
@@ -182,9 +170,6 @@ class Stmt {
 	public function __debugInfo() {
 		$tmp = clone $this;
 		unset($tmp->conn);
-		foreach ($tmp->futures as &$future) {
-			$future = null;
-		}
 
 		return (array) $tmp;
 	}

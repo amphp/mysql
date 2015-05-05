@@ -34,8 +34,8 @@ class Connection {
 	private $packetType;
 	private $socket;
 	private $readGranularity = 8192;
-	private $readWatcher = NULL;
-	private $writeWatcher = NULL;
+	private $readWatcher = null;
+	private $writeWatcher = null;
 	private $watcherEnabled = false;
 	private $authPluginDataLen;
 	private $query;
@@ -47,9 +47,8 @@ class Connection {
 	private $config;
 	private $futures = [];
 	private $onReady = [];
-	private $resultSet = null;
-	private $resultSetMethod;
-	private $oldDb = NULL;
+	private $result;
+	private $oldDb = null;
 
 	protected $connectionId;
 	protected $authPluginData;
@@ -777,39 +776,23 @@ REGEX;
 		$this->sendPacket("");
 	}
 
-	private function &resultSet($prop, $val = NAN) {
-		$cb = $this->resultSet;
-		return $cb($prop, $val);
-	}
-
-	private function resultSetMethod($method) {
-		$args = func_get_args();
-		unset($args[0]);
-		$cb = $this->resultSetMethod;
-		return $cb($method, $args);
-	}
-
-	private function bindResultSet($resultSet) {
-		$class = get_class($resultSet);
-		$this->resultSet = \Closure::bind(function &($prop, $val = NAN) { if (!@is_nan($val)) $this->$prop = $val; return $this->$prop; }, $resultSet, $class);
-		$this->resultSetMethod = \Closure::bind(function ($method, $args) { call_user_func_array([$this, $method], $args); }, $resultSet, $class);
-	}
-
 	/** @see 14.6.4.1.1 Text Resultset */
 	private function handleQuery() {
 		$this->parseCallback = [$this, "handleTextColumnDefinition"];
-		$this->getFuture()->succeed($resultSet = new ResultSet($this->connInfo));
-		$this->bindResultSet($resultSet);
-		$this->resultSetMethod("setColumns", ord($this->packet));
+		$this->getFuture()->succeed(new ResultSet($this->connInfo, $result = new ResultProxy));
+		/* we need to succeed before assigning vars, so that a when() handler won't have a partial result available */
+		$this->result = $result;
+		$this->result->setColumns(ord($this->packet));
 	}
 
 	/** @see 14.7.1 Binary Protocol Resultset */
 	private function handleExecute() {
 		$this->parseCallback = [$this, "handleBinaryColumnDefinition"];
-		$this->getFuture()->succeed($resultSet = new ResultSet($this->connInfo));
-		$this->bindResultSet($resultSet);
-		$this->resultSetMethod("setColumns", ord($this->packet));
-		$this->resultSet("columns", []);
+		$this->getFuture()->succeed(new ResultSet($this->connInfo, $result = new ResultProxy));
+		/* we need to succeed before assigning vars, so that a when() handler won't have a partial result available */
+		$this->result = $result;
+		$this->result->setColumns(ord($this->packet));
+		$this->result->columns = [];
 	}
 
 	private function handleFieldList() {
@@ -835,9 +818,8 @@ REGEX;
 	}
 
 	private function handleColumnDefinition($cbMethod) {
-		$toFetch = &$this->resultSet("columnsToFetch");
-		if (!$toFetch--) {
-			$this->resultSetMethod("updateState", ResultSet::COLUMNS_FETCHED);
+		if (!$this->result->columnsToFetch--) {
+			$this->result->updateState(ResultProxy::COLUMNS_FETCHED);
 			if (ord($this->packet) == self::ERR_PACKET) {
 				$this->parseCallback = null;
 				$this->handleError();
@@ -853,39 +835,35 @@ REGEX;
 			return;
 		}
 
-		$this->resultSet("columns")[] = $this->parseColumnDefinition();
+		$this->result->columns[] = $this->parseColumnDefinition();
 	}
 
 	private function prepareParams() {
-		$toFetch = &$this->resultSet("columnsToFetch");
-		if (!$toFetch--) {
-			//$this->resultSetMethod("updateState", ResultSet::PARAMS_FETCHED);
-			$toFetch = $this->resultSet("columnCount");
-			if (!$toFetch) {
+		if (!$this->result->columnsToFetch--) {
+			if (!$this->result->columnCount) {
 				$this->prepareFields();
 			} else {
+				$this->result->columnsToFetch = $this->result->columnCount;
 				$this->parseCallback = [$this, "prepareFields"];
 			}
 			return;
 		}
 
-		$this->resultSet("params")[] = $this->parseColumnDefinition();
-		//$this->resultSetMethod("updateState", ResultSet::PARAMS_FETCHED);
+		$this->result->params[] = $this->parseColumnDefinition();
 	}
 
 	private function prepareFields() {
-		$toFetch = &$this->resultSet("columnsToFetch");
-		if (!$toFetch--) {
+		if (!$this->result->columnsToFetch--) {
 			$this->parseCallback = null;
-			$this->resultSetMethod("updateState", ResultSet::COLUMNS_FETCHED);
+			$this->result->updateState(ResultProxy::COLUMNS_FETCHED);
 			$this->query = null;
 			$this->ready();
 
 			return;
 		}
 
-		$this->resultSet("columns")[] = $this->parseColumnDefinition();
-		$this->resultSetMethod("updateState", ResultSet::COLUMNS_FETCHED);
+		$this->result->columns[] = $this->parseColumnDefinition();
+		$this->result->updateState(ResultProxy::COLUMNS_FETCHED);
 	}
 
 	/** @see 14.6.4.1.1.2 Column Defintion */
@@ -1033,7 +1011,7 @@ REGEX;
 				if ($type == self::EOF_PACKET) {
 					$this->parseEof();
 				}
-				$future = &$this->resultSet("next");
+				$future = &$this->result->next;
 				if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
 					$this->parseCallback = [$this, "handleQuery"];
 					$this->futures[] = $future ?: $future = new Future;
@@ -1047,7 +1025,7 @@ REGEX;
 				}
 				$this->query = null;
 				$this->ready();
-				$this->resultSetMethod("updateState", ResultSet::ROWS_FETCHED);
+				$this->result->updateState(ResultProxy::ROWS_FETCHED);
 				return;
 		}
 
@@ -1063,14 +1041,14 @@ REGEX;
 				$off += $intlen + $len;
 			}
 		}
-		$this->resultSetMethod("rowFetched", $fields);
+		$this->result->rowFetched($fields);
 	}
 
 	/** @see 14.7.2 Binary Protocol Resultset Row */
 	private function handleBinaryResultsetRow() {
 		if (ord($this->packet) == self::EOF_PACKET) {
 			$this->parseEof();
-			$future = &$this->resultSet("next");
+			$future = &$this->result->next;
 			if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
 				$this->parseCallback = [$this, "handleQuery"];
 				$this->futures[] = $future ?: $future = new Future;
@@ -1084,14 +1062,14 @@ REGEX;
 			}
 			$this->query = null;
 			$this->ready();
-			$this->resultSetMethod("updateState", ResultSet::ROWS_FETCHED);
+			$this->result->updateState(ResultProxy::ROWS_FETCHED);
 			return;
 		}
 
 		$off = 1; // skip first byte
 
-		$columnCount = $this->resultSet("columnCount");
-		$columns = $this->resultSet("columns");
+		$columnCount = $this->result->columnCount;
+		$columns = $this->result->columns;
 		$fields = [];
 
 		for ($i = 0; $i < $columnCount; $i++) {
@@ -1107,7 +1085,7 @@ REGEX;
 			$off += $len;
 		}
 		ksort($fields);
-		$this->resultSetMethod("rowFetched", $fields);
+		$this->result->rowFetched($fields);
 	}
 
 	/** @see 14.7.4.1 COM_STMT_PREPARE Response */
@@ -1157,10 +1135,11 @@ REGEX;
 		}
 
 		finish: {
-			$resultset = new Stmt($this, $this->query, $stmtId, $columns, $params, $this->named);
 			$this->named = [];
-			$this->bindResultSet($resultset);
-			$this->getFuture()->succeed($resultset);
+			$this->result = new ResultProxy;
+			$this->result->columnsToFetch = $params;
+			$this->result->columnCount = $columns;
+			$this->getFuture()->succeed(new Stmt($this, $this->query, $stmtId, $this->named, $this->result));
 			if ($params) {
 				$this->parseCallback = [$this, "prepareParams"];
 			} else {
