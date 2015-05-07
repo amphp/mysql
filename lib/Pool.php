@@ -112,7 +112,7 @@ class Pool {
 			$this->connectionFuture = $conn->connect($this->connector ?: $this->connector = new \Nbsock\Connector($this->reactor));
 			$this->connectionFuture->when(function ($error) use ($conn) {
 				if ($error) {
-					$this->unmapConnection($conn);
+					// DO NOT unmapConnection() here - that is already done by config->reset callback
 					if (empty($this->connections)) {
 						$this->virtualConnection->fail($error);
 					}

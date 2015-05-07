@@ -1,15 +1,6 @@
 <?php
 
-class BasicTest extends \PHPUnit_Framework_TestCase {
-
-	function setup() {
-		//Done before each test.
-	}
-
-	function teardown() {
-		//Done after each test.
-	}
-
+class PoolTest extends \PHPUnit_Framework_TestCase {
 	function testConnect() {
 		$complete = false;
 		$callable = function() use (&$complete)  {
@@ -45,7 +36,3 @@ class BasicTest extends \PHPUnit_Framework_TestCase {
 		\Amp\run($callable);
 	}
 }
-
-
-
-

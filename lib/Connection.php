@@ -12,6 +12,36 @@ use Nbsock\Connector;
  * use better Exceptions...
  */
 
+class ParseState {
+	const START = 0;
+	const FETCH_PACKET = 1;
+}
+
+/** @see 14.1.3.4 Status Flags */
+class StatusFlags {
+	const SERVER_STATUS_IN_TRANS = 0x0001; // a transaction is active
+	const SERVER_STATUS_AUTOCOMMIT = 0x0002; // auto-commit is enabled
+	const SERVER_MORE_RESULTS_EXISTS = 0x0008;
+	const SERVER_STATUS_NO_GOOD_INDEX_USED = 0x0010;
+	const SERVER_STATUS_NO_INDEX_USED = 0x0020;
+	const SERVER_STATUS_CURSOR_EXISTS = 0x0040; // Used by Binary Protocol Resultset to signal that COM_STMT_FETCH has to be used to fetch the row-data.
+	const SERVER_STATUS_LAST_ROW_SENT = 0x0080;
+	const SERVER_STATUS_DB_DROPPED = 0x0100;
+	const SERVER_STATUS_NO_BACKSLASH_ESCAPES = 0x0200;
+	const SERVER_STATUS_METADATA_CHANGED = 0x0400;
+	const SERVER_QUERY_WAS_SLOW = 0x0800;
+	const SERVER_PS_OUT_PARAMS = 0x1000;
+	const SERVER_STATUS_IN_TRANS_READONLY = 0x2000; // in a read-only transaction
+	const SERVER_SESSION_STATE_CHANGED = 0x4000; // connection state information has changed
+}
+
+/** @see 13.1.3.1.1 Session State Information */
+class SessionStateTypes {
+	const SESSION_TRACK_SYSTEM_VARIABLES = 0x00;
+	const SESSION_TRACK_SCHEMA = 0x01;
+	const SESSION_TRACK_STATE_CHANGE = 0x02;
+}
+
 class Connection {
 	private $out = [];
 	private $outBuf;
@@ -366,11 +396,10 @@ REGEX;
 			if (!isset($m[3])) {
 				return $m[1] . $m[2] . $m[1];
 			}
-			if ($m[3] === "?") {
-				$index++;
-			} else {
-				$this->named[$m[4]][] = $index++;
+			if ($m[3] !== "?") {
+				$this->named[$m[4]][] = $index;
 			}
+			$index++;
 			return "?";
 		}, $query);
 		$this->sendPacket("\x16$query");
@@ -1647,34 +1676,4 @@ REGEX;
 			$this->watcherEnabled = true;
 		}
 	}
-}
-
-class ParseState {
-	const START = 0;
-	const FETCH_PACKET = 1;
-}
-
-/** @see 14.1.3.4 Status Flags */
-class StatusFlags {
-	const SERVER_STATUS_IN_TRANS = 0x0001; // a transaction is active
-	const SERVER_STATUS_AUTOCOMMIT = 0x0002; // auto-commit is enabled
-	const SERVER_MORE_RESULTS_EXISTS = 0x0008;
-	const SERVER_STATUS_NO_GOOD_INDEX_USED = 0x0010;
-	const SERVER_STATUS_NO_INDEX_USED = 0x0020;
-	const SERVER_STATUS_CURSOR_EXISTS = 0x0040; // Used by Binary Protocol Resultset to signal that COM_STMT_FETCH has to be used to fetch the row-data.
-	const SERVER_STATUS_LAST_ROW_SENT = 0x0080;
-	const SERVER_STATUS_DB_DROPPED = 0x0100;
-	const SERVER_STATUS_NO_BACKSLASH_ESCAPES = 0x0200;
-	const SERVER_STATUS_METADATA_CHANGED = 0x0400;
-	const SERVER_QUERY_WAS_SLOW = 0x0800;
-	const SERVER_PS_OUT_PARAMS = 0x1000;
-	const SERVER_STATUS_IN_TRANS_READONLY = 0x2000; // in a read-only transaction
-	const SERVER_SESSION_STATE_CHANGED = 0x4000; // connection state information has changed
-}
-
-/** @see 13.1.3.1.1 Session State Information */
-class SessionStateTypes {
-	const SESSION_TRACK_SYSTEM_VARIABLES = 0x00;
-	const SESSION_TRACK_SCHEMA = 0x01;
-	const SESSION_TRACK_STATE_CHANGE = 0x02;
 }
