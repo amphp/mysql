@@ -112,7 +112,7 @@ class Pool {
 			$this->connectionFuture = $conn->connect($this->connector ?: $this->connector = new \Nbsock\Connector($this->reactor));
 			$this->connectionFuture->when(function ($error) use ($conn) {
 				if ($error) {
-					// DO NOT unmapConnection() here - that is already done by config->reset callback
+					$this->unmapConnection($conn);
 					if (empty($this->connections)) {
 						$this->virtualConnection->fail($error);
 					}
@@ -239,9 +239,12 @@ class Pool {
 		});
 	}
 
+	/* This method might be called multiple times with the same hash. Important is that it's unmapped immediately */
 	private function unmapConnection($conn) {
 		$hash = spl_object_hash($conn);
-		unset($this->connections[$this->connectionMap[$hash]], $this->connectionMap[$hash]);
+		if (isset($this->connectionMap[$hash])) {
+			unset($this->connections[$this->connectionMap[$hash]], $this->connectionMap[$hash]);
+		}
 	}
 
 	public function __destruct() {
