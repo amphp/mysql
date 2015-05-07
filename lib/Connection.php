@@ -90,6 +90,15 @@ class Connection {
 	const CLOSING = 3;
 	const CLOSED = 4;
 
+	const REFRESH_GRANT = 0x01;
+	const REFRESH_LOG = 0x02;
+	const REFRESH_TABLES = 0x04;
+	const REFRESH_HOSTS = 0x08;
+	const REFREHS_STATUS = 0x10;
+	const REFRESH_THREADS = 0x20;
+	const REFRESH_SLAVE = 0x40;
+	const REFRESH_MASTER = 0x80;
+
 	public function __construct(Reactor $reactor, ConnectionConfig $config) {
 		$this->reactor = $reactor;
 		$this->config = $config;
@@ -237,9 +246,7 @@ class Connection {
 	}
 
 	public function listAllFields($table, $like = "%") {
-		if (!$future) {
-			$future = new Future;
-		}
+		$future = new Future;
 
 		$columns = [];
 		$when = function($error, $array) use (&$columns, &$when, $future) {
@@ -271,9 +278,12 @@ class Connection {
 		return $this->startCommand();
 	}
 
-	/** @see 14.6.8 COM_REFRESH */
+	/**
+	 * @param $subcommand int one of the self::REFRESH_* constants
+	 * @see 14.6.8 COM_REFRESH
+	 */
 	public function refresh($subcommand) {
-		$this->sendPacket("\x07$subcommand");
+		$this->sendPacket("\x07".chr($subcommand));
 		return $this->startCommand();
 	}
 
@@ -299,7 +309,7 @@ class Connection {
 
 	/** @see 14.6.13 COM_PROCESS_KILL */
 	public function killProcess($process) {
-		$this->sendPacket("\x0c$process");
+		$this->sendPacket("\x0c".DataTypes::encode_int32($process));
 		return $this->startCommand();
 	}
 
@@ -311,7 +321,7 @@ class Connection {
 
 	/** @see 14.6.15 COM_PING */
 	public function ping() {
-		$this->sendPacket("\x0d");
+		$this->sendPacket("\x0e");
 		return $this->startCommand();
 	}
 
@@ -1164,14 +1174,14 @@ REGEX;
 	}
 
 	private function compilePacket() {
-		while (1) {
+		 do {
 			$pending = current($this->out);
 			unset($this->out[key($this->out)]);
 			if ($pending !== null || empty($this->out)) {
 				break;
 			}
 			$this->seqId = $this->compressionId = -1;
-		}
+		} while (1);
 		if ($pending == "") {
 			return $pending;
 		}
