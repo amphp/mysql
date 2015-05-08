@@ -131,7 +131,7 @@ class Connection {
 
 	public function __construct(Reactor $reactor, ConnectionConfig $config) {
 		$this->reactor = $reactor;
-		$this->config = $config;
+		$this->config = clone $config; // prevent changes from outside...
 		$this->connInfo = new ConnectionState;
 
 		if ($config->resolvedHost === null) {
@@ -1519,7 +1519,7 @@ REGEX;
 						switch ($this->authPluginName) {
 							case "sha256_password":
 								$key = substr($this->packet, 1);
-								$this->config->key[$this->config->resolvedHost] = $key;
+								$this->config->key = $key;
 								$this->sendHandshake();
 								break;
 							default:
@@ -1642,8 +1642,8 @@ REGEX;
 					if ($this->config->pass === "") {
 						$auth = "";
 					} else {
-						if (isset($this->config->key[$this->config->resolvedHost])) {
-							$auth = $this->sha256Auth($this->config->pass, $this->authPluginData, $this->config->key[$this->config->resolvedHost]);
+						if (isset($this->config->key)) {
+							$auth = $this->sha256Auth($this->config->pass, $this->authPluginData, $this->config->key);
 						} else {
 							$auth = "\x1";
 						}

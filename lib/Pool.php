@@ -39,6 +39,10 @@ class Pool {
 		$this->config->db = $db;
 
 		if (is_array($sslOptions)) {
+			if (isset($sslOptions["key"])) {
+				$this->config->key = $sslOptions["key"];
+				unset($sslOptions["key"]);
+			}
 			$this->config->ssl = $sslOptions;
 		} else {
 			$this->config->ssl = $sslOptions ? [] : null;
