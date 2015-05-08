@@ -895,10 +895,10 @@ REGEX;
 
 	private function prepareParams() {
 		if (!$this->result->columnsToFetch--) {
-			if (!$this->result->columnCount) {
+			$this->result->columnsToFetch = $this->result->columnCount;
+			if (!$this->result->columnsToFetch) {
 				$this->prepareFields();
 			} else {
-				$this->result->columnsToFetch = $this->result->columnCount;
 				$this->parseCallback = [$this, "prepareFields"];
 			}
 			return;
@@ -1194,6 +1194,7 @@ REGEX;
 			$this->result = new ResultProxy;
 			$this->result->columnsToFetch = $params;
 			$this->result->columnCount = $columns;
+			$this->result->columns = [];
 			$this->getFuture()->succeed(new Stmt($this, $this->query, $stmtId, $this->named, $this->result));
 			if ($params) {
 				$this->parseCallback = [$this, "prepareParams"];
