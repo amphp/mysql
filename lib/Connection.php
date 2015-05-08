@@ -9,7 +9,6 @@ use Nbsock\Connector;
 /* @TODO
  * 14.2.3 Auth switch request??
  * 14.2.4 COM_CHANGE_USER
- * use better Exceptions...
  */
 
 class ParseState {
@@ -595,7 +594,7 @@ REGEX;
 			if ($this->connectionState == self::READY) {
 				// normal error
 				if ($this->config->exceptions) {
-					$this->getFuture()->fail(new \Exception("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}".($this->query != "" ? "\nCurrent query: {$this->query}" : "")));
+					$this->getFuture()->fail(new QueryException("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}", $this->query));
 				} else {
 					$this->getFuture()->succeed(false);
 				}
@@ -604,7 +603,7 @@ REGEX;
 			} elseif ($this->connectionState < self::READY) {
 				// connection failure
 				$this->closeSocket();
-				$this->getFuture()->fail(new \Exception("Could not connect to {$this->config->resolvedHost}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
+				$this->getFuture()->fail(new InitializationException("Could not connect to {$this->config->resolvedHost}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
 			}
 		}
 	}
@@ -728,7 +727,7 @@ REGEX;
 		handshake_packet: {
 			$this->protocol = $this->packetType;
 			if ($this->protocol !== 0x0a) {
-				throw new \Exception("Unsupported protocol version ".ord($this->packet)." (Expected: 10)");
+				throw new \UnexpectedValueException("Unsupported protocol version ".ord($this->packet)." (Expected: 10)");
 			}
 			// goto fetch_server_version;
 		}
@@ -1334,7 +1333,15 @@ REGEX;
 
 	private function goneAway() {
 		foreach ($this->futures as $future) {
-			$future->fail(new \Exception("Connection went away... unable to fulfil this future".($this->query == "" ? "" : "\nCurrent query was {$this->query}")));
+			if ($this->config->exceptions || $this->connectionState < self::READY) {
+				if ($this->query == "") {
+					$future->fail(new InitializationException("Connection went away"));
+				} else {
+					$future->fail(new QueryException("Connection went away... unable to fulfil this future ... It's unknown whether the query was executed...", $this->query));
+				}
+			} else {
+				$future->succeed(false);
+			}
 		}
 		$this->closeSocket();
 		if (null !== $cb = $this->config->restore) {
@@ -1356,7 +1363,7 @@ REGEX;
 				case ParseState::FETCH_PACKET:
 					goto fetch_packet;
 				default:
-					throw new \UnexpectedValueException("{$this->compressionState} is not a valid ParseState constant");
+					throw new \Exception("{$this->compressionState} is not a valid ParseState constant");
 			}
 		}
 
@@ -1424,7 +1431,7 @@ REGEX;
 				case ParseState::FETCH_PACKET:
 					goto fetch_packet;
 				default:
-					throw new \UnexpectedValueException("{$this->mysqlState} is not a valid ParseState constant");
+					throw new \Exception("{$this->mysqlState} is not a valid ParseState constant");
 			}
 		}
 
@@ -1523,7 +1530,7 @@ REGEX;
 								$this->sendHandshake();
 								break;
 							default:
-								throw new \Exception("Unexpected EXTRA_AUTH_PACKET in authentication phase for method {$this->authPluginName}");
+								throw new \UnexpectedValueException("Unexpected EXTRA_AUTH_PACKET in authentication phase for method {$this->authPluginName}");
 						}
 						break;
 					}
@@ -1650,9 +1657,9 @@ REGEX;
 					}
 					break;
 				case "mysql_old_password":
-					throw new \Exception("mysql_old_password is outdated and insecure. Intentionally not implemented!");
+					throw new \UnexpectedValueException("mysql_old_password is outdated and insecure. Intentionally not implemented!");
 				default:
-					throw new \Exception("Invalid (or unimplemented?) auth method requested by server: {$this->authPluginName}");
+					throw new \UnexpectedValueException("Invalid (or unimplemented?) auth method requested by server: {$this->authPluginName}");
 			}
 		} elseif ($this->config->pass !== "") {
 			$auth = $this->secureAuth($this->config->pass, $this->authPluginData);
