@@ -17,38 +17,15 @@ class Pool {
 	public function __construct($connStr, $sslOptions = null, \Amp\Reactor $reactor = null) {
 		$this->reactor = $reactor ?: \Amp\getReactor();
 
-		$db = null;
-		$limit = INF;
-
-		// well, yes. I *had* to document that behavior change. Future me, feel free to kill me ;-)
-		foreach (explode(";", $connStr) as $param) {
-			if (PHP_VERSION_ID < 70000) {
-				list($$key, $key) = array_reverse(explode("=", $param, 2));
-			} else {
-				list($key, $$key) = explode("=", $param, 2);
-			}
-		}
-		if (!isset($host, $user, $pass)) {
-			throw new \Exception("Required parameters host, user and pass need to be passed in connection string");
-		}
-
-		$this->config = new ConnectionConfig;
-		$this->config->host = $host;
-		$this->config->user = $user;
-		$this->config->pass = $pass;
-		$this->config->db = $db;
-
-		if (is_array($sslOptions)) {
-			if (isset($sslOptions["key"])) {
-				$this->config->key = $sslOptions["key"];
-				unset($sslOptions["key"]);
-			}
-			$this->config->ssl = $sslOptions;
+		if (preg_match("((?:^|;)\s*limit\s*=\s*([^;]*?)\s*(?:;|$))is", $connStr, $match, PREG_OFFSET_CAPTURE)) {
+			$this->limit = (int) $match[1][0];
+			$connStr = substr_replace($connStr, ";", $match[0][1], strlen($match[0][0]));
 		} else {
-			$this->config->ssl = $sslOptions ? [] : null;
+			$this->limit = INF;
 		}
 
-		$this->limit = $limit;
+		$this->config = Connection::parseConnStr($connStr, $sslOptions);
+
 		$this->initLocal();
 		$this->addConnection();
 	}
@@ -94,7 +71,7 @@ class Pool {
 				return;
 			}
 
-			$this->connections[] = $conn = new Connection($this->reactor, $this->config);
+			$this->connections[] = $conn = new Connection($this->config, null, $this->reactor);
 			end($this->connections);
 			$this->connectionMap[spl_object_hash($conn)] = key($this->connections);
 			$this->connectionFuture = $conn->connect($this->connector ?: $this->connector = new \Nbsock\Connector($this->reactor));

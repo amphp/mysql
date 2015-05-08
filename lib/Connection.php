@@ -128,14 +128,51 @@ class Connection {
 	const REFRESH_SLAVE = 0x40;
 	const REFRESH_MASTER = 0x80;
 
-	public function __construct(Reactor $reactor, ConnectionConfig $config) {
-		$this->reactor = $reactor;
-		$this->config = clone $config; // prevent changes from outside...
+	public function __construct($config, $sslOptions = null, Reactor $reactor = null) {
+		$this->reactor = $reactor ?: \Amp\getReactor();
 		$this->connInfo = new ConnectionState;
 
+		if (!$config instanceof ConnectionConfig) {
+			$config = self::parseConnStr($config, $sslOptions);
+		}
 		if ($config->resolvedHost === null) {
 			$this->resolveHost($config);
 		}
+		$this->config = $config;
+	}
+
+	public static function parseConnStr($connStr, $sslOptions = null) {
+		$db = null;
+
+		// well, yes. I *had* to document that behavior change. Future me, feel free to kill me ;-)
+		foreach (explode(";", $connStr) as $param) {
+			if (PHP_VERSION_ID < 70000) {
+				list($$key, $key) = array_reverse(array_map("trim", explode("=", $param, 2)));
+			} else {
+				list($key, $$key) = array_map("trim", explode("=", $param, 2));
+			}
+		}
+		if (!isset($host, $user, $pass)) {
+			throw new \Exception("Required parameters host, user and pass need to be passed in connection string");
+		}
+
+		$config = new ConnectionConfig;
+		$config->host = $host;
+		$config->user = $user;
+		$config->pass = $pass;
+		$config->db = $db;
+
+		if (is_array($sslOptions)) {
+			if (isset($sslOptions["key"])) {
+				$config->key = $sslOptions["key"];
+				unset($sslOptions["key"]);
+			}
+			$config->ssl = $sslOptions;
+		} else {
+			$config->ssl = $sslOptions ? [] : null;
+		}
+
+		return $config;
 	}
 
 	private function resolveHost($config) {
