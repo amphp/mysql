@@ -133,6 +133,25 @@ class Connection {
 		$this->reactor = $reactor;
 		$this->config = $config;
 		$this->connInfo = new ConnectionState;
+
+		if ($config->resolvedHost === null) {
+			$this->resolveHost($config);
+		}
+	}
+
+	private function resolveHost($config) {
+		$index = strpos($config->host, ':');
+
+		if ($index === false) {
+			$config->resolvedHost = "tcp://{$config->host}:3306";
+		} else if ($index === 0) {
+			$config->host = "localhost";
+			$config->resolvedHost = "tcp://localhost:" . (int) substr($config->host, 1);
+		} else {
+			list($host, $port) = explode(':', $config->host, 2);
+			$config->host = $host;
+			$config->resolvedHost = "tcp://$host:" . (int) $port;
+		}
 	}
 
 	public function alive() {

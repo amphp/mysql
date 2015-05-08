@@ -33,7 +33,7 @@ class Pool {
 		}
 
 		$this->config = new ConnectionConfig;
-		$this->resolveHost($host);
+		$this->config->host = $host;
 		$this->config->user = $user;
 		$this->config->pass = $pass;
 		$this->config->db = $db;
@@ -82,22 +82,6 @@ class Pool {
 
 	public function useExceptions($set) {
 		$this->config->exceptions = $set;
-	}
-
-	private function resolveHost($host) {
-		$index = strpos($host, ':');
-
-		if($index === false) {
-			$this->config->host = $host;
-			$this->config->resolvedHost = "tcp://$host:3306";
-		} else if($index === 0) {
-			$this->config->host = "localhost";
-			$this->config->resolvedHost = "tcp://localhost:" . (int) substr($host, 1);
-		} else {
-			list($host, $port) = explode(':', $host, 2);
-			$this->config->host = $host;
-			$this->config->resolvedHost = "tcp://$host:" . (int) $port;
-		}
 	}
 
 	private function addConnection() {
