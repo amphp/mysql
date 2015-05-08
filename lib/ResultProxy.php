@@ -5,6 +5,7 @@ namespace Mysql;
 class ResultProxy {
 	public $columnCount;
 	public $columns = [];
+	public $params = [];
 	public $columnsToFetch;
 	public $rows = null;
 	public $fetchedRows = 0;

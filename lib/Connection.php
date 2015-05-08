@@ -463,7 +463,8 @@ REGEX;
 	}
 
 	/** @see 14.7.6 COM_STMT_EXECUTE */
-	/* prebound params: null-bit set, type MYSQL_TYPE_LONG_BLOB, no value */
+	// prebound params: null-bit set, type MYSQL_TYPE_LONG_BLOB, no value
+	// $params is by-ref, because the actual result object might not yet have been filled completely with data upon call of this method ...
 	public function execute($stmtId, $query, &$params, $prebound, $data = []) {
 		$future = new Future;
 		$this->appendTask(function () use ($stmtId, $query, &$params, $prebound, $data, $future) {
@@ -495,11 +496,11 @@ REGEX;
 					$types .= $unsigned?"\x80":"\0";
 					$values .= $value;
 				}
-			}
-			$payload .= chr($bound);
-			if ($bound) {
-				$payload .= $types;
-				$payload .= $values;
+				$payload .= chr($bound);
+				if ($bound) {
+					$payload .= $types;
+					$payload .= $values;
+				}
 			}
 
 			$this->query = $query;

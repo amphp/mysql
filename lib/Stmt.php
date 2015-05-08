@@ -8,7 +8,6 @@ use Amp\Success;
 class Stmt {
 	private $paramCount;
 	private $numParamCount;
-	private $params = [];
 	private $named = [];
 	private $byNamed;
 	private $query;
@@ -56,7 +55,7 @@ class Stmt {
 							$args[0] = $this->stmtId;
 						}
 						if ($method == "execute") {
-							$args[1] = &$this->params;
+							$args[1] = &$this->result->params;
 						}
 						call_user_func_array([$this->conn(), $method], $args)->when(function($error, $result) use ($future) {
 							if ($error) {
@@ -130,7 +129,7 @@ class Stmt {
 			}
 		}
 
-		return $this->conn()->execute($this->stmtId, $this->query, $this->params, $prebound, $args);
+		return $this->conn()->execute($this->stmtId, $this->query, $this->result->params, $prebound, $args);
 	}
 
 	public function close() {
