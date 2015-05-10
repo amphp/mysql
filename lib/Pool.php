@@ -63,6 +63,9 @@ class Pool {
 
 	public function useExceptions($set) {
 		$this->config->exceptions = $set;
+		foreach ($this->connections as $conn) {
+			$conn->useExceptions($set);
+		}
 	}
 
 	private function addConnection() {

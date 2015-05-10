@@ -190,6 +190,10 @@ class Connection {
 		}
 	}
 
+	public function useExceptions($set) {
+		$this->config->exceptions = $set;
+	}
+
 	public function alive() {
 		return $this->connectionState <= self::READY;
 	}
@@ -286,48 +290,56 @@ class Connection {
 		return clone $this->connInfo;
 	}
 
-	private function startCommand() {
-		$this->seqId = $this->compressionId = -1;
-		return $this->futures[] = new Future;
+	private function startCommand($callback) {
+		$future = new Future;
+		$this->appendTask(function() use ($callback, $future) {
+			$this->seqId = $this->compressionId = -1;
+			$this->futures[] = $future;
+			$callback();
+		});
+		return $future;
 	}
 
 	public function setCharset($charset, $collate) {
 		$query = "SET NAMES '$charset'".($collate == "" ? "" : " COLLATE '$collate'");
-		$future = new Future;
-		$this->appendTask(function() use ($query, $future) {
-			$this->query($query, $future);
+		$this->appendTask(function() use ($query, &$future) {
+			$future = $this->query($query);
 		});
 		return $future;
 	}
 
 	/** @see 14.6.2 COM_QUIT */
 	public function closeConnection() {
-		$this->sendPacket("\x01");
-		$this->connectionState = self::CLOSING;
-		return $this->startCommand();
+		return $this->startCommand(function() {
+			$this->sendPacket("\x01");
+			$this->connectionState = self::CLOSING;
+		});
 	}
 
 	/** @see 14.6.3 COM_INIT_DB */
 	public function useDb($db) {
-		$this->oldDb = $this->config->db;
-		$this->config->db = $db;
-		$this->sendPacket("\x02$db");
-		return $this->startCommand();
+		return $this->startCommand(function() use ($db) {
+			$this->oldDb = $this->config->db;
+			$this->config->db = $db;
+			$this->sendPacket("\x02$db");
+		});
 	}
 
 	/** @see 14.6.4 COM_QUERY */
 	public function query($query) {
-		$this->sendPacket("\x03$query");
-		$this->query = $query;
-		$this->packetCallback = [$this, "handleQuery"];
-		return $this->startCommand();
+		return $this->startCommand(function() use ($query) {
+			$this->sendPacket("\x03$query");
+			$this->query = $query;
+			$this->packetCallback = [$this, "handleQuery"];
+		});
 	}
 
 	/** @see 14.6.5 COM_FIELD_LIST */
 	public function listFields($table, $like = "%") {
-		$this->sendPacket("\x04$table\0$like");
-		$this->parseCallback = [$this, "handleFieldlist"];
-		return $this->startCommand();
+		return $this->startCommand(function() use ($table, $like) {
+			$this->sendPacket("\x04$table\0$like");
+			$this->parseCallback = [$this, "handleFieldlist"];
+		});
 	}
 
 	public function listAllFields($table, $like = "%") {
@@ -353,14 +365,16 @@ class Connection {
 
 	/** @see 14.6.6 COM_CREATE_DB */
 	public function createDatabase($db) {
-		$this->sendPacket("\x05$db");
-		return $this->startCommand();
+		return $this->startCommand(function() use ($db) {
+			$this->sendPacket("\x05$db");
+		});
 	}
 
 	/** @see 14.6.7 COM_DROP_DB */
 	public function dropDatabase($db) {
-		$this->sendPacket("\x06$db");
-		return $this->startCommand();
+		return $this->startCommand(function() use ($db) {
+			$this->sendPacket("\x06$db");
+		});
 	}
 
 	/**
@@ -368,114 +382,120 @@ class Connection {
 	 * @see 14.6.8 COM_REFRESH
 	 */
 	public function refresh($subcommand) {
-		$this->sendPacket("\x07".chr($subcommand));
-		return $this->startCommand();
+		return $this->startCommand(function() use ($subcommand) {
+			$this->sendPacket("\x07" . chr($subcommand));
+		});
 	}
 
 	/** @see 14.6.9 COM_SHUTDOWN */
 	public function shutdown() {
-		$this->sendPacket("\x08\x00"); /* SHUTDOWN_DEFAULT / SHUTDOWN_WAIT_ALL_BUFFERS, only one in use */
-		return $this->startCommand();
+		return $this->startCommand(function() {
+			$this->sendPacket("\x08\x00"); /* SHUTDOWN_DEFAULT / SHUTDOWN_WAIT_ALL_BUFFERS, only one in use */
+		});
 	}
 
 	/** @see 14.6.10 COM_STATISTICS */
 	public function statistics() {
-		$this->sendPacket("\x09");
-		$this->parseCallback = [$this, "readStatistics"];
-		return $this->startCommand();
+		return $this->startCommand(function() {
+			$this->sendPacket("\x09");
+			$this->parseCallback = [$this, "readStatistics"];
+		});
 	}
 
 	/** @see 14.6.11 COM_PROCESS_INFO */
 	public function processInfo() {
-		$this->sendPacket("\x0a");
-		$this->packetCallback = [$this, "handleQuery"];
-		return $this->startCommand();
+		return $this->startCommand(function() {
+			$this->sendPacket("\x0a");
+			$this->packetCallback = [$this, "handleQuery"];
+		});
 	}
 
 	/** @see 14.6.13 COM_PROCESS_KILL */
 	public function killProcess($process) {
-		$this->sendPacket("\x0c".DataTypes::encode_int32($process));
-		return $this->startCommand();
+		return $this->startCommand(function() use ($process) {
+			$this->sendPacket("\x0c" . DataTypes::encode_int32($process));
+		});
 	}
 
 	/** @see 14.6.14 COM_DEBUG */
 	public function debugStdout() {
-		$this->sendPacket("\x0d");
-		return $this->startCommand();
+		return $this->startCommand(function() {
+			$this->sendPacket("\x0d");
+		});
 	}
 
 	/** @see 14.6.15 COM_PING */
 	public function ping() {
-		$this->sendPacket("\x0e");
-		return $this->startCommand();
+		return $this->startCommand(function() {
+			$this->sendPacket("\x0e");
+		});
 	}
 
 	/** @see 14.6.18 COM_CHANGE_USER */
 	/* @TODO broken, my test server doesn't support that command, can't test now
 	public function changeUser($user, $pass, $db = null) {
-		$this->config->user = $user;
-		$this->config->pass = $pass;
-		$this->config->db = $db;
-		$payload = "\x11";
+		return $this->startCommand(function() use ($user, $pass, $db) {
+			$this->config->user = $user;
+			$this->config->pass = $pass;
+			$this->config->db = $db;
+			$payload = "\x11";
 
-		$payload .= "$user\0";
-		$auth = $this->secureAuth($this->config->pass, $this->authPluginData);
-		if ($this->capabilities & self::CLIENT_SECURE_CONNECTION) {
-			$payload .= ord($auth).$auth;
-		} else {
-			$payload .= "$auth\0";
-		}
-		$payload .= "$db\0";
+			$payload .= "$user\0";
+			$auth = $this->secureAuth($this->config->pass, $this->authPluginData);
+			if ($this->capabilities & self::CLIENT_SECURE_CONNECTION) {
+				$payload .= ord($auth) . $auth;
+			} else {
+				$payload .= "$auth\0";
+			}
+			$payload .= "$db\0";
 
-		$this->sendPacket($payload);
-		$this->parseCallback = [$this, "authSwitchRequest"];
-		return $this->startCommand();
+			$this->sendPacket($payload);
+			$this->parseCallback = [$this, "authSwitchRequest"];
+		});
 	}
 	*/
 
 	/** @see 14.6.19 COM_RESET_CONNECTION */
 	public function resetConnection() {
-		$this->sendPacket("\x1f");
-		return $this->startCommand();
+		return $this->startCommand(function() {
+			$this->sendPacket("\x1f");
+		});
 	}
 
 	/** @see 14.7.4 COM_STMT_PREPARE */
 	public function prepare($query, $data = null) {
-		$this->query = $query;
-		$regex = <<<'REGEX'
+		$future = $this->startCommand(function() use ($query) {
+			$this->query = $query;
+			$regex = <<<'REGEX'
 ("|'|`)((?:\\\\|\\\1|(?!\1).)*+)\1|(\?)|:([a-zA-Z_]+)
 REGEX;
 
-		$index = 0;
-		$query = preg_replace_callback("~$regex~ms", function($m) use (&$index) {
-			if (!isset($m[3])) {
-				return $m[1] . $m[2] . $m[1];
-			}
-			if ($m[3] !== "?") {
-				$this->named[$m[4]][] = $index;
-			}
-			$index++;
-			return "?";
-		}, $query);
-		$this->sendPacket("\x16$query");
-		$this->parseCallback = [$this, "handlePrepare"];
+			$index = 0;
+			$query = preg_replace_callback("~$regex~ms", function ($m) use (&$index) {
+				if (!isset($m[3])) {
+					return $m[1] . $m[2] . $m[1];
+				}
+				if ($m[3] !== "?") {
+					$this->named[$m[4]][] = $index;
+				}
+				$index++;
+				return "?";
+			}, $query);
+			$this->sendPacket("\x16$query");
+			$this->parseCallback = [$this, "handlePrepare"];
+		});
+
 		if ($data === null) {
-			return $this->startCommand();
+			return $future;
 		}
 
 		$retFuture = new Future;
-		$this->startCommand()->when(function($error, $stmt) use ($retFuture, $data) {
+		$future->when(function($error, $stmt) use ($retFuture, $data) {
 			if ($error) {
 				$retFuture->fail($error);
 			} else {
 				try {
-					$stmt->execute($data)->when(function ($error, $result) use ($retFuture) {
-						if ($error) {
-							$retFuture->fail($error);
-						} else {
-							$retFuture->succeed($result);
-						}
-					});
+					$retFuture->succeed($stmt->execute($data));
 				} catch (\Exception $e) {
 					$retFuture->fail($e);
 				}
@@ -549,9 +569,9 @@ REGEX;
 		return $future; // do not use $this->startCommand(), that might unexpectedly reset the seqId!
 	}
 
+	/** @see 14.7.7 COM_STMT_CLOSE */
 	public function closeStmt($stmtId) {
-		$payload = "\x19";
-		$payload .= DataTypes::encode_int32($stmtId);
+		$payload = "\x19" . DataTypes::encode_int32($stmtId);
 		$this->appendTask(function () use ($payload) {
 			if ($this->connectionState === self::READY) {
 				$this->out[] = null;
@@ -561,28 +581,27 @@ REGEX;
 		});
 	}
 
+	/** @see 14.7.8 COM_STMT_RESET */
+	public function resetStmt($stmtId) {
+		$payload = "\x1a" . DataTypes::encode_int32($stmtId);
+		$future = new Future;
+		$this->appendTask(function () use ($payload, $future) {
+			$this->out[] = null;
+			$this->futures[] = $future;
+			$this->sendPacket($payload);
+		});
+		return $future;
+	}
+
+	/** @see 14.8.4 COM_STMT_FETCH */
 	public function fetchStmt($stmtId) {
-		$payload = "\x1c";
-		$payload .= DataTypes::encode_int32($stmtId);
-		$payload .= DataTypes::encode_int32(1);
+		$payload = "\x1c" . DataTypes::encode_int32($stmtId) . DataTypes::encode_int32(1);
 		$future = new Future;
 		$this->appendTask(function () use ($payload, $future) {
 			$this->out[] = null;
 			$this->futures[] = $future;
 			$this->sendPacket($payload);
 			$this->ready();
-		});
-		return $future;
-	}
-
-	public function resetStmt($stmtId) {
-		$payload = "\x1a";
-		$payload .= DataTypes::encode_int32($stmtId);
-		$future = new Future;
-		$this->appendTask(function () use ($payload, $future) {
-			$this->out[] = null;
-			$this->futures[] = $future;
-			$this->sendPacket($payload);
 		});
 		return $future;
 	}

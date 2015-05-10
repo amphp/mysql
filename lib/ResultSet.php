@@ -34,7 +34,7 @@ class ResultSet {
 		}
 	}
 
-	private function genericFetchAll($cb) {
+	protected function genericFetchAll($cb) {
 		if ($this->result->state == ResultProxy::ROWS_FETCHED) {
 			return new Success($cb($this->result->rows));
 		} else {
@@ -68,7 +68,7 @@ class ResultSet {
 		});
 	}
 
-	public function genericFetch(callable $cb = null) {
+	protected function genericFetch(callable $cb = null) {
 		if ($this->result->userFetched < $this->result->fetchedRows) {
 			$row = $this->result->rows[$this->result->userFetched++];
 			return new Success($cb ? $cb($row) : $row);
