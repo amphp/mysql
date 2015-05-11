@@ -96,6 +96,11 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 			$result = (yield $db->prepare("SELECT * FROM tmp WHERE a = ? OR b = ?", [5, 8]));
 			$this->assertEquals((yield $result->rowCount()), 1);
 
+			$stmt = (yield $db->prepare("INSERT INTO tmp VALUES (:foo, :bar)"));
+			$stmt->bind("foo", 5);
+			$result = (yield $stmt->execute(["bar" => 9]));
+			$this->assertEquals((yield $result->affectedRows), 1);
+
 			$db->close();
 		});
 	}

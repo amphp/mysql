@@ -546,7 +546,9 @@ REGEX;
 			$types = "";
 			$values = "";
 			if ($paramCount) {
-				$args = array_slice($data + array_fill(0, $paramCount, null), 0, $paramCount);
+				$args = $data + array_fill(0, $paramCount, null);
+				ksort($args);
+				$args = array_slice($args, 0, $paramCount);
 				$nullOff = strlen($payload);
 				$payload .= str_repeat("\0", ($paramCount + 7) >> 3);
 				foreach ($args as $paramId => $param) {
@@ -1317,13 +1319,15 @@ REGEX;
 		} while ($pending != "");
 
 		if (defined("MYSQL_DEBUG")) {
-			print "out: ";
+			fwrite(STDERR, "out: ");
 			for ($i = 0; $i < min(strlen($packet), 200); $i++)
 				fwrite(STDERR, dechex(ord($packet[$i])) . " ");
 			$r = range("\0", "\x1f");
 			unset($r[10], $r[9]);
-			print "len: ".strlen($packet)." ";
+			fwrite(STDERR, "len: ".strlen($packet)." ");
+			ob_start();
 			var_dump(str_replace($r, ".", substr($packet, 0, 200)));
+			fwrite(STDERR, ob_get_clean());
 		}
 
 		return $packet;
@@ -1549,7 +1553,7 @@ REGEX;
 
 			if ($this->packetSize > 0) {
 				if (defined("MYSQL_DEBUG")) {
-					print "in: ";
+					fwrite(STDERR, "in: ");
 					$print = substr_replace(pack("V", $this->packetSize), chr($this->seqId), 3, 1);
 					for ($i = 0; $i < 4; $i++)
 						fwrite(STDERR, dechex(ord($print[$i])) . " ");
@@ -1557,8 +1561,10 @@ REGEX;
 						fwrite(STDERR, dechex(ord($this->packet[$i])) . " ");
 					$r = range("\0", "\x1f");
 					unset($r[10], $r[9]);
-					print "len: ".strlen($this->packet)." ";
+					fwrite(STDERR, "len: ".strlen($this->packet)." ");
+					ob_start();
 					var_dump(str_replace($r, ".", substr($this->packet, 0, 200)));
+					fwrite(STDERR, ob_get_clean());
 				}
 				if ($this->parseCallback) {
 					$cb = $this->parseCallback;

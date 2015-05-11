@@ -2,7 +2,7 @@
 
 $autoloader = require(__DIR__.'/../vendor/autoload.php');
 
-const DB_HOST = 'localhost:3305';
+const DB_HOST = 'localhost:10101';
 const DB_USER = 'root';
 const DB_PASS = '';
 
