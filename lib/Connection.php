@@ -202,12 +202,12 @@ class Connection {
 		return $this->connectionState === self::READY;
 	}
 
-	public function close() {
+	public function forceClose() {
 		$this->closeSocket();
 	}
 
 	public function getConfig() {
-		return $this->config;
+		return clone $this->config;
 	}
 
 	/* Technical function to be used in combination with Pool */
@@ -278,7 +278,7 @@ class Connection {
 	}
 
 	private function appendTask($callback) {
-		if ($this->packetCallback || $this->parseCallback || !empty($this->onReady) || $this->connectionState != self::READY) {
+		if (!empty($this->futures) || $this->connectionState != self::READY) {
 			$this->onReady[] = $callback;
 		} else {
 			$cb = $this->config->busy;
@@ -320,10 +320,12 @@ class Connection {
 	}
 
 	/** @see 14.6.2 COM_QUIT */
-	public function closeConnection() {
+	public function close() {
 		return $this->startCommand(function() {
 			$this->sendPacket("\x01");
 			$this->connectionState = self::CLOSING;
+		})->when(function() {
+			$this->closeSocket();
 		});
 	}
 
@@ -619,7 +621,7 @@ REGEX;
 
 	private function established() {
 		// @TODO flags to use?
-		$this->capabilities |= self::CLIENT_SESSION_TRACK | self::CLIENT_TRANSACTIONS | self::CLIENT_PROTOCOL_41 | self::CLIENT_SECURE_CONNECTION | self::CLIENT_MULTI_RESULTS | self::CLIENT_PS_MULTI_RESULTS | self::CLIENT_MULTI_STATEMENTS;
+		$this->capabilities |= self::CLIENT_SESSION_TRACK | self::CLIENT_TRANSACTIONS | self::CLIENT_PROTOCOL_41 | self::CLIENT_SECURE_CONNECTION | self::CLIENT_MULTI_RESULTS | self::CLIENT_PS_MULTI_RESULTS | self::CLIENT_MULTI_STATEMENTS | self::CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA;
 
 		if (extension_loaded("zlib")) {
 			$this->capabilities |= self::CLIENT_COMPRESS;
@@ -752,6 +754,7 @@ REGEX;
 	}
 
 	private function handleOk() {
+		var_dump(count($this->futures));
 		$this->parseOk();
 		$this->getFuture()->succeed($this->getConnInfo());
 		$this->ready();
@@ -1280,6 +1283,7 @@ REGEX;
 	private function closeSocket() {
 		if ($this->readWatcher) {
 			$this->reactor->cancel($this->readWatcher);
+			$this->readWatcher = null;
 			fclose($this->socket);
 		}
 		if ($this->writeWatcher) {
@@ -1317,9 +1321,10 @@ REGEX;
 		} while ($pending != "");
 
 		if (defined("MYSQL_DEBUG")) {
+			print "out: ";
 			for ($i = 0; $i < min(strlen($packet), 200); $i++)
 				fwrite(STDERR, dechex(ord($packet[$i])) . " ");
-			$r = range("\0", "\x19");
+			$r = range("\0", "\x1f");
 			unset($r[10], $r[9]);
 			print "len: ".strlen($packet)." ";
 			var_dump(str_replace($r, ".", substr($packet, 0, 200)));
@@ -1548,13 +1553,16 @@ REGEX;
 
 			if ($this->packetSize > 0) {
 				if (defined("MYSQL_DEBUG")) {
+					print "in: ";
 					$print = substr_replace(pack("V", $this->packetSize), chr($this->seqId), 3, 1);
 					for ($i = 0; $i < 4; $i++)
 						fwrite(STDERR, dechex(ord($print[$i])) . " ");
 					for ($i = 0; $i < min(200, $this->packetSize); $i++)
 						fwrite(STDERR, dechex(ord($this->packet[$i])) . " ");
+					$r = range("\0", "\x1f");
+					unset($r[10], $r[9]);
 					print "len: ".strlen($this->packet)." ";
-					var_dump(substr($this->packet, 0, 200));
+					var_dump(str_replace($r, ".", substr($this->packet, 0, 200)));
 				}
 				if ($this->parseCallback) {
 					$cb = $this->parseCallback;
@@ -1704,7 +1712,9 @@ REGEX;
 		}
 
 		$payload .= $this->config->user."\0";
-		if ($this->capabilities & self::CLIENT_PLUGIN_AUTH) {
+		if ($this->config->pass == "") {
+			$auth = "";
+		} elseif ($this->capabilities & self::CLIENT_PLUGIN_AUTH) {
 			switch ($this->authPluginName) {
 				case "mysql_native_password":
 					$auth = $this->secureAuth($this->config->pass, $this->authPluginData);
@@ -1728,10 +1738,8 @@ REGEX;
 				default:
 					throw new \UnexpectedValueException("Invalid (or unimplemented?) auth method requested by server: {$this->authPluginName}");
 			}
-		} elseif ($this->config->pass !== "") {
-			$auth = $this->secureAuth($this->config->pass, $this->authPluginData);
 		} else {
-			$auth = "";
+			$auth = $this->secureAuth($this->config->pass, $this->authPluginData);
 		}
 		if ($this->capabilities & self::CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA) {
 			$payload .= DataTypes::encodeInt(strlen($auth));

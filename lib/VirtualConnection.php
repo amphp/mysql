@@ -14,7 +14,7 @@ class VirtualConnection {
 			unset($this->call[key($this->call)]);
 			return $cur;
 		}
-		return NULL;
+		return null;
 	}
 
 	public function fail($e) {

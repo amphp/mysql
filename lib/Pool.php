@@ -2,6 +2,8 @@
 
 namespace Mysql;
 
+use Amp\Future;
+
 class Pool {
 	private $reactor;
 	private $connector = null;
@@ -192,18 +194,10 @@ class Pool {
 		return $this->getReadyConnection()->prepare($query, $data);
 	}
 
-	// @TODO really use this?
+	/* extracts a connection and returns it, wrapped in a Promise */
 	public function getConnection() {
-		$pool = clone $this;
-		$pool->limit = 0;
-		$pool->config = clone $pool->config;
-		$pool->initLocal();
-		return $this->getReadyConnection()->getThis()->when(function($error, $conn) use ($pool) {
+		return $this->getReadyConnection()->getThis()->when(function($error, $conn) {
 			$this->unmapConnection($conn);
-			$pool->limit = 1;
-			$pool->connections = [$conn];
-			$pool->connectionMap[spl_object_hash($conn)] = 0;
-			$pool->ready($conn);
 		});
 	}
 
@@ -221,7 +215,7 @@ class Pool {
 
 	public function close() {
 		foreach ($this->connections as $conn) {
-			$conn->close();
+			$conn->forceClose();
 			$this->unmapConnection($conn);
 		}
 		$this->ready = [];
