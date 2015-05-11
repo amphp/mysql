@@ -754,7 +754,6 @@ REGEX;
 	}
 
 	private function handleOk() {
-		var_dump(count($this->futures));
 		$this->parseOk();
 		$this->getFuture()->succeed($this->getConnInfo());
 		$this->ready();
