@@ -1,26 +1,22 @@
 <?php
 
-
 $autoloader = require(__DIR__.'/../vendor/autoload.php');
 
-// Add a PSR-0 classpath for testing
-// $autoloader->add('Example', [realpath('./').'/test/']);
+define('DB_HOST', 'localhost');
+define('DB_USER', 'root');
+define('DB_PASS', '');
 
-// Add a PSR-4 classpath for testing.
-// $autoloader->addPsr4('Example', [realpath('./').'/test/']);
+$pipes = [];
+$proc = proc_open("mysqld --defaults-file=my.cnf", [2 => ["pipe", "w"]], $pipes, __DIR__);
+$stderr = $pipes[2];
+$buf = "";
+do {
+	if (!($row = fgets($stderr)) || preg_match("# \[ERROR\] #", $row)) {
+		die("\nERROR: Aborting, couldn't start mysql successfully\n$buf");
+	}
+	$buf .= $row;
+} while (preg_match("(^Version: '[0-9.a-zA-Z]+')", $row));
 
-
-@include_once __DIR__."/../mysql_config.php";
-
-if (!defined('DB_HOST')) {
-	define('DB_HOST', '');
-}
-if (!defined('DB_USER')){
-	define('DB_USER', '');
-}
-if (!defined('DB_PASS')) {
-	define('DB_PASS', '');
-}
-if (!defined('DB_NAME')) {
-	define('DB_NAME', '');
-}
+register_shutdown_function(function() use ($proc) {
+	proc_terminate($proc);
+});
