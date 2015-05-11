@@ -8,13 +8,10 @@ php:
 
 before_script:
   - composer install
-  - mysql -e "create database IF NOT EXISTS amptest;" -uroot
-  - echo "<?php const DB_HOST = '127.0.0.1'; const DB_NAME = 'amptest'; const DB_USER = 'travis';" > ./mysql_config.php
-  - cat ./mysql_config.php
-  
+
   
  
-script: php vendor/bin/phpunit -c test/phpunit.xml --coverage-text
+script: php vendor/bin/phpunit -c phpunit.xml --coverage-text
 
 #notifications:
 # the notification goes to the committer by default, but you can add extra

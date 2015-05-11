@@ -210,6 +210,7 @@ class Connection {
 		return $this->config;
 	}
 
+	/* Technical function to be used in combination with Pool */
 	public function getThis() {
 		return new Success($this);
 	}
@@ -229,7 +230,9 @@ class Connection {
 		}
 	}
 
-	public function connect(Connector $connector) {
+	public function connect(Connector $connector = null) {
+		$connector = $connector ?: new \Nbsock\Connector($this->reactor);
+
 		$future = new Future;
 		$connector->connect($this->config->resolvedHost)->when(function ($error, $socket) use ($future) {
 			if ($this->connectionState === self::CLOSED) {
@@ -300,7 +303,15 @@ class Connection {
 		return $future;
 	}
 
-	public function setCharset($charset, $collate) {
+	public function setCharset($charset, $collate = "") {
+		if ($collate === "" && false !== $off = strpos($charset, "_")) {
+			$collate = $charset;
+			$charset = substr($collate, 0, $off);
+		}
+
+		$this->config->charset = $charset;
+		$this->config->collate = $collate;
+
 		$query = "SET NAMES '$charset'".($collate == "" ? "" : " COLLATE '$collate'");
 		$this->appendTask(function() use ($query, &$future) {
 			$future = $this->query($query);
