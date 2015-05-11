@@ -68,4 +68,23 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 			$db->close();
 		});
 	}
+
+	function testPrepared() {
+		(new \Amp\NativeReactor)->run(function($reactor) {
+			$db = new \Mysql\Connection("host=" . DB_HOST . ";user=" . DB_USER . ";pass=" . DB_PASS . ";db=ConnectionTest", null, $reactor);
+			$db->connect();
+
+			$db->query("CREATE TEMPORARY TABLE tmp SELECT 1 AS a, 2 AS b");
+			$db->query("INSERT INTO tmp VALUES (5, 6), (8, 9)");
+
+			$stmt = (yield $db->prepare("SELECT * FROM tmp WHERE a = ? OR b = :num"));
+			$result = (yield $stmt->execute([5, "num" => 9]));
+			$this->assertEquals((yield $result->rowCount()), 2);
+
+			$result = (yield $db->prepare("SELECT * FROM tmp WHERE a = ? OR b = ?", [5, 8]));
+			$this->assertEquals((yield $result->rowCount()), 1);
+
+			$db->close();
+		});
+	}
 }

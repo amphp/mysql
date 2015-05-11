@@ -2,7 +2,7 @@
 
 $autoloader = require(__DIR__.'/../vendor/autoload.php');
 
-const DB_HOST = 'localhost';
+const DB_HOST = 'localhost:3305';
 const DB_USER = 'root';
 const DB_PASS = '';
 
@@ -18,7 +18,8 @@ $stderr = $pipes[2];
 $buf = "";
 do {
 	if (!($row = fgets($stderr)) || preg_match("# \[ERROR\] #", $row)) {
-		die("\nERROR: Aborting, couldn't start mysql successfully\n$buf$row");
+		print "\nERROR: Aborting, couldn't start mysql successfully\n$buf$row";
+		exit(127);
 	}
 	$buf .= $row;
 } while (!preg_match("(^Version: '[0-9.a-zA-Z]+')", $row));

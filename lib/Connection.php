@@ -278,7 +278,7 @@ class Connection {
 	}
 
 	private function appendTask($callback) {
-		if (!empty($this->futures) || $this->connectionState != self::READY) {
+		if ($this->packetCallback || $this->parseCallback || !empty($this->onReady) || !empty($this->futures) || $this->connectionState != self::READY) {
 			$this->onReady[] = $callback;
 		} else {
 			$cb = $this->config->busy;
@@ -916,7 +916,6 @@ REGEX;
 		/* we need to succeed before assigning vars, so that a when() handler won't have a partial result available */
 		$this->result = $result;
 		$this->result->setColumns(ord($this->packet));
-		$this->result->columns = [];
 	}
 
 	private function handleFieldList() {
@@ -1259,12 +1258,11 @@ REGEX;
 		}
 
 		finish: {
-			$this->named = [];
 			$this->result = new ResultProxy;
 			$this->result->columnsToFetch = $params;
 			$this->result->columnCount = $columns;
-			$this->result->columns = [];
 			$this->getFuture()->succeed(new Stmt($this, $this->query, $stmtId, $this->named, $this->result));
+			$this->named = [];
 			if ($params) {
 				$this->parseCallback = [$this, "prepareParams"];
 			} else {
