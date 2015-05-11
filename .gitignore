@@ -8,3 +8,4 @@ mysql_config.php
 test/mysql_db/auto.cnf
 test/mysql_db/ib_logfile*
 test/mysql_db/ibdata*
+test/mysql_db/ConnectionTest/tmp.*
