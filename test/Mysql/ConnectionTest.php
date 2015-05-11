@@ -78,6 +78,18 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 			$db->query("INSERT INTO tmp VALUES (5, 6), (8, 9)");
 
 			$stmt = (yield $db->prepare("SELECT * FROM tmp WHERE a = ? OR b = :num"));
+			$base = [
+				"catalog" => "def",
+				"schema" => "connectiontest",
+				"table" => "tmp",
+				"original_table" => "tmp",
+				"charset" => 63,
+				"columnlen" => 1,
+				"type" => 3,
+				"flags" => 1,
+				"decimals" => 0,
+			];
+			$this->assertEquals((yield $stmt->getFields()), [$base + ["name" => "a", "original_name" => "a"], $base + ["name" => "b", "original_name" => "b"]]);
 			$result = (yield $stmt->execute([5, "num" => 9]));
 			$this->assertEquals((yield $result->rowCount()), 2);
 

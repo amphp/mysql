@@ -153,7 +153,9 @@ class Stmt {
 		} elseif (isset($this->result->futures[ResultProxy::COLUMNS_FETCHED][0])) {
 			return $this->result->futures[ResultProxy::COLUMNS_FETCHED][0][0];
 		} else {
-			return $this->result->futures[ResultProxy::COLUMNS_FETCHED][0] = [new Future, &$this->result->columns, null];
+			$future = new Future;
+			$this->result->futures[ResultProxy::COLUMNS_FETCHED][0] = [$future, &$this->result->columns, null];
+			return $future;
 		}
 	}
 

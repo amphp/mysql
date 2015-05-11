@@ -986,7 +986,6 @@ REGEX;
 		}
 
 		$this->result->columns[] = $this->parseColumnDefinition();
-		$this->result->updateState(ResultProxy::COLUMNS_FETCHED);
 	}
 
 	/** @see 14.6.4.1.1.2 Column Defintion */
