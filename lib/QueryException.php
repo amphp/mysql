@@ -1,6 +1,6 @@
 <?php
 
-namespace Mysql;
+namespace Amp\Mysql;
 
 class QueryException extends Exception {
 	protected $query = "";

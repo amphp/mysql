@@ -17,7 +17,7 @@
 	},
 	"autoload": {
 		"psr-4": {
-			"Mysql\\": "lib/"
+			"Amp\\Mysql\\": "lib/"
 		}
 	}
 }

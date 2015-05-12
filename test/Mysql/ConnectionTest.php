@@ -1,10 +1,14 @@
 <?php
 
+use Amp\NativeReactor;
+use Amp\Mysql\Connection;
+use Amp\Mysql\DataTypes;
+
 class ConnectionTest extends \PHPUnit_Framework_TestCase {
 	function testConnect() {
 		$complete = false;
-		(new \Amp\NativeReactor)->run(function($reactor) use (&$complete) {
-			$db = new \Mysql\Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest", null, $reactor);
+		(new NativeReactor)->run(function($reactor) use (&$complete) {
+			$db = new Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest", null, $reactor);
 			yield $db->connect();
 
 			/* use an alternative charset... Default is utf8mb4_general_ci */
@@ -17,8 +21,8 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 	}
 
 	function testQuery() {
-		(new \Amp\NativeReactor)->run(function($reactor) {
-			$db = new \Mysql\Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest", null, $reactor);
+		(new NativeReactor)->run(function($reactor) {
+			$db = new Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest", null, $reactor);
 			$db->connect();
 
 			$resultset = (yield $db->query("SELECT 1 AS a"));
@@ -38,8 +42,8 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 	}
 
 	function testMultiStmt() {
-		(new \Amp\NativeReactor)->run(function($reactor) {
-			$db = new \Mysql\Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest", null, $reactor);
+		(new NativeReactor)->run(function($reactor) {
+			$db = new Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest", null, $reactor);
 			$db->connect();
 
 			$db->query("CREATE DATABASE IF NOT EXISTS alt");
@@ -60,9 +64,9 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 			$this->assertEquals(count($fields), 2);
 			$this->assertEquals($fields[0]["original_name"], "b");
 			$this->assertEquals($fields[0]["name"], "d");
-			$this->assertEquals($fields[0]["type"], \Mysql\DataTypes::MYSQL_TYPE_LONG);
+			$this->assertEquals($fields[0]["type"], DataTypes::MYSQL_TYPE_LONG);
 			$this->assertEquals($fields[1]["name"], "c");
-			$this->assertEquals($fields[1]["type"], \Mysql\DataTypes::MYSQL_TYPE_NEWDECIMAL);
+			$this->assertEquals($fields[1]["type"], DataTypes::MYSQL_TYPE_NEWDECIMAL);
 
 			yield $db->query("DROP DATABASE alt");
 			$db->close();
@@ -70,8 +74,8 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 	}
 
 	function testPrepared() {
-		(new \Amp\NativeReactor)->run(function($reactor) {
-			$db = new \Mysql\Connection("host=" . DB_HOST . ";user=" . DB_USER . ";pass=" . DB_PASS . ";db=connectiontest", null, $reactor);
+		(new NativeReactor)->run(function($reactor) {
+			$db = new Connection("host=" . DB_HOST . ";user=" . DB_USER . ";pass=" . DB_PASS . ";db=connectiontest", null, $reactor);
 			$db->connect();
 
 			$db->query("CREATE TEMPORARY TABLE tmp SELECT 1 AS a, 2 AS b");

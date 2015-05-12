@@ -1,6 +1,6 @@
 <?php
 
-namespace Mysql;
+namespace Amp\Mysql;
 
 class ConnectionConfig {
 	/* <domain/IP-string>(:<port>) */

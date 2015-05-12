@@ -1,6 +1,6 @@
 <?php
 
-namespace Mysql;
+namespace Amp\Mysql;
 
 class RefreshTypes {
 	const REFRESH_GRANT = 0x01;

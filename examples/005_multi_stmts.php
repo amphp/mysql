@@ -4,7 +4,7 @@ require './example_bootstrap.php';
 require 'support/generic_table.php';
 
 \Amp\run(function() {
-	$db = new \Mysql\Pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME);
+	$db = new \Amp\Mysql\Pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME);
 
 	/* create same table than in 003_generic_with_yield.php */
 	yield genTable($db);

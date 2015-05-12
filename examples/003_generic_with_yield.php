@@ -3,7 +3,7 @@
 require './example_bootstrap.php';
 
 \Amp\run(function() {
-	$db = new \Mysql\Pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME);
+	$db = new \Amp\Mysql\Pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME);
 
 	/* Create table and insert a few rows */
 	/* we need to wait until table is finished, so that we can insert. */

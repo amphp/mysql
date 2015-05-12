@@ -1,5 +1,5 @@
 <?php
 
-namespace Mysql;
+namespace Amp\Mysql;
 
 class InitializationException extends Exception {}

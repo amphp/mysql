@@ -1,6 +1,6 @@
 <?php
 
-namespace Mysql;
+namespace Amp\Mysql;
 
 use Amp\Future;
 use Amp\Reactor;
