@@ -35,6 +35,20 @@ More extensive code examples reside in the [`examples`](examples) directory.
 
 ##### Simple `SELECT` query
 
+*Async Generator*
+
+```php
+\Amp\run(function() {
+    $connection = new Amp\Mysql\Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS);
+    yield $connection->connect();
+    $resultSet = yield $connection->query("SELECT 10");
+    $rows = yield $resultSet->fetchAll();
+    var_dump($rows); // Array(1) { 0 => Array(1) { 0 => 10 } }
+});
+```
+
+*Synchronous Wait*
+
 ```php
 $connection = new Amp\Mysql\Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS);
 \Amp\wait($connection->connect());
@@ -55,7 +69,7 @@ Using a `Connection` object directly (as shown above) is klunky in terms of init
 $pool = new \Amp\Mysql\Pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS);
 
 // We can use the pool immediately -- the connection state is transparent
-$pool->query("...");
+$promise = $pool->query("...");
 ```
 
 The `Pool` aggregates `Connection` instances as needed with configurable limits so we can get the most out of parallel queries.
