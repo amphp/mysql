@@ -1,21 +1,21 @@
 Mysql [![Build Status](https://travis-ci.org/amphp/mysql.svg?branch=master)](https://travis-ci.org/amphp/mysql)
 =====
 
-Amp\Mysql is a mysql client built on the [amp concurrency framework][1]. It provides an asynchronous interface how to communicate with multiple synchronous mysql connections, distributing queries as efficiently as possible over the separate connections, being transparently usable through a single Pool of Connections. The library has no dependency on internal mysql extensions, but communicates directly with the mysql server.
+`amp\mysql` is an asynchronous MySQL client built on the [amp concurrency framework][1]. The library exposes a Promise-based API to dynamically query multiple synchronous MySQL connections concurrently. The client transparently distributes these queries across a scalable pool of available connections and does so using 100% userland PHP; there are no external extension dependencies (e.g. `ext/mysqli`, `ext/pdo`, etc).
 
 ##### Features
 
- - Asynchronous interface for full single-threaded concurrency
- - Pools multiple connections (mysql protocol being fundamentally synchronous)
- - Implements various sorts of mysql transfer (like gzip or TLS)
- - Fully featured and supports all commands<sup>†</sup>
+ - Asynchronous API exposing full single-threaded concurrency;
+ - Transparent connection pooling to overcome MySQL's fundamentally synchronous connection protocol;
+ - MySQL transfer encoding support (gzip, TLS encryption);
+ - Support for all MySQL commands<sup>†</sup>.
 
-<small><sup>†</sup> As far as documented in [official Mysql Internals Manual][2]</small>
+<small><sup>†</sup> As documented in [official Mysql Internals Manual][2]</small>
 
 ##### Project Goals
 
-* Providing a fast possibility to issue multiple commands in parallel
-* Full mysql protocol support with asynchronous fetching possibilities
+* Expose a non-blocking API for issuing multiple MySQL queries in parallel;
+* Support the *full* MySQL protocol and *all* available commands asynchronously.
 
 ##### Installation
 
@@ -33,12 +33,10 @@ Documentation & Examples
 
 More extensive code examples reside in the [`examples`](examples) directory.
 
-##### Simple mysql query
-
-Just issue a simple SELECT query:
+##### Simple `SELECT` query
 
 ```php
-$connection = new \Mysql\Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS);
+$connection = new Amp\Mysql\Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS);
 \Amp\wait($connection->connect());
 
 $promise = $connection->query("SELECT 10"); // returns Promise returning ResultSet
@@ -49,17 +47,18 @@ var_dump($rows); // Array(1) { 0 => Array(1) { 0 => 10 } }
 $connection->close();
 ```
 
-That ends up a bit complicated for initialization… So, rather use a Pool, which does connection establishing for us...
+Using a `Connection` object directly (as shown above) is klunky in terms of initialization. Instead we can use a `Pool` to automatically handle establishing the connection ...
 
 ##### Pooled connections
 
 ```php
-$pool = new \Mysql\Pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS);
+$pool = new \Amp\Mysql\Pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS);
 
-$pool->query("..."); // we immediately can just use it
+// We can use the pool immediately -- the connection state is transparent
+$pool->query("...");
 ```
 
-The Pool class pools a lot of Connections [as much as needed, but not more], so that we can have a maximum of simultaneous operations happening at the same time.
+The `Pool` aggregates `Connection` instances as needed with configurable limits so we can get the most out of parallel queries.
 
 ##### Fetch modes on ResultSet
 
