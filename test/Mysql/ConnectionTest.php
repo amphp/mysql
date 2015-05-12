@@ -4,7 +4,7 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 	function testConnect() {
 		$complete = false;
 		(new \Amp\NativeReactor)->run(function($reactor) use (&$complete) {
-			$db = new \Mysql\Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=ConnectionTest", null, $reactor);
+			$db = new \Mysql\Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest", null, $reactor);
 			yield $db->connect();
 
 			/* use an alternative charset... Default is utf8mb4_general_ci */
@@ -18,7 +18,7 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 
 	function testQuery() {
 		(new \Amp\NativeReactor)->run(function($reactor) {
-			$db = new \Mysql\Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=ConnectionTest", null, $reactor);
+			$db = new \Mysql\Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest", null, $reactor);
 			$db->connect();
 
 			$resultset = (yield $db->query("SELECT 1 AS a"));
@@ -39,7 +39,7 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 
 	function testMultiStmt() {
 		(new \Amp\NativeReactor)->run(function($reactor) {
-			$db = new \Mysql\Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=ConnectionTest", null, $reactor);
+			$db = new \Mysql\Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest", null, $reactor);
 			$db->connect();
 
 			$db->query("CREATE DATABASE IF NOT EXISTS alt");
@@ -71,7 +71,7 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 
 	function testPrepared() {
 		(new \Amp\NativeReactor)->run(function($reactor) {
-			$db = new \Mysql\Connection("host=" . DB_HOST . ";user=" . DB_USER . ";pass=" . DB_PASS . ";db=ConnectionTest", null, $reactor);
+			$db = new \Mysql\Connection("host=" . DB_HOST . ";user=" . DB_USER . ";pass=" . DB_PASS . ";db=connectiontest", null, $reactor);
 			$db->connect();
 
 			$db->query("CREATE TEMPORARY TABLE tmp SELECT 1 AS a, 2 AS b");
@@ -99,7 +99,7 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 			$stmt = (yield $db->prepare("INSERT INTO tmp VALUES (:foo, :bar)"));
 			$stmt->bind("foo", 5);
 			$result = (yield $stmt->execute(["bar" => 9]));
-			$this->assertEquals((yield $result->affectedRows), 1);
+			$this->assertEquals($result->affectedRows, 1);
 
 			$db->close();
 		});

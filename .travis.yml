@@ -9,14 +9,7 @@ php:
 before_script:
   - composer install
   - mysqld --version
-  
+  - echo '<?php $autoloader = require(__DIR__."/../vendor/autoload.php"); const DB_HOST = "localhost"; const DB_USER = "root"; const DB_PASS = "";' > test/phpunit_bootstrap.php
+  - mysql -u root -e "CREATE DATABASE connectiontest; CREATE TABLE connectiontest.main SELECT 1 AS a, 2 AS b; INSERT INTO connectiontest.main VALUES (5, 6);"
  
 script: php vendor/bin/phpunit -c phpunit.xml --coverage-text
-
-#notifications:
-# the notification goes to the committer by default, but you can add extra
-#  email:
-#    recipients:
-#      - customemail+travis@example.com
-#    on_success: [always|never|change] # default: change
-#    on_failure: [always|never|change] # default: always
