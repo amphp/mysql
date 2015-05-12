@@ -2,8 +2,6 @@
 
 namespace Amp\Mysql;
 
-use Amp\Future;
-
 class Pool {
 	private $reactor;
 	private $connector = null;
@@ -43,7 +41,11 @@ class Pool {
 			}
 			return $this->getReadyConnection();
 		};
-		$this->config->busy = function($conn) { if (isset($this->readyMap[$hash = spl_object_hash($conn)])) unset($this->ready[$this->readyMap[$hash]]); };
+		$this->config->busy = function($conn) {
+			if (isset($this->readyMap[$hash = spl_object_hash($conn)])) {
+				unset($this->ready[$this->readyMap[$hash]]);
+			}
+		};
 	}
 
 	/** First parameter may be collation too, then charset is determined by the prefix of collation */
@@ -112,7 +114,7 @@ class Pool {
 	}
 
 	/** @return Connection */
-	protected function &getReadyConnection() {
+	protected function getReadyConnection() {
 		if ($this->limit < 0) {
 			$this->limit *= -1;
 		}
@@ -178,16 +180,6 @@ class Pool {
 
 	public function ping() {
 		return $this->getReadyConnection()->ping();
-	}
-
-	/* @TODO changeUser broken...
-	public function changeUser($user, $pass, $db = null) {
-		return $this->getReadyConnection()->changeUser($user, $pass, $db);
-	}
-	*/
-
-	public function resetConnection() {
-		return $this->getReadyConnection()->resetConnection();
 	}
 
 	public function prepare($query, $data = null) {

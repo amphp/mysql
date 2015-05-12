@@ -1125,6 +1125,25 @@ REGEX;
 		}
 	}
 
+	private function successfulResultsetFetch() {
+		$future = &$this->result->next;
+		if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
+			$this->parseCallback = [$this, "handleQuery"];
+			$this->futures[] = $future ?: $future = new Future;
+		} else {
+			if ($future) {
+				$future->succeed(null);
+			} else {
+				$future = new Success(null);
+			}
+			$this->parseCallback = null;
+		}
+		$this->query = null;
+		$this->ready();
+		$this->result->updateState(ResultProxy::ROWS_FETCHED);
+
+	}
+
 	/** @see 14.6.4.1.1.3 Resultset Row */
 	private function handleTextResultsetRow() {
 		switch ($type = ord($this->packet)) {
@@ -1135,21 +1154,7 @@ REGEX;
 				if ($type == self::EOF_PACKET) {
 					$this->parseEof();
 				}
-				$future = &$this->result->next;
-				if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
-					$this->parseCallback = [$this, "handleQuery"];
-					$this->futures[] = $future ?: $future = new Future;
-				} else {
-					if ($future) {
-						$future->succeed(null);
-					} else {
-						$future = new Success(null);
-					}
-					$this->parseCallback = null;
-				}
-				$this->query = null;
-				$this->ready();
-				$this->result->updateState(ResultProxy::ROWS_FETCHED);
+				$this->successfulResultsetFetch();
 				return;
 		}
 
@@ -1172,21 +1177,7 @@ REGEX;
 	private function handleBinaryResultsetRow() {
 		if (ord($this->packet) == self::EOF_PACKET) {
 			$this->parseEof();
-			$future = &$this->result->next;
-			if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
-				$this->parseCallback = [$this, "handleQuery"];
-				$this->futures[] = $future ?: $future = new Future;
-			} else {
-				if ($future) {
-					$future->succeed(null);
-				} else {
-					$future = new Success(null);
-				}
-				$this->parseCallback = null;
-			}
-			$this->query = null;
-			$this->ready();
-			$this->result->updateState(ResultProxy::ROWS_FETCHED);
+			$this->successfulResultsetFetch();
 			return;
 		}
 
