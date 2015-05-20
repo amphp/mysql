@@ -220,6 +220,7 @@ class Connection {
 			if (empty($this->onReady)) {
 				$cb = $this->config->ready;
 				$this->out[] = null;
+				$this->disableRead();
 			} else {
 				list($key, $cb) = each($this->onReady);
 				unset($this->onReady[$key]);
@@ -266,7 +267,8 @@ class Connection {
 		$this->seqId = $this->compressionId = -1;
 
 		$this->reactor->cancel($this->readWatcher);
-		$this->readWatcher = $this->reactor->onReadable($this->socket, [$this, "onRead"]);
+		$this->readWatcher = null;
+		$this->enableRead();
 		$this->onRead();
 	}
 
@@ -296,6 +298,7 @@ class Connection {
 	private function startCommand($callback) {
 		$future = new Future;
 		$this->appendTask(function() use ($callback, $future) {
+			$this->enableRead();
 			$this->seqId = $this->compressionId = -1;
 			$this->futures[] = $future;
 			$callback();
@@ -313,10 +316,7 @@ class Connection {
 		$this->config->collate = $collate;
 
 		$query = "SET NAMES '$charset'".($collate == "" ? "" : " COLLATE '$collate'");
-		$this->appendTask(function() use ($query, &$future) {
-			$future = $this->query($query);
-		});
-		return $future;
+		return $this->query($query);
 	}
 
 	/** @see 14.6.2 COM_QUIT */
@@ -625,11 +625,11 @@ REGEX;
 		// @TODO flags to use?
 		$this->capabilities |= self::CLIENT_SESSION_TRACK | self::CLIENT_TRANSACTIONS | self::CLIENT_PROTOCOL_41 | self::CLIENT_SECURE_CONNECTION | self::CLIENT_MULTI_RESULTS | self::CLIENT_PS_MULTI_RESULTS | self::CLIENT_MULTI_STATEMENTS | self::CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA;
 
+		$this->connectionState = self::ESTABLISHED;
+
 		if (extension_loaded("zlib")) {
 			$this->capabilities |= self::CLIENT_COMPRESS;
 		}
-
-		$this->writeWatcher = $this->reactor->onWritable($this->socket, [$this, "onWrite"], $enableNow = false);
 	}
 
 	/** @see 14.1.3.2 ERR-Packet */
@@ -1270,15 +1270,9 @@ REGEX;
 	}
 
 	private function closeSocket() {
-		if ($this->readWatcher) {
-			$this->reactor->cancel($this->readWatcher);
-			$this->readWatcher = null;
-			fclose($this->socket);
-		}
-		if ($this->writeWatcher) {
-			$this->reactor->cancel($this->writeWatcher);
-			$this->writeWatcher = null;
-		}
+		$this->disableRead();
+		$this->disableWrite();
+		@fclose($this->socket);
 		$this->connectionState = self::CLOSED;
 	}
 
@@ -1351,7 +1345,7 @@ REGEX;
 		return $out;
 	}
 
-	public function onWrite($reactor, $watcherId, $socket) {
+	public function onWrite() {
 		if ($this->outBuflen == 0) {
 			$doCompress = ($this->capabilities & self::CLIENT_COMPRESS) && $this->connectionState >= self::READY;
 
@@ -1364,12 +1358,13 @@ REGEX;
 			$this->outBuflen = strlen($packet);
 
 			if ($this->outBuflen == 0) {
-				$reactor->disable($watcherId);
+				$this->disableWrite();
 				$this->watcherEnabled = false;
+				return;
 			}
 		}
 
-		$bytes = @fwrite($socket, $this->outBuf);
+		$bytes = @fwrite($this->socket, $this->outBuf);
 		$this->outBuflen -= $bytes;
 		if ($this->outBuflen > 0) {
 			if ($bytes == 0) {
@@ -1604,7 +1599,7 @@ REGEX;
 					}
 					/* intentionally missing break */
 				default:
-					if ($this->writeWatcher === NULL) {
+					if ($this->connectionState <= self::ESTABLISHED) {
 						$this->established();
 						$this->handleHandshake();
 					} elseif ($cb) {
@@ -1689,7 +1684,7 @@ REGEX;
 				}
 
 				$this->reactor->cancel($watcherId);
-				$this->reactor->disable($this->readWatcher);
+				$this->reactor->disable($this->readWatcher); // temporarily disable, reenable after establishing tls
 				(new \Nbsock\Encryptor($reactor))->enable($socket, $this->config->ssl + ['peer_name' => $this->config->host])->when(function ($error) {
 					if ($error) {
 						$this->getFuture()->fail($error);
@@ -1768,8 +1763,34 @@ REGEX;
 	private function _sendPacket($payload) {
 		$this->out[] = $payload;
 		if (!$this->watcherEnabled) {
-			$this->reactor->enable($this->writeWatcher);
+			$this->enableWrite();
 			$this->watcherEnabled = true;
+		}
+	}
+
+	private function enableWrite() {
+		if (!$this->writeWatcher) {
+			$this->writeWatcher = $this->reactor->onWritable($this->socket, [$this, "onWrite"]);
+		}
+	}
+
+	private function disableWrite() {
+		if ($this->writeWatcher) {
+			$this->reactor->cancel($this->writeWatcher);
+			$this->writeWatcher = null;
+		}
+	}
+
+	private function enableRead() {
+		if (!$this->readWatcher) {
+			$this->readWatcher = $this->reactor->onReadable($this->socket, [$this, "onRead"]);
+		}
+	}
+
+	private function disableRead() {
+		if ($this->readWatcher) {
+			$this->reactor->cancel($this->readWatcher);
+			$this->readWatcher = null;
 		}
 	}
 }

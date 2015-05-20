@@ -36,8 +36,6 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 			$this->assertEquals((yield $resultset->fetchAll()), [["a" => 1, 0 => 1]]);
 			$this->assertEquals((yield $resultset->fetchRows()), [[0 => 1]]);
 			$this->assertEquals((yield $resultset->fetchObjects()), [(object) ["a" => 1]]);
-
-			$db->close();
 		});
 	}
 
@@ -69,7 +67,6 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 			$this->assertEquals($fields[1]["type"], DataTypes::MYSQL_TYPE_NEWDECIMAL);
 
 			yield $db->query("DROP DATABASE alt");
-			$db->close();
 		});
 	}
 
@@ -104,8 +101,6 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 			$stmt->bind("foo", 5);
 			$result = (yield $stmt->execute(["bar" => 9]));
 			$this->assertEquals($result->affectedRows, 1);
-
-			$db->close();
 		});
 	}
 }

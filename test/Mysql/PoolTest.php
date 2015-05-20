@@ -12,7 +12,6 @@ class PoolTest extends \PHPUnit_Framework_TestCase {
 			/* use an alternative charset... Default is utf8mb4_general_ci */
 			$db->setCharset("latin1_general_ci");
 
-			$db->close();
 			$complete = true;
 		});
 		$this->assertEquals(true, $complete, "Database commands did not complete.");
@@ -26,7 +25,6 @@ class PoolTest extends \PHPUnit_Framework_TestCase {
 
 			/* Try a query */
 			yield $db->query("CREATE TABLE tmp SELECT 1 AS a, 2 AS b");
-			$db->close();
 		});
 	}
 
@@ -42,7 +40,6 @@ class PoolTest extends \PHPUnit_Framework_TestCase {
 			}
 
 			yield \Amp\all($pings);
-			$db->close();
 			$complete = true;
 		});
 		$this->assertEquals(true, $complete, "Database commands did not complete.");
