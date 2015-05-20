@@ -10,7 +10,7 @@ class ResultProxy {
 	public $rows = null;
 	public $fetchedRows = 0;
 	public $userFetched = 0;
-	public $futures = [self::SINGLE_ROW_FETCH => [], self::COLUMNS_FETCHED => [], self::ROWS_FETCHED => []];
+	public $deferreds = [self::SINGLE_ROW_FETCH => [], self::COLUMNS_FETCHED => [], self::ROWS_FETCHED => []];
 	public $state = self::UNFETCHED;
 	public $next;
 
@@ -29,29 +29,29 @@ class ResultProxy {
 		if ($state == ResultProxy::ROWS_FETCHED) {
 			$this->rowFetched(null);
 		}
-		if (empty($this->futures[$state])) {
+		if (empty($this->deferreds[$state])) {
 			return;
 		}
-		foreach ($this->futures[$state] as list($future, $rows, $cb)) {
-			$future->succeed($cb ? $cb($rows) : $rows);
+		foreach ($this->deferreds[$state] as list($deferred, $rows, $cb)) {
+			$deferred->succeed($cb ? $cb($rows) : $rows);
 		}
-		$this->futures[$state] = [];
+		$this->deferreds[$state] = [];
 	}
 
 	public function rowFetched($row) {
 		if ($row !== null) {
 			$this->rows[$this->fetchedRows++] = $row;
 		}
-		list($key, list($entry, , $cb)) = each($this->futures[ResultProxy::SINGLE_ROW_FETCH]);
+		list($key, list($entry, , $cb)) = each($this->deferreds[ResultProxy::SINGLE_ROW_FETCH]);
 		if ($key !== null) {
-			unset($this->futures[ResultProxy::SINGLE_ROW_FETCH][$key]);
+			unset($this->deferreds[ResultProxy::SINGLE_ROW_FETCH][$key]);
 			$entry->succeed($cb && $row ? $cb($row) : $row);
 		}
 	}
 
 	public function __debugInfo() {
 		$tmp = clone $this;
-		foreach ($tmp->futures as &$type) {
+		foreach ($tmp->deferreds as &$type) {
 			foreach ($type as &$entry) {
 				$entry[2] = null;
 			}

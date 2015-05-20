@@ -1,11 +1,12 @@
 {
 	"name": "amphp/mysql",
-	"description": "description_text",
+	"description": "Asynchronous parallel Mysql client built on the Amp concurrency framework",
 	"minimum-stability": "dev",
 	"require": {
-		"amphp/amp": "~0.16",
-		"rdlowrey/nbsock": "~0.6"
+		"amphp/amp": "1.0.x-dev",
+		"rdlowrey/nbsock": "~0.7"
 	},
+	"licence": "MIT",
 	"authors": [
 		{
 			"name": "Bob Weinand",

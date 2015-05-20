@@ -2,8 +2,7 @@
 
 namespace Amp\Mysql;
 
-use Amp\Future;
-use Amp\Reactor;
+use Amp\Deferred;
 
 class VirtualConnection {
 	private $call = [];
@@ -18,15 +17,15 @@ class VirtualConnection {
 	}
 
 	public function fail($e) {
-		foreach ($this->call as list($future)) {
-			$future->fail($e);
+		foreach ($this->call as list($deferred)) {
+			$deferred->fail($e);
 		}
 		$this->call = [];
 	}
 
 	public function __call($func, $args) {
-		$future = new Future;
-		$this->call[] = [$future, $func, $args];
-		return $future;
+		$deferred = new Deferred;
+		$this->call[] = [$deferred, $func, $args];
+		return $deferred;
 	}
 }

@@ -1,7 +1,7 @@
 <?php
 
 namespace Amp\Mysql;
-use Amp\Future;
+use Amp\Deferred;
 use Amp\Reactor;
 use Amp\Success;
 use Nbsock\Connector;
@@ -74,7 +74,7 @@ class Connection {
 
 	private $reactor;
 	private $config;
-	private $futures = [];
+	private $deferreds = [];
 	private $onReady = [];
 	private $result;
 	private $oldDb = null;
@@ -129,7 +129,7 @@ class Connection {
 	const REFRESH_MASTER = 0x80;
 
 	public function __construct($config, $sslOptions = null, Reactor $reactor = null) {
-		$this->reactor = $reactor ?: \Amp\getReactor();
+		$this->reactor = $reactor ?: \Amp\reactor();
 		$this->connInfo = new ConnectionState;
 
 		if (!$config instanceof ConnectionConfig) {
@@ -216,7 +216,7 @@ class Connection {
 	}
 
 	private function ready() {
-		if (empty($this->futures)) {
+		if (empty($this->deferreds)) {
 			if (empty($this->onReady)) {
 				$cb = $this->config->ready;
 				$this->out[] = null;
@@ -234,10 +234,10 @@ class Connection {
 	public function connect(Connector $connector = null) {
 		$connector = $connector ?: new \Nbsock\Connector($this->reactor);
 
-		$future = new Future;
-		$connector->connect($this->config->resolvedHost)->when(function ($error, $socket) use ($future) {
+		$deferred = new Deferred;
+		$connector->connect($this->config->resolvedHost)->when(function ($error, $socket) use ($deferred) {
 			if ($this->connectionState === self::CLOSED) {
-				$future->succeed(null);
+				$deferred->succeed(null);
 				if ($socket) {
 					fclose($socket);
 				}
@@ -245,7 +245,7 @@ class Connection {
 			}
 
 			if ($error) {
-				$future->fail($error);
+				$deferred->fail($error);
 				if ($socket) {
 					fclose($socket);
 				}
@@ -254,9 +254,9 @@ class Connection {
 
 			$this->socket = $socket;
 			$this->readWatcher = $this->reactor->onReadable($this->socket, [$this, "onInit"]);
-			$this->futures[] = $future;
+			$this->deferreds[] = $deferred;
 		});
-		return $future;
+		return $deferred->promise();
 	}
 
 	public function onInit() {
@@ -272,15 +272,15 @@ class Connection {
 		$this->onRead();
 	}
 
-	/** @return Future */
-	private function getFuture() {
-		list($key, $future) = each($this->futures);
-		unset($this->futures[$key]);
-		return $future;
+	/** @return Deferred */
+	private function getDeferred() {
+		list($key, $deferred) = each($this->deferreds);
+		unset($this->deferreds[$key]);
+		return $deferred;
 	}
 
 	private function appendTask($callback) {
-		if ($this->packetCallback || $this->parseCallback || !empty($this->onReady) || !empty($this->futures) || $this->connectionState != self::READY) {
+		if ($this->packetCallback || $this->parseCallback || !empty($this->onReady) || !empty($this->deferreds) || $this->connectionState != self::READY) {
 			$this->onReady[] = $callback;
 		} else {
 			$cb = $this->config->busy;
@@ -296,14 +296,14 @@ class Connection {
 	}
 
 	private function startCommand($callback) {
-		$future = new Future;
-		$this->appendTask(function() use ($callback, $future) {
+		$deferred = new Deferred;
+		$this->appendTask(function() use ($callback, $deferred) {
 			$this->enableRead();
 			$this->seqId = $this->compressionId = -1;
-			$this->futures[] = $future;
+			$this->deferreds[] = $deferred;
 			$callback();
 		});
-		return $future;
+		return $deferred->promise();
 	}
 
 	public function setCharset($charset, $collate = "") {
@@ -356,16 +356,16 @@ class Connection {
 	}
 
 	public function listAllFields($table, $like = "%") {
-		$future = new Future;
+		$deferred = new Deferred;
 
 		$columns = [];
-		$when = function($error, $array) use (&$columns, &$when, $future) {
+		$when = function($error, $array) use (&$columns, &$when, $deferred) {
 			if ($error) {
-				$future->fail($error);
+				$deferred->fail($error);
 				return;
 			}
 			if ($array === null) {
-				$future->succeed($columns);
+				$deferred->succeed($columns);
 				return;
 			}
 			list($columns[], $promise) = $array;
@@ -373,7 +373,7 @@ class Connection {
 		};
 		$this->listFields($table, $like)->when($when);
 
-		return $future;
+		return $deferred->promise();
 	}
 
 	/** @see 14.6.6 COM_CREATE_DB */
@@ -477,7 +477,7 @@ class Connection {
 
 	/** @see 14.7.4 COM_STMT_PREPARE */
 	public function prepare($query, $data = null) {
-		$future = $this->startCommand(function() use ($query) {
+		$promise = $this->startCommand(function() use ($query) {
 			$this->query = $query;
 			$regex = <<<'REGEX'
 ("|'|`)((?:\\\\|\\\1|(?!\1).)*+)\1|(\?)|:([a-zA-Z_]+)
@@ -499,23 +499,23 @@ REGEX;
 		});
 
 		if ($data === null) {
-			return $future;
+			return $promise;
 		}
 
-		$retFuture = new Future;
-		$future->when(function($error, $stmt) use ($retFuture, $data) {
+		$retDeferred = new Deferred;
+		$promise->when(function($error, $stmt) use ($retDeferred, $data) {
 			if ($error) {
-				$retFuture->fail($error);
+				$retDeferred->fail($error);
 			} else {
 				try {
-					$retFuture->succeed($stmt->execute($data));
+					$retDeferred->succeed($stmt->execute($data));
 				} catch (\Exception $e) {
-					$retFuture->fail($e);
+					$retDeferred->fail($e);
 				}
 			}
 		});
 
-		return $retFuture;
+		return $retDeferred->promise();
 	}
 
 	/** @see 14.7.5 COM_STMT_SEND_LONG_DATA */
@@ -535,8 +535,8 @@ REGEX;
 	// prebound params: null-bit set, type MYSQL_TYPE_LONG_BLOB, no value
 	// $params is by-ref, because the actual result object might not yet have been filled completely with data upon call of this method ...
 	public function execute($stmtId, $query, &$params, $prebound, $data = []) {
-		$future = new Future;
-		$this->appendTask(function () use ($stmtId, $query, &$params, $prebound, $data, $future) {
+		$deferred = new Deferred;
+		$this->appendTask(function () use ($stmtId, $query, &$params, $prebound, $data, $deferred) {
 			$payload = "\x17";
 			$payload .= DataTypes::encode_int32($stmtId);
 			$payload .= chr(0); // cursor flag // @TODO cursor types?!
@@ -577,11 +577,11 @@ REGEX;
 			$this->query = $query;
 
 			$this->out[] = null;
-			$this->futures[] = $future;
+			$this->deferreds[] = $deferred;
 			$this->sendPacket($payload);
 			$this->packetCallback = [$this, "handleExecute"];
 		});
-		return $future; // do not use $this->startCommand(), that might unexpectedly reset the seqId!
+		return $deferred->promise(); // do not use $this->startCommand(), that might unexpectedly reset the seqId!
 	}
 
 	/** @see 14.7.7 COM_STMT_CLOSE */
@@ -599,26 +599,27 @@ REGEX;
 	/** @see 14.7.8 COM_STMT_RESET */
 	public function resetStmt($stmtId) {
 		$payload = "\x1a" . DataTypes::encode_int32($stmtId);
-		$future = new Future;
-		$this->appendTask(function () use ($payload, $future) {
+		$deferred = new Deferred;
+		$this->appendTask(function () use ($payload, $deferred) {
 			$this->out[] = null;
-			$this->futures[] = $future;
+			$this->deferreds[] = $deferred;
 			$this->sendPacket($payload);
+			$this->enableRead();
 		});
-		return $future;
+		return $deferred->promise();
 	}
 
 	/** @see 14.8.4 COM_STMT_FETCH */
 	public function fetchStmt($stmtId) {
 		$payload = "\x1c" . DataTypes::encode_int32($stmtId) . DataTypes::encode_int32(1);
-		$future = new Future;
-		$this->appendTask(function () use ($payload, $future) {
+		$deferred = new Deferred;
+		$this->appendTask(function () use ($payload, $deferred) {
 			$this->out[] = null;
-			$this->futures[] = $future;
+			$this->deferreds[] = $deferred;
 			$this->sendPacket($payload);
-			$this->ready();
+			$this->enableRead();
 		});
-		return $future;
+		return $deferred->promise();
 	}
 
 	private function established() {
@@ -665,16 +666,16 @@ REGEX;
 			if ($this->connectionState == self::READY) {
 				// normal error
 				if ($this->config->exceptions) {
-					$this->getFuture()->fail(new QueryException("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}", $this->query));
+					$this->getDeferred()->fail(new QueryException("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}", $this->query));
 				} else {
-					$this->getFuture()->succeed(false);
+					$this->getDeferred()->succeed(false);
 				}
 				$this->query = null;
 				$this->ready();
 			} elseif ($this->connectionState < self::READY) {
 				// connection failure
 				$this->closeSocket();
-				$this->getFuture()->fail(new InitializationException("Could not connect to {$this->config->resolvedHost}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
+				$this->getDeferred()->fail(new InitializationException("Could not connect to {$this->config->resolvedHost}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
 			}
 		}
 	}
@@ -757,7 +758,7 @@ REGEX;
 
 	private function handleOk() {
 		$this->parseOk();
-		$this->getFuture()->succeed($this->getConnInfo());
+		$this->getDeferred()->succeed($this->getConnInfo());
 		$this->ready();
 	}
 
@@ -787,7 +788,7 @@ REGEX;
 
 	private function handleEof() {
 		$this->parseEof();
-		$this->getFuture()->succeed($this->getConnInfo());
+		$this->getDeferred()->succeed($this->getConnInfo());
 		$this->ready();
 	}
 
@@ -905,7 +906,7 @@ REGEX;
 	/** @see 14.6.4.1.1 Text Resultset */
 	private function handleQuery() {
 		$this->parseCallback = [$this, "handleTextColumnDefinition"];
-		$this->getFuture()->succeed(new ResultSet($this->connInfo, $result = new ResultProxy));
+		$this->getDeferred()->succeed(new ResultSet($this->connInfo, $result = new ResultProxy));
 		/* we need to succeed before assigning vars, so that a when() handler won't have a partial result available */
 		$this->result = $result;
 		$this->result->setColumns(ord($this->packet));
@@ -914,7 +915,7 @@ REGEX;
 	/** @see 14.7.1 Binary Protocol Resultset */
 	private function handleExecute() {
 		$this->parseCallback = [$this, "handleBinaryColumnDefinition"];
-		$this->getFuture()->succeed(new ResultSet($this->connInfo, $result = new ResultProxy));
+		$this->getDeferred()->succeed(new ResultSet($this->connInfo, $result = new ResultProxy));
 		/* we need to succeed before assigning vars, so that a when() handler won't have a partial result available */
 		$this->result = $result;
 		$this->result->setColumns(ord($this->packet));
@@ -927,10 +928,10 @@ REGEX;
 		} elseif (ord($this->packet) == self::EOF_PACKET) {
 			$this->parseCallback = null;
 			$this->parseEof();
-			$this->getFuture()->succeed(null);
+			$this->getDeferred()->succeed(null);
 			$this->ready();
 		} else {
-			$this->getFuture()->succeed([$this->parseColumnDefinition(), $this->futures[] = new Future]);
+			$this->getDeferred()->succeed([$this->parseColumnDefinition(), $this->deferreds[] = new Deferred]);
 		}
 	}
 
@@ -1126,15 +1127,15 @@ REGEX;
 	}
 
 	private function successfulResultsetFetch() {
-		$future = &$this->result->next;
+		$deferred = &$this->result->next;
 		if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
 			$this->parseCallback = [$this, "handleQuery"];
-			$this->futures[] = $future ?: $future = new Future;
+			$this->deferreds[] = $deferred ?: $deferred = new Deferred;
 		} else {
-			if ($future) {
-				$future->succeed(null);
+			if ($deferred) {
+				$deferred->succeed(null);
 			} else {
-				$future = new Success(null);
+				$deferred = new Success(null);
 			}
 			$this->parseCallback = null;
 		}
@@ -1253,7 +1254,7 @@ REGEX;
 			$this->result = new ResultProxy;
 			$this->result->columnsToFetch = $params;
 			$this->result->columnCount = $columns;
-			$this->getFuture()->succeed(new Stmt($this, $this->query, $stmtId, $this->named, $this->result));
+			$this->getDeferred()->succeed(new Stmt($this, $this->query, $stmtId, $this->named, $this->result));
 			$this->named = [];
 			if ($params) {
 				$this->parseCallback = [$this, "prepareParams"];
@@ -1264,7 +1265,7 @@ REGEX;
 	}
 
 	private function readStatistics() {
-		$this->getFuture()->succeed($this->packet);
+		$this->getDeferred()->succeed($this->packet);
 		$this->ready();
 		$this->parseCallback = null;
 	}
@@ -1390,15 +1391,15 @@ REGEX;
 	}
 
 	private function goneAway() {
-		foreach ($this->futures as $future) {
+		foreach ($this->deferreds as $deferred) {
 			if ($this->config->exceptions || $this->connectionState < self::READY) {
 				if ($this->query == "") {
-					$future->fail(new InitializationException("Connection went away"));
+					$deferred->fail(new InitializationException("Connection went away"));
 				} else {
-					$future->fail(new QueryException("Connection went away... unable to fulfil this future ... It's unknown whether the query was executed...", $this->query));
+					$deferred->fail(new QueryException("Connection went away... unable to fulfil this deferred ... It's unknown whether the query was executed...", $this->query));
 				}
 			} else {
-				$future->succeed(false);
+				$deferred->succeed(false);
 			}
 		}
 		$this->closeSocket();
@@ -1687,7 +1688,7 @@ REGEX;
 				$this->reactor->disable($this->readWatcher); // temporarily disable, reenable after establishing tls
 				(new \Nbsock\Encryptor($reactor))->enable($socket, $this->config->ssl + ['peer_name' => $this->config->host])->when(function ($error) {
 					if ($error) {
-						$this->getFuture()->fail($error);
+						$this->getDeferred()->fail($error);
 						$this->closeSocket();
 						return;
 					}

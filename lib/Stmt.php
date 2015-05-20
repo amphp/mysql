@@ -2,7 +2,7 @@
 
 namespace Amp\Mysql;
 
-use Amp\Future;
+use Amp\Deferred;
 use Amp\Success;
 
 class Stmt {
@@ -50,18 +50,18 @@ class Stmt {
 					foreach ($this->prebound as $paramId => $msg) {
 						$this->conn->bindParam($this->stmtId, $paramId, $msg);
 					}
-					while (list($future, $method, $args) = $this->virtualConn->getCall()) {
+					while (list($deferred, $method, $args) = $this->virtualConn->getCall()) {
 						if (isset($args[0])) {
 							$args[0] = $this->stmtId;
 						}
 						if ($method == "execute") {
 							$args[1] = &$this->result->params;
 						}
-						call_user_func_array([$this->conn(), $method], $args)->when(function($error, $result) use ($future) {
+						call_user_func_array([$this->conn(), $method], $args)->when(function($error, $result) use ($deferred) {
 							if ($error) {
-								$future->fail($error);
+								$deferred->fail($error);
 							} else {
-								$future->succeed($result);
+								$deferred->succeed($result);
 							}
 						});
 					}
@@ -150,12 +150,12 @@ class Stmt {
 	public function getFields() {
 		if ($this->result->state >= ResultProxy::COLUMNS_FETCHED) {
 			return new Success($this->result->columns);
-		} elseif (isset($this->result->futures[ResultProxy::COLUMNS_FETCHED][0])) {
-			return $this->result->futures[ResultProxy::COLUMNS_FETCHED][0][0];
+		} elseif (isset($this->result->deferreds[ResultProxy::COLUMNS_FETCHED][0])) {
+			return $this->result->deferreds[ResultProxy::COLUMNS_FETCHED][0][0];
 		} else {
-			$future = new Future;
-			$this->result->futures[ResultProxy::COLUMNS_FETCHED][0] = [$future, &$this->result->columns, null];
-			return $future;
+			$deferred = new Deferred;
+			$this->result->deferreds[ResultProxy::COLUMNS_FETCHED][0] = [$deferred, &$this->result->columns, null];
+			return $deferred->promise();
 		}
 	}
 

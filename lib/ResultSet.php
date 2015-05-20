@@ -2,7 +2,7 @@
 
 namespace Amp\Mysql;
 
-use Amp\Future;
+use Amp\Deferred;
 use Amp\Success;
 
 class ResultSet {
@@ -18,9 +18,9 @@ class ResultSet {
 		if ($this->result->state >= ResultProxy::COLUMNS_FETCHED) {
 			return new Success($this->result->columns);
 		} else {
-			$future = new Future;
-			$this->result->futures[ResultProxy::COLUMNS_FETCHED][] = [$future, &$this->result->columns];
-			return $future;
+			$deferred = new Deferred;
+			$this->result->deferreds[ResultProxy::COLUMNS_FETCHED][] = [$deferred, &$this->result->columns];
+			return $deferred->promise();
 		}
 	}
 
@@ -28,9 +28,9 @@ class ResultSet {
 		if ($this->result->state == ResultProxy::ROWS_FETCHED) {
 			return new Success(count($this->result->rows));
 		} else {
-			$future = new Future;
-			$this->result->futures[ResultProxy::ROWS_FETCHED][] = [$future, null, function () { return count($this->result->rows); }];
-			return $future;
+			$deferred = new Deferred;
+			$this->result->deferreds[ResultProxy::ROWS_FETCHED][] = [$deferred, null, function () { return count($this->result->rows); }];
+			return $deferred->promise();
 		}
 	}
 
@@ -38,9 +38,9 @@ class ResultSet {
 		if ($this->result->state == ResultProxy::ROWS_FETCHED) {
 			return new Success($cb($this->result->rows));
 		} else {
-			$future = new Future;
-			$this->result->futures[ResultProxy::ROWS_FETCHED][] = [$future, &$this->result->rows, $cb];
-			return $future;
+			$deferred = new Deferred;
+			$this->result->deferreds[ResultProxy::ROWS_FETCHED][] = [$deferred, &$this->result->rows, $cb];
+			return $deferred->promise();
 		}
 	}
 
@@ -75,9 +75,9 @@ class ResultSet {
 		} elseif ($this->result->state == ResultProxy::ROWS_FETCHED) {
 			return new Success(null);
 		} else {
-			$future = new Future;
-			$this->result->futures[ResultProxy::SINGLE_ROW_FETCH][] = [$future, null, $cb];
-			return $future;
+			$deferred = new Deferred;
+			$this->result->deferreds[ResultProxy::SINGLE_ROW_FETCH][] = [$deferred, null, $cb];
+			return $deferred->promise();
 		}
 	}
 
@@ -102,7 +102,8 @@ class ResultSet {
 	}
 
 	public function next() {
-		return $this->result->next ?: $this->result->next = new Future;
+		$deferred = $this->result->next ?: $this->result->next = new Deferred;
+		return $deferred->promise();
 	}
 
 }

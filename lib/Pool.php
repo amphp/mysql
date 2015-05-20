@@ -9,13 +9,13 @@ class Pool {
 	private $connectionMap = [];
 	private $ready = [];
 	private $readyMap = [];
-	private $connectionFuture;
+	private $connectionDeferred;
 	private $virtualConnection;
 	private $config;
 	private $limit;
 
 	public function __construct($connStr, $sslOptions = null, \Amp\Reactor $reactor = null) {
-		$this->reactor = $reactor ?: \Amp\getReactor();
+		$this->reactor = $reactor ?: \Amp\reactor();
 
 		if (preg_match("((?:^|;)\s*limit\s*=\s*([^;]*?)\s*(?:;|$))is", $connStr, $match, PREG_OFFSET_CAPTURE)) {
 			$this->limit = (int) $match[1][0];
@@ -81,8 +81,8 @@ class Pool {
 			$this->connections[] = $conn = new Connection($this->config, null, $this->reactor);
 			end($this->connections);
 			$this->connectionMap[spl_object_hash($conn)] = key($this->connections);
-			$this->connectionFuture = $conn->connect($this->connector ?: $this->connector = new \Nbsock\Connector($this->reactor));
-			$this->connectionFuture->when(function ($error) use ($conn) {
+			$this->connectionDeferred = $conn->connect($this->connector ?: $this->connector = new \Nbsock\Connector($this->reactor));
+			$this->connectionDeferred->when(function ($error) use ($conn) {
 				if ($error) {
 					$this->unmapConnection($conn);
 					if (empty($this->connections)) {
@@ -99,8 +99,8 @@ class Pool {
 	}
 
 	private function ready($conn) {
-		if (list($future, $method, $args) = $this->virtualConnection->getCall()) {
-			$future->succeed(call_user_func_array([$conn, $method], $args));
+		if (list($deferred, $method, $args) = $this->virtualConnection->getCall()) {
+			$deferred->succeed(call_user_func_array([$conn, $method], $args));
 		} else {
 			$this->ready[] = $conn;
 			end($this->ready);
@@ -110,7 +110,7 @@ class Pool {
 	}
 
 	public function init() {
-		return $this->connectionFuture;
+		return $this->connectionDeferred;
 	}
 
 	/** @return Connection */
