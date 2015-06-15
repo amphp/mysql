@@ -26,6 +26,6 @@ class VirtualConnection {
 	public function __call($func, $args) {
 		$deferred = new Deferred;
 		$this->call[] = [$deferred, $func, $args];
-		return $deferred;
+		return $deferred->promise();
 	}
 }
