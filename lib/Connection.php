@@ -1433,7 +1433,7 @@ REGEX;
 
 			$this->compressionSize = DataTypes::decode_int24($this->compressionBuf);
 
-			$this->compressionId = ord($this->mysqlBuf[3]);
+			$this->compressionId = ord($this->compressionBuf[3]);
 
 			$this->uncompressedSize = DataTypes::decode_int24(substr($this->compressionBuf, 4, 3));
 
