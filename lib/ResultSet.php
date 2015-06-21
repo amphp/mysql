@@ -19,7 +19,7 @@ class ResultSet {
 			return new Success($this->result->columns);
 		} else {
 			$deferred = new Deferred;
-			$this->result->deferreds[ResultProxy::COLUMNS_FETCHED][] = [$deferred, &$this->result->columns];
+			$this->result->deferreds[ResultProxy::COLUMNS_FETCHED][] = [$deferred, &$this->result->columns, null];
 			return $deferred->promise();
 		}
 	}

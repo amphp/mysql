@@ -151,7 +151,7 @@ class Stmt {
 		if ($this->result->state >= ResultProxy::COLUMNS_FETCHED) {
 			return new Success($this->result->columns);
 		} elseif (isset($this->result->deferreds[ResultProxy::COLUMNS_FETCHED][0])) {
-			return $this->result->deferreds[ResultProxy::COLUMNS_FETCHED][0][0];
+			return $this->result->deferreds[ResultProxy::COLUMNS_FETCHED][0][0]->promise();
 		} else {
 			$deferred = new Deferred;
 			$this->result->deferreds[ResultProxy::COLUMNS_FETCHED][0] = [$deferred, &$this->result->columns, null];
