@@ -39,6 +39,26 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 		});
 	}
 
+    function testQueryFetchRow() {
+		(new NativeReactor)->run(function($reactor) {
+			$db = new Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest", null, $reactor);
+			$db->connect();
+
+            $db->query('DROP TABLE tmp');
+            $db->query('CREATE TABLE tmp (a int)');
+            $db->query('INSERT INTO tmp VALUES (1), (2), (3)');
+
+            $resultset = (yield $db->query('SELECT a FROM tmp'));
+
+            $got = [];
+
+            while ($row = (yield $resultset->fetchRow()))
+                $got[] = $row;
+
+            $this->assertEquals($got, [[1], [2], [3]]);
+        });
+    }
+
 	function testMultiStmt() {
 		(new NativeReactor)->run(function($reactor) {
 			$db = new Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest", null, $reactor);
