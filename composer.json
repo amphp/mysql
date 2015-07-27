@@ -20,5 +20,9 @@
 		"psr-4": {
 			"Amp\\Mysql\\": "lib/"
 		}
-	}
+	},
+    "scripts": {
+        "test": "phpunit",
+        "test-env-setup": "test/bin/create-test-db"
+    }
 }
