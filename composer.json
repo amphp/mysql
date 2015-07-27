@@ -21,8 +21,8 @@
 			"Amp\\Mysql\\": "lib/"
 		}
 	},
-    "scripts": {
-        "test": "phpunit",
-        "test-env-setup": "test/bin/create-test-db"
-    }
+	"scripts": {
+		"test": "phpunit",
+		"test-env-setup": "test/bin/create-test-db"
+	}
 }

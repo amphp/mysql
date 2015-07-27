@@ -11,18 +11,18 @@ $datadir = __DIR__ . DIRECTORY_SEPARATOR . "..";
 $dbPath = implode(DIRECTORY_SEPARATOR, [__DIR__, "..", "mysql_db"]);
 
 if (!chdir($datadir)) {
-    print "Unable to cd into $datadir\n";
-    exit(-1);
+	print "Unable to cd into $datadir\n";
+	exit(-1);
 }
 
 if (file_exists($dbPath)) {
-    print "Test db dir $dbPath already exists, aborting\n";
-    exit(0);
+	print "Test db dir $dbPath already exists, aborting\n";
+	exit(0);
 }
 
 if (!mkdir($dbPath)) {
-    print "Unable to create db directory $dbPath\n";
-    exit(-1);
+	print "Unable to create db directory $dbPath\n";
+	exit(-1);
 }
 
 execCommandOrDie(mysqlCmd("mysql_install_db", "--basedir=" . MYSQL_BASEDIR));
