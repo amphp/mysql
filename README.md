@@ -1,4 +1,4 @@
-Mysql [![Build Status](https://travis-ci.org/amphp/mysql.svg?branch=master)](https://travis-ci.org/amphp/mysql)
+MySQL [![Build Status](https://travis-ci.org/amphp/mysql.svg?branch=master)](https://travis-ci.org/amphp/mysql) [![Two Crowns](https://img.shields.io/badge/chat-Two%20Crowns-blue.svg)](https://dev.kelunik.com)
 =====
 
 `amp\mysql` is an asynchronous MySQL client built on the [amp concurrency framework][1]. The library exposes a Promise-based API to dynamically query multiple synchronous MySQL connections concurrently. The client transparently distributes these queries across a scalable pool of available connections and does so using 100% userland PHP; there are no external extension dependencies (e.g. `ext/mysqli`, `ext/pdo`, etc).
