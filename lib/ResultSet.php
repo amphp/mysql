@@ -76,7 +76,16 @@ class ResultSet {
 			return new Success(null);
 		} else {
 			$deferred = new Deferred;
-			$this->result->deferreds[ResultProxy::SINGLE_ROW_FETCH][] = [$deferred, null, $cb];
+
+			/* We need to increment the internal counter, else the next time genericFetch is called,
+			 * it'll simply return the row we fetch here instead of fetching a new row
+			 * since callback order on promises isn't defined, we can't do this via when() */
+			$incRow = function ($row) use ($cb) {
+				$this->result->userFetched++;
+				return $cb && $row ? $cb($row) : $row;
+			};
+
+			$this->result->deferreds[ResultProxy::SINGLE_ROW_FETCH][] = [$deferred, null, $incRow];
 			return $deferred->promise();
 		}
 	}
