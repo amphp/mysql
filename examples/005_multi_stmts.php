@@ -7,7 +7,7 @@ require 'support/generic_table.php';
 	$db = new \Amp\Mysql\Pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME);
 
 	/* create same table than in 003_generic_with_yield.php */
-	yield genTable($db);
+	yield \Amp\resolve(genTable($db));
 
 	/* multi statements are enabled by default, but generally stored procedures also might return multiple resultsets anyway */
 	$promise = $db->query("SELECT a + b FROM tmp; SELECT a - b FROM tmp;");
