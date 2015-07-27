@@ -4,8 +4,6 @@ vendor
 composer.lock
 composer.phar
 mysql_config.php
+testdb_config.php
 *.pid
-test/mysql_db/auto.cnf
-test/mysql_db/ib_logfile*
-test/mysql_db/ibdata*
-test/mysql_db/ConnectionTest/tmp.*
+test/mysql_db/
