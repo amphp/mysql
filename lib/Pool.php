@@ -3,8 +3,6 @@
 namespace Amp\Mysql;
 
 class Pool {
-	private $reactor;
-	private $connector = null;
 	private $connections = [];
 	private $connectionMap = [];
 	private $ready = [];
@@ -14,9 +12,7 @@ class Pool {
 	private $config;
 	private $limit;
 
-	public function __construct($connStr, $sslOptions = null, \Amp\Reactor $reactor = null) {
-		$this->reactor = $reactor ?: \Amp\reactor();
-
+	public function __construct($connStr, $sslOptions = null) {
 		if (preg_match("((?:^|;)\s*limit\s*=\s*([^;]*?)\s*(?:;|$))is", $connStr, $match, PREG_OFFSET_CAPTURE)) {
 			$this->limit = (int) $match[1][0];
 			$connStr = substr_replace($connStr, ";", $match[0][1], strlen($match[0][0]));
@@ -73,15 +69,15 @@ class Pool {
 	}
 
 	private function addConnection() {
-		$this->reactor->immediately(function() {
+		\Amp\immediately(function() {
 			if (count($this->connections) >= $this->limit) {
 				return;
 			}
 
-			$this->connections[] = $conn = new Connection($this->config, null, $this->reactor);
+			$this->connections[] = $conn = new Connection($this->config);
 			end($this->connections);
 			$this->connectionMap[spl_object_hash($conn)] = key($this->connections);
-			$this->connectionDeferred = $conn->connect($this->connector ?: $this->connector = new \Nbsock\Connector($this->reactor));
+			$this->connectionDeferred = $conn->connect();
 			$this->connectionDeferred->when(function ($error) use ($conn) {
 				if ($error) {
 					$this->unmapConnection($conn);
@@ -212,7 +208,6 @@ class Pool {
 		}
 		$this->ready = [];
 		$this->readyMap = [];
-		$this->connector = null;
 		$this->limit *= -1;
 	}
 }

@@ -3,8 +3,8 @@
 	"description": "Asynchronous parallel Mysql client built on the Amp concurrency framework",
 	"minimum-stability": "dev",
 	"require": {
-		"amphp/amp": "1.0.x-dev",
-		"rdlowrey/nbsock": "~0.7"
+		"amphp/amp": "^1",
+		"amphp/socket": "~0.8"
 	},
 	"licence": "MIT",
 	"authors": [
@@ -14,7 +14,7 @@
 		}
 	],
 	"require-dev": {
-		"phpunit/phpunit": "dev-master"
+		"phpunit/phpunit": "4.8.x-dev"
 	},
 	"autoload": {
 		"psr-4": {

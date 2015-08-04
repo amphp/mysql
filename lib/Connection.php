@@ -72,7 +72,6 @@ class Connection {
 	private $parseCallback = null;
 	private $packetCallback = null;
 
-	private $reactor;
 	private $config;
 	private $deferreds = [];
 	private $onReady = [];
@@ -128,8 +127,7 @@ class Connection {
 	const REFRESH_SLAVE = 0x40;
 	const REFRESH_MASTER = 0x80;
 
-	public function __construct($config, $sslOptions = null, Reactor $reactor = null) {
-		$this->reactor = $reactor ?: \Amp\reactor();
+	public function __construct($config, $sslOptions = null) {
 		$this->connInfo = new ConnectionState;
 
 		if (!$config instanceof ConnectionConfig) {
@@ -231,11 +229,9 @@ class Connection {
 		}
 	}
 
-	public function connect(Connector $connector = null) {
-		$connector = $connector ?: new \Nbsock\Connector($this->reactor);
-
+	public function connect() {
 		$deferred = new Deferred;
-		$connector->connect($this->config->resolvedHost)->when(function ($error, $socket) use ($deferred) {
+		\Amp\Socket\connect($this->config->resolvedHost)->when(function ($error, $socket) use ($deferred) {
 			if ($this->connectionState === self::CLOSED) {
 				$deferred->succeed(null);
 				if ($socket) {
@@ -253,7 +249,7 @@ class Connection {
 			}
 
 			$this->socket = $socket;
-			$this->readWatcher = $this->reactor->onReadable($this->socket, [$this, "onInit"]);
+			$this->readWatcher = \Amp\onReadable($this->socket, [$this, "onInit"]);
 			$this->deferreds[] = $deferred;
 		});
 		return $deferred->promise();
@@ -266,7 +262,7 @@ class Connection {
 		$this->out = [];
 		$this->seqId = $this->compressionId = -1;
 
-		$this->reactor->cancel($this->readWatcher);
+		\Amp\cancel($this->readWatcher);
 		$this->readWatcher = null;
 		$this->enableRead();
 		$this->onRead();
@@ -1678,22 +1674,22 @@ REGEX;
 
 		if (!$inSSL && ($this->capabilities & self::CLIENT_SSL)) {
 			$this->_sendPacket($payload);
-			$this->reactor->onWritable($this->socket, function ($reactor, $watcherId, $socket) {
+			\Amp\onWritable($this->socket, function ($reactor, $watcherId, $socket) {
 				/* wait until main write watcher has written everything... */
 				if ($this->outBuflen > 0 || !empty($this->out)) {
 					return;
 				}
 
-				$this->reactor->cancel($watcherId);
-				$this->reactor->disable($this->readWatcher); // temporarily disable, reenable after establishing tls
-				(new \Nbsock\Encryptor($reactor))->enable($socket, $this->config->ssl + ['peer_name' => $this->config->host])->when(function ($error) {
+				\Amp\cancel($watcherId);
+				\Amp\disable($this->readWatcher); // temporarily disable, reenable after establishing tls
+				\Amp\Socket\cryptoEnable($socket, $this->config->ssl + ['peer_name' => $this->config->host])->when(function ($error) {
 					if ($error) {
 						$this->getDeferred()->fail($error);
 						$this->closeSocket();
 						return;
 					}
 
-					$this->reactor->enable($this->readWatcher);
+					\Amp\enable($this->readWatcher);
 					$this->sendHandshake(true);
 				});
 			});
@@ -1771,26 +1767,26 @@ REGEX;
 
 	private function enableWrite() {
 		if (!$this->writeWatcher) {
-			$this->writeWatcher = $this->reactor->onWritable($this->socket, [$this, "onWrite"]);
+			$this->writeWatcher = \Amp\onWritable($this->socket, [$this, "onWrite"]);
 		}
 	}
 
 	private function disableWrite() {
 		if ($this->writeWatcher) {
-			$this->reactor->cancel($this->writeWatcher);
+			\Amp\cancel($this->writeWatcher);
 			$this->writeWatcher = null;
 		}
 	}
 
 	private function enableRead() {
 		if (!$this->readWatcher) {
-			$this->readWatcher = $this->reactor->onReadable($this->socket, [$this, "onRead"]);
+			$this->readWatcher = \Amp\onReadable($this->socket, [$this, "onRead"]);
 		}
 	}
 
 	private function disableRead() {
 		if ($this->readWatcher) {
-			$this->reactor->cancel($this->readWatcher);
+			\Amp\cancel($this->readWatcher);
 			$this->readWatcher = null;
 		}
 	}

@@ -1,14 +1,15 @@
 <?php
 
-use Amp\NativeReactor;
 use Amp\Mysql\Connection;
 use Amp\Mysql\DataTypes;
+use Amp\NativeReactor;
 
 class ConnectionTest extends \PHPUnit_Framework_TestCase {
 	function testConnect() {
 		$complete = false;
-		(new NativeReactor)->run(function($reactor) use (&$complete) {
-			$db = new Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest", null, $reactor);
+		\Amp\reactor(new NativeReactor());
+		\Amp\run(function() use (&$complete) {
+			$db = new Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest");
 			yield $db->connect();
 
 			/* use an alternative charset... Default is utf8mb4_general_ci */
@@ -21,8 +22,9 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 	}
 
 	function testQuery() {
-		(new NativeReactor)->run(function($reactor) {
-			$db = new Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest", null, $reactor);
+		\Amp\reactor(new NativeReactor());
+		\Amp\run(function() {
+			$db = new Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest");
 			$db->connect();
 
 			$resultset = (yield $db->query("SELECT 1 AS a"));
@@ -40,8 +42,9 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 	}
 
 	function testQueryFetchRow() {
-		(new NativeReactor)->run(function ($reactor) {
-			$db = new Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest", null, $reactor);
+		\Amp\reactor(new NativeReactor());
+		\Amp\run(function () {
+			$db = new Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest");
 			$db->connect();
 
 			$db->query('DROP TABLE tmp');
@@ -61,8 +64,9 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 	}
 
 	function testMultiStmt() {
-		(new NativeReactor)->run(function($reactor) {
-			$db = new Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest", null, $reactor);
+		\Amp\reactor(new NativeReactor());
+		\Amp\run(function() {
+			$db = new Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest");
 			$db->connect();
 
 			$db->query("CREATE DATABASE IF NOT EXISTS alt");
@@ -92,8 +96,9 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 	}
 
 	function testPrepared() {
-		(new NativeReactor)->run(function($reactor) {
-			$db = new Connection("host=" . DB_HOST . ";user=" . DB_USER . ";pass=" . DB_PASS . ";db=connectiontest", null, $reactor);
+		\Amp\reactor(new NativeReactor());
+		\Amp\run(function() {
+			$db = new Connection("host=" . DB_HOST . ";user=" . DB_USER . ";pass=" . DB_PASS . ";db=connectiontest");
 			$db->connect();
 
 			$db->query("CREATE TEMPORARY TABLE tmp SELECT 1 AS a, 2 AS b");
