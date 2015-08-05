@@ -94,7 +94,6 @@ class DataTypes {
 	/** @see 14.7.3 Binary Protocol Value */
 	public static function decodeBinary($type, $str, &$len = 0) {
 		$unsigned = $type & 0x80;
-		$type &= 0x7f;
 		switch ($type) {
 			case self::MYSQL_TYPE_STRING:
 			case self::MYSQL_TYPE_VARCHAR:
@@ -114,15 +113,19 @@ class DataTypes {
 				return $ret;
 
 			case self::MYSQL_TYPE_LONGLONG:
+			case self::MYSQL_TYPE_LONGLONG | 0x80:
 				$len = 8;
-				return $unsigned && ($str[3] & "\x80") ? self::decode_unsigned64($str) : self::decode_int64($str);
+				return $unsigned && ($str[7] & "\x80") ? self::decode_unsigned64($str) : self::decode_int64($str);
 
 			case self::MYSQL_TYPE_LONG:
+			case self::MYSQL_TYPE_LONG | 0x80:
 			case self::MYSQL_TYPE_INT24:
+			case self::MYSQL_TYPE_INT24 | 0x80:
 				$len = 4;
 				return $unsigned && ($str[3] & "\x80") ? self::decode_unsigned32($str) : ((self::decode_int32($str) << self::INT32_NORMALIZE_SHIFT) >> self::INT32_NORMALIZE_SHIFT);
 
 			case self::MYSQL_TYPE_TINY:
+			case self::MYSQL_TYPE_TINY | 0x80:
 				$len = 1;
 				return $unsigned ? ord($str) : ((ord($str) << self::INT8_NORMALIZE_SHIFT) >> self::INT8_NORMALIZE_SHIFT);
 

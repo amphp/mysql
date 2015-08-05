@@ -137,7 +137,7 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 			$db->connect();
 
 			$result = (yield $db->prepare("SELECT -1", []));
-			$this->assertEquals(yield $result->fetchRow(), [-1]);
+			$this->assertEquals((yield $result->fetchRow()), [-1]);
 		});
 	}
 }
