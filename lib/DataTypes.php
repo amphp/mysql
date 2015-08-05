@@ -35,14 +35,10 @@ class DataTypes {
 	const MYSQL_TYPE_STRING = 0xfe;
 	const MYSQL_TYPE_GEOMETRY = 0xff;
 
-	/* force twos complement */
-	const INT8_NORMALIZE_SHIFT = PHP_INT_MAX >> 63 ? 56 : 24;
-	const INT32_NORMALIZE_SHIFT = PHP_INT_MAX >> 63 ? 32 : 0;
-
 	private static function isLittleEndian() {
 		static $result = null;
 		if ($result === null) {
-			return $result = unpack('S',"\x01\x00")[1] === 1;
+			return $result = unpack('S', "\x01\x00")[1] === 1;
 		}
 		return $result;
 	}
@@ -78,14 +74,14 @@ class DataTypes {
 				break;
 			case "string":
 				$type = self::MYSQL_TYPE_LONG_BLOB;
-				$value = self::encodeInt(strlen($param)).$param;
+				$value = self::encodeInt(strlen($param)) . $param;
 				break;
 			case "NULL":
 				$type = self::MYSQL_TYPE_NULL;
 				$value = "";
 				break;
 			default:
-				throw new \UnexpectedValueException("Unexpected type for binding parameter: ".gettype($param));
+				throw new \UnexpectedValueException("Unexpected type for binding parameter: " . gettype($param));
 		}
 
 		return [$unsigned, $type, $value];
@@ -122,12 +118,14 @@ class DataTypes {
 			case self::MYSQL_TYPE_INT24:
 			case self::MYSQL_TYPE_INT24 | 0x80:
 				$len = 4;
-				return $unsigned && ($str[3] & "\x80") ? self::decode_unsigned32($str) : ((self::decode_int32($str) << self::INT32_NORMALIZE_SHIFT) >> self::INT32_NORMALIZE_SHIFT);
+				$shift = PHP_INT_MAX >> 63 ? 32 : 0;
+				return $unsigned && ($str[3] & "\x80") ? self::decode_unsigned32($str) : ((self::decode_int32($str) << $shift) >> $shift);
 
 			case self::MYSQL_TYPE_TINY:
 			case self::MYSQL_TYPE_TINY | 0x80:
 				$len = 1;
-				return $unsigned ? ord($str) : ((ord($str) << self::INT8_NORMALIZE_SHIFT) >> self::INT8_NORMALIZE_SHIFT);
+				$shift = PHP_INT_MAX >> 63 ? 56 : 24;
+				return $unsigned ? ord($str) : ((ord($str) << $shift) >> $shift);
 
 			case self::MYSQL_TYPE_DOUBLE:
 				$len = 8;
@@ -156,9 +154,9 @@ class DataTypes {
 						break;
 
 					default:
-						throw new \UnexpectedValueException("Unexpected string length for date in binary protocol: ".($len - 1));
+						throw new \UnexpectedValueException("Unexpected string length for date in binary protocol: " . ($len - 1));
 				}
-				return str_pad($year, 2, "0", STR_PAD_LEFT)."-".str_pad($month, 2, "0", STR_PAD_LEFT)."-".str_pad($day, 2, "0", STR_PAD_LEFT)." ".str_pad($hour, 2, "0", STR_PAD_LEFT).":".str_pad($minute, 2, "0", STR_PAD_LEFT).":".str_pad($second, 2, "0", STR_PAD_LEFT).".".str_pad($microsecond, 5, "0", STR_PAD_LEFT);
+				return str_pad($year, 2, "0", STR_PAD_LEFT) . "-" . str_pad($month, 2, "0", STR_PAD_LEFT) . "-" . str_pad($day, 2, "0", STR_PAD_LEFT) . " " . str_pad($hour, 2, "0", STR_PAD_LEFT) . ":" . str_pad($minute, 2, "0", STR_PAD_LEFT) . ":" . str_pad($second, 2, "0", STR_PAD_LEFT) . "." . str_pad($microsecond, 5, "0", STR_PAD_LEFT);
 
 			case self::MYSQL_TYPE_TIME:
 				$negative = $day = $hour = $minute = $second = $microsecond = 0;
@@ -175,16 +173,16 @@ class DataTypes {
 						break;
 
 					default:
-						throw new \UnexpectedValueException("Unexpected string length for time in binary protocol: ".($len - 1));
+						throw new \UnexpectedValueException("Unexpected string length for time in binary protocol: " . ($len - 1));
 				}
-				return ($negative ? "" : "-").str_pad($day, 2, "0", STR_PAD_LEFT)."d ".str_pad($hour, 2, "0", STR_PAD_LEFT).":".str_pad($minute, 2, "0", STR_PAD_LEFT).":".str_pad($second, 2, "0", STR_PAD_LEFT).".".str_pad($microsecond, 5, "0", STR_PAD_LEFT);
+				return ($negative ? "" : "-") . str_pad($day, 2, "0", STR_PAD_LEFT) . "d " . str_pad($hour, 2, "0", STR_PAD_LEFT) . ":" . str_pad($minute, 2, "0", STR_PAD_LEFT) . ":" . str_pad($second, 2, "0", STR_PAD_LEFT) . "." . str_pad($microsecond, 5, "0", STR_PAD_LEFT);
 
 			case self::MYSQL_TYPE_NULL:
 				$len = 0;
 				return null;
 
 			default:
-				throw new \UnexpectedValueException("Invalid type for Binary Protocol: 0x".dechex($type));
+				throw new \UnexpectedValueException("Invalid type for Binary Protocol: 0x" . dechex($type));
 		}
 	}
 
@@ -274,11 +272,11 @@ class DataTypes {
 		if ($int < 0xfb) {
 			return chr($int);
 		} elseif ($int < (1 << 16)) {
-			return "\xfc".self::encode_int16($int);
+			return "\xfc" . self::encode_int16($int);
 		} elseif ($int < (1 << 24)) {
-			return "\xfd".self::encode_int24($int);
+			return "\xfd" . self::encode_int24($int);
 		} elseif ($int < (1 << 62) * 4) {
-			return "\xfe".self::encode_int64($int);
+			return "\xfe" . self::encode_int64($int);
 		} else {
 			throw new \OutOfRangeException("encodeInt doesn't allow integers bigger than 2^64 - 1 (current: $int)");
 		}
