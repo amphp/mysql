@@ -129,4 +129,15 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 			$this->assertEquals($result->affectedRows, 1);
 		});
 	}
+
+	function testPreparedWithNegativeValue() {
+		\Amp\reactor(new NativeReactor());
+		\Amp\run(function() {
+			$db = new Connection("host=" . DB_HOST . ";user=" . DB_USER . ";pass=" . DB_PASS . ";db=connectiontest");
+			$db->connect();
+
+			$result = (yield $db->prepare("SELECT -1", []));
+			$this->assertEquals(yield $result->fetchRow(), [-1]);
+		});
+	}
 }

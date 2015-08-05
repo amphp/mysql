@@ -35,6 +35,10 @@ class DataTypes {
 	const MYSQL_TYPE_STRING = 0xfe;
 	const MYSQL_TYPE_GEOMETRY = 0xff;
 
+	/* force twos complement */
+	const INT8_NORMALIZE_SHIFT = PHP_INT_MAX >> 63 ? 56 : 24;
+	const INT32_NORMALIZE_SHIFT = PHP_INT_MAX >> 63 ? 32 : 0;
+
 	private static function isLittleEndian() {
 		static $result = null;
 		if ($result === null) {
@@ -87,8 +91,10 @@ class DataTypes {
 		return [$unsigned, $type, $value];
 	}
 
-	/** @see 24.7.3 Binary Protocol Value */
+	/** @see 14.7.3 Binary Protocol Value */
 	public static function decodeBinary($type, $str, &$len = 0) {
+		$unsigned = $type & 0x80;
+		$type &= 0x7f;
 		switch ($type) {
 			case self::MYSQL_TYPE_STRING:
 			case self::MYSQL_TYPE_VARCHAR:
@@ -109,16 +115,16 @@ class DataTypes {
 
 			case self::MYSQL_TYPE_LONGLONG:
 				$len = 8;
-				return self::decode_int64($str);
+				return $unsigned && ($str[3] & "\x80") ? self::decode_unsigned64($str) : self::decode_int64($str);
 
 			case self::MYSQL_TYPE_LONG:
 			case self::MYSQL_TYPE_INT24:
 				$len = 4;
-				return self::decode_int32($str);
+				return $unsigned && ($str[3] & "\x80") ? self::decode_unsigned32($str) : ((self::decode_int32($str) << self::INT32_NORMALIZE_SHIFT) >> self::INT32_NORMALIZE_SHIFT);
 
 			case self::MYSQL_TYPE_TINY:
 				$len = 1;
-				return ord($str);
+				return $unsigned ? ord($str) : ((ord($str) << self::INT8_NORMALIZE_SHIFT) >> self::INT8_NORMALIZE_SHIFT);
 
 			case self::MYSQL_TYPE_DOUBLE:
 				$len = 8;
@@ -232,9 +238,33 @@ class DataTypes {
 		return unpack("V", $str)[1];
 	}
 
+	public static function decode_unsigned32($str) {
+		if (PHP_INT_MAX >> 31) {
+			return unpack("V", $str)[1];
+		} else {
+			$int = unpack("v", $str)[1];
+			return $int[1] + ($int[2] * (1 << 16));
+		}
+	}
+
 	public static function decode_int64($str) {
-		$int = unpack("V2", $str);
-		return $int[1] + ($int[2] << 32);
+		if (PHP_INT_MAX >> 31) {
+			$int = unpack("V2", $str);
+			return $int[1] + ($int[2] << 32);
+		} else {
+			$int = unpack("v2V", $str);
+			return $int[1] + ($int[2] * (1 << 16)) + $int[3] * (1 << 16) * (1 << 16);
+		}
+	}
+
+	public static function decode_unsigned64($str) {
+		if (PHP_INT_MAX >> 31) {
+			$int = unpack("V2", $str);
+			return $int[1] + $int[2] * (1 << 32);
+		} else {
+			$int = unpack("v4", $str);
+			return $int[1] + ($int[2] * (1 << 16)) + ($int[3] + ($int[4] * (1 << 16))) * (1 << 16) * (1 << 16);
+		}
 	}
 
 	public static function encodeInt($int) {

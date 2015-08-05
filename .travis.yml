@@ -7,7 +7,6 @@ php:
 
 
 before_script:
-  - phpenv rehash
   - composer install
   - mysqld --version
   - echo '<?php $autoloader = require(__DIR__."/../vendor/autoload.php"); const DB_HOST = "localhost"; const DB_USER = "root"; const DB_PASS = "";' > test/phpunit_bootstrap.php
