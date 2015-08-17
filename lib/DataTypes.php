@@ -118,13 +118,13 @@ class DataTypes {
 			case self::MYSQL_TYPE_INT24:
 			case self::MYSQL_TYPE_INT24 | 0x80:
 				$len = 4;
-				$shift = PHP_INT_MAX >> 63 ? 32 : 0;
+				$shift = PHP_INT_MAX >> 31 ? 32 : 0;
 				return $unsigned && ($str[3] & "\x80") ? self::decode_unsigned32($str) : ((self::decode_int32($str) << $shift) >> $shift);
 
 			case self::MYSQL_TYPE_TINY:
 			case self::MYSQL_TYPE_TINY | 0x80:
 				$len = 1;
-				$shift = PHP_INT_MAX >> 63 ? 56 : 24;
+				$shift = PHP_INT_MAX >> 31 ? 56 : 24;
 				return $unsigned ? ord($str) : ((ord($str) << $shift) >> $shift);
 
 			case self::MYSQL_TYPE_DOUBLE:
