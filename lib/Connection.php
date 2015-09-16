@@ -1,10 +1,9 @@
 <?php
 
 namespace Amp\Mysql;
+
 use Amp\Deferred;
-use Amp\Reactor;
 use Amp\Success;
-use Nbsock\Connector;
 
 /* @TODO
  * 14.2.3 Auth switch request??
@@ -709,6 +708,7 @@ REGEX;
 		}
 
 		fetch_status_info: {
+			var_dump($off, $this->capabilities & self::CLIENT_SESSION_TRACK);
 			if ($this->capabilities & self::CLIENT_SESSION_TRACK) {
 				$this->connInfo->statusInfo = DataTypes::decodeString(substr($this->packet, $off), $intlen, $strlen);
 				$off += $intlen + $strlen;
@@ -1714,7 +1714,7 @@ REGEX;
 						if (isset($this->config->key)) {
 							$auth = $this->sha256Auth($this->config->pass, $this->authPluginData, $this->config->key);
 						} else {
-							$auth = "\x1";
+							$auth = "\x01";
 						}
 					}
 					break;
