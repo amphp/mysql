@@ -6,7 +6,7 @@ use Amp\NativeReactor;
 class PoolTest extends \PHPUnit_Framework_TestCase {
 	function testConnect() {
 		$complete = false;
-		\Amp\reactor(new NativeReactor());
+		\Amp\reactor(\Amp\driver());
 		\Amp\run(function() use (&$complete) {
 			$db = new Pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest");
 			yield $db->init(); // force waiting for connection
@@ -21,7 +21,7 @@ class PoolTest extends \PHPUnit_Framework_TestCase {
 	/** This should throw an exception as the password is incorrect. */
 	function testWrongPassword() {
 		$this->setExpectedException("Exception");
-		\Amp\reactor(new NativeReactor());
+		\Amp\reactor(\Amp\driver());
 		\Amp\run(function() {
 			$db = new Pool("host=".DB_HOST.";user=".DB_USER.";pass=the_wrong_password;db=connectiontest");
 
@@ -33,7 +33,7 @@ class PoolTest extends \PHPUnit_Framework_TestCase {
 	/* common test for all the Pool functions which are just a thin wrapper for the Connection class */
 	function testVirtualConnection() {
 		$complete = false;
-		\Amp\reactor(new NativeReactor());
+		\Amp\reactor(\Amp\driver());
 		\Amp\run(function() use (&$complete) {
 			$db = new Pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest");
 

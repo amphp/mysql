@@ -7,7 +7,7 @@ use Amp\NativeReactor;
 class ConnectionTest extends \PHPUnit_Framework_TestCase {
 	function testConnect() {
 		$complete = false;
-		\Amp\reactor(new NativeReactor());
+		\Amp\reactor(\Amp\driver());
 		\Amp\run(function() use (&$complete) {
 			$db = new Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest");
 			yield $db->connect();
@@ -22,7 +22,7 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 	}
 
 	function testQuery() {
-		\Amp\reactor(new NativeReactor());
+		\Amp\reactor(\Amp\driver());
 		\Amp\run(function() {
 			$db = new Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest");
 			$db->connect();
@@ -42,7 +42,7 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 	}
 
 	function testQueryFetchRow() {
-		\Amp\reactor(new NativeReactor());
+		\Amp\reactor(\Amp\driver());
 		\Amp\run(function () {
 			$db = new Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest");
 			$db->connect();
@@ -64,7 +64,7 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 	}
 
 	function testMultiStmt() {
-		\Amp\reactor(new NativeReactor());
+		\Amp\reactor(\Amp\driver());
 		\Amp\run(function() {
 			$db = new Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest");
 			$db->connect();
@@ -96,7 +96,7 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 	}
 
 	function testPrepared() {
-		\Amp\reactor(new NativeReactor());
+		\Amp\reactor(\Amp\driver());
 		\Amp\run(function() {
 			$db = new Connection("host=" . DB_HOST . ";user=" . DB_USER . ";pass=" . DB_PASS . ";db=connectiontest");
 			$db->connect();
@@ -131,12 +131,14 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 	}
 
 	function testPreparedWithNegativeValue() {
-		\Amp\reactor(new NativeReactor());
+		\Amp\reactor(\Amp\driver());
 		\Amp\run(function() {
 			$db = new Connection("host=" . DB_HOST . ";user=" . DB_USER . ";pass=" . DB_PASS . ";db=connectiontest");
 			$db->connect();
 
-			$result = (yield $db->prepare("SELECT -1", []));
+			$db->query("DROP TABLE tmp"); // just in case it would exist...
+			yield $db->prepare("CREATE TABLE tmp SELECT ? AS a", [-1]);
+			$result = (yield $db->prepare("SELECT a FROM tmp", []));
 			$this->assertEquals((yield $result->fetchRow()), [-1]);
 		});
 	}
