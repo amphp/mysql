@@ -10,11 +10,6 @@ use Amp\Success;
  * 14.2.4 COM_CHANGE_USER
  */
 
-class ParseState {
-	const START = 0;
-	const FETCH_PACKET = 1;
-}
-
 /** @see 14.1.3.4 Status Flags */
 class StatusFlags {
 	const SERVER_STATUS_IN_TRANS = 0x0001; // a transaction is active
@@ -45,21 +40,12 @@ class Connection {
 	private $outBuf;
 	private $outBuflen = 0;
 	private $uncompressedOut = "";
-	private $compressionBuf;
-	private $compressionBuflen = 0;
-	private $mysqlBuf;
-	private $mysqlBuflen = 0;
-	private $lastIn = true;
-	private $packet;
-	private $compressionSize;
-	private $uncompressedSize;
-	private $mysqlState = ParseState::START;
-	private $compressionState = ParseState::START;
+
+	private $processors = [];
+
 	private $protocol;
 	private $seqId = -1;
 	private $compressionId = -1;
-	private $packetSize;
-	private $packetType;
 	private $socket;
 	private $readGranularity = 8192;
 	private $readWatcher = null;
@@ -229,7 +215,9 @@ class Connection {
 	}
 
 	public function connect() {
-		$deferred = new Deferred;
+		\assert(!$this->deferreds && !$this->socket, self::class."::connect() should not be called twice");
+
+		$this->deferreds[] = $deferred = new Deferred;
 		\Amp\Socket\connect($this->config->resolvedHost)->when(function ($error, $socket) use ($deferred) {
 			if ($this->connectionState === self::CLOSED) {
 				$deferred->succeed(null);
@@ -247,17 +235,16 @@ class Connection {
 				return;
 			}
 
+			$this->processors = [$this->parseMysql()];
+
 			$this->socket = $socket;
 			$this->readWatcher = \Amp\onReadable($this->socket, [$this, "onInit"]);
-			$this->deferreds[] = $deferred;
 		});
 		return $deferred->promise();
 	}
 
 	public function onInit() {
 		// reset internal state
-		$this->compressionBuf = $this->mysqlBuf = "";
-		$this->compressionBuflen = $this->mysqlBuflen = 0;
 		$this->out = [];
 		$this->seqId = $this->compressionId = -1;
 
@@ -629,270 +616,163 @@ REGEX;
 	}
 
 	/** @see 14.1.3.2 ERR-Packet */
-	private function handleError() {
+	private function handleError($packet) {
 		$off = 1;
 
-		err_packet: {
-			$this->connInfo->errorCode = DataTypes::decode_int16(substr($this->packet, $off, 2));
-			$off += 2;
-			if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
-				// goto get_err_state;
-			} else {
-				goto fetch_err_msg;
-			}
-		}
+		$this->connInfo->errorCode = DataTypes::decode_int16(substr($packet, $off, 2));
+		$off += 2;
 
-		get_err_state: {
-			$this->connInfo->errorState = substr($this->packet, $off, 6);
-
+		if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
+			$this->connInfo->errorState = substr($packet, $off, 6);
 			$off += 6;
-			// goto fetch_err_msg;
 		}
 
-		fetch_err_msg: {
-			$this->connInfo->errorMsg = substr($this->packet, $off);
+		$this->connInfo->errorMsg = substr($packet, $off);
 
-			// goto finished;
-		}
-
-
-		finished: {
-			$this->parseCallback = null;
-			if ($this->connectionState == self::READY) {
-				// normal error
-				if ($this->config->exceptions) {
-					$this->getDeferred()->fail(new QueryException("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}", $this->query));
-				} else {
-					$this->getDeferred()->succeed(false);
-				}
-				$this->query = null;
-				$this->ready();
-			} elseif ($this->connectionState < self::READY) {
-				// connection failure
-				$this->closeSocket();
-				$this->getDeferred()->fail(new InitializationException("Could not connect to {$this->config->resolvedHost}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
+		$this->parseCallback = null;
+		if ($this->connectionState == self::READY) {
+			// normal error
+			if ($this->config->exceptions) {
+				$this->getDeferred()->fail(new QueryException("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}", $this->query));
+			} else {
+				$this->getDeferred()->succeed(false);
 			}
+			$this->query = null;
+			$this->ready();
+		} elseif ($this->connectionState < self::READY) {
+			// connection failure
+			$this->closeSocket();
+			$this->getDeferred()->fail(new InitializationException("Could not connect to {$this->config->resolvedHost}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
 		}
 	}
 
 	/** @see 14.1.3.1 OK-Packet */
-	private function parseOk() {
+	private function parseOk($packet) {
 		$off = 1;
 
-		ok_packet: {
-			$this->connInfo->affectedRows = DataTypes::decodeInt(substr($this->packet, $off), $intlen);
-			$off += $intlen;
-			// goto get_last_insert_id;
-		}
+		$this->connInfo->affectedRows = DataTypes::decodeInt(substr($packet, $off), $intlen);
+		$off += $intlen;
 
-		get_last_insert_id: {
-			$this->connInfo->insertId = DataTypes::decodeInt(substr($this->packet, $off), $intlen);
-			$off += $intlen;
-			if ($this->capabilities & (self::CLIENT_PROTOCOL_41 | self::CLIENT_TRANSACTIONS)) {
-				// goto get_status_flags;
-			} else {
-				goto fetch_status_info;
-			}
-		}
+		$this->connInfo->insertId = DataTypes::decodeInt(substr($packet, $off), $intlen);
+		$off += $intlen;
 
-		get_status_flags: {
-			$this->connInfo->statusFlags = DataTypes::decode_int16(substr($this->packet, $off));
+		if ($this->capabilities & (self::CLIENT_PROTOCOL_41 | self::CLIENT_TRANSACTIONS)) {
+			$this->connInfo->statusFlags = DataTypes::decode_int16(substr($packet, $off));
 			$off += 2;
-			// goto get_warning_count;
-		}
 
-		get_warning_count: {
-			$this->connInfo->warnings = DataTypes::decode_int16(substr($this->packet, $off));
+			$this->connInfo->warnings = DataTypes::decode_int16(substr($packet, $off));
 			$off += 2;
-			// goto fetch_status_info;
 		}
 
-		fetch_status_info: {
-			var_dump($off, $this->capabilities & self::CLIENT_SESSION_TRACK);
-			if ($this->capabilities & self::CLIENT_SESSION_TRACK) {
-				$this->connInfo->statusInfo = DataTypes::decodeString(substr($this->packet, $off), $intlen, $strlen);
-				$off += $intlen + $strlen;
-				if ($this->connInfo->statusFlags & StatusFlags::SERVER_SESSION_STATE_CHANGED) {
-					goto fetch_state_changes;
+		if ($this->capabilities & self::CLIENT_SESSION_TRACK) {
+			$this->connInfo->statusInfo = DataTypes::decodeString(substr($packet, $off), $intlen, $strlen);
+			$off += $intlen + $strlen;
+
+			if ($this->connInfo->statusFlags & StatusFlags::SERVER_SESSION_STATE_CHANGED) {
+				$sessionState = DataTypes::decodeString(substr($packet, $off), $intlen, $sessionStateLen);
+				$len = 0;
+				while ($len < $sessionStateLen) {
+					$data = DataTypes::decodeString(substr($sessionState, $len + 1), $datalen);
+
+					switch ($type = DataTypes::decode_int8(substr($sessionState, $len))) {
+						case SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES:
+							$this->connInfo->sessionState[SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES][DataTypes::decodeString($data, $intlen, $strlen)] = DataTypes::decodeString(substr($data, $intlen + $strlen));
+							break;
+						case SessionStateTypes::SESSION_TRACK_SCHEMA:
+							$this->connInfo->sessionState[SessionStateTypes::SESSION_TRACK_SCHEMA] = DataTypes::decodeString($data);
+							break;
+						case SessionStateTypes::SESSION_TRACK_STATE_CHANGE:
+							$this->connInfo->sessionState[SessionStateTypes::SESSION_TRACK_STATE_CHANGE] = DataTypes::decodeString($data);
+							break;
+						default:
+							throw new \UnexpectedValueException("$type is not a valid mysql session state type");
+					}
+
+					$len += 1 + $datalen;
 				}
-			} else {
-				$this->connInfo->statusInfo = substr($this->packet, $off);
 			}
-			goto finished;
-		}
-
-		fetch_state_changes: {
-			$sessionState = DataTypes::decodeString(substr($this->packet, $off), $intlen, $sessionStateLen);
-			$len = 0;
-			while ($len < $sessionStateLen) {
-				$data = DataTypes::decodeString(substr($sessionState, $len + 1), $datalen);
-
-				switch ($type = DataTypes::decode_int8(substr($sessionState, $len))) {
-					case SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES:
-						$this->connInfo->sessionState[SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES][DataTypes::decodeString($data, $intlen, $strlen)] = DataTypes::decodeString(substr($data, $intlen + $strlen));
-						break;
-					case SessionStateTypes::SESSION_TRACK_SCHEMA:
-						$this->connInfo->sessionState[SessionStateTypes::SESSION_TRACK_SCHEMA] = DataTypes::decodeString($data);
-						break;
-					case SessionStateTypes::SESSION_TRACK_STATE_CHANGE:
-						$this->connInfo->sessionState[SessionStateTypes::SESSION_TRACK_STATE_CHANGE] = DataTypes::decodeString($data);
-						break;
-					default:
-						throw new \UnexpectedValueException("$type is not a valid mysql session state type");
-				}
-
-				$len += 1 + $datalen;
-			}
-
-			// goto finished;
-		}
-
-		finished: {
-			return;
+		} else {
+			$this->connInfo->statusInfo = substr($packet, $off);
 		}
 	}
 
-	private function handleOk() {
-		$this->parseOk();
+	private function handleOk($packet) {
+		$this->parseOk($packet);
 		$this->getDeferred()->succeed($this->getConnInfo());
 		$this->ready();
 	}
 
 	/** @see 14.1.3.3 EOF-Packet */
-	private function parseEof() {
-		$off = 1;
+	private function parseEof($packet) {
+		if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
+			$this->connInfo->warnings = DataTypes::decode_int16(substr($packet, 1));
 
-		eof_packet: {
-			if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
-				$this->connInfo->warnings = DataTypes::decode_int16(substr($this->packet, $off));
-				$off += 2;
-				// goto get_eof_status_flags;
-			} else {
-				goto finished;
-			}
-		}
-
-		get_eof_status_flags: {
-			$this->connInfo->statusFlags = DataTypes::decode_int16(substr($this->packet, $off));
-			// goto finished;
-		}
-
-		finished: {
-			return;
+			$this->connInfo->statusFlags = DataTypes::decode_int16(substr($packet, 3));
 		}
 	}
 
-	private function handleEof() {
-		$this->parseEof();
+	private function handleEof($packet) {
+		$this->parseEof($packet);
 		$this->getDeferred()->succeed($this->getConnInfo());
 		$this->ready();
 	}
 
 	/** @see 14.2.5 Connection Phase Packets */
-	private function handleHandshake() {
+	private function handleHandshake($packet) {
 		$off = 1;
 
-		handshake_packet: {
-			$this->protocol = $this->packetType;
-			if ($this->protocol !== 0x0a) {
-				throw new \UnexpectedValueException("Unsupported protocol version ".ord($this->packet)." (Expected: 10)");
-			}
-			// goto fetch_server_version;
+		$this->protocol = ord($packet);
+		if ($this->protocol !== 0x0a) {
+			throw new \UnexpectedValueException("Unsupported protocol version ".ord($packet)." (Expected: 10)");
 		}
 
-		fetch_server_version: {
-			$this->connInfo->serverVersion = DataTypes::decodeNullString(substr($this->packet, $off), $len);
-			$off += $len + 1;
-			// goto get_connection_id;
-		}
+		$this->connInfo->serverVersion = DataTypes::decodeNullString(substr($packet, $off), $len);
+		$off += $len + 1;
 
-		get_connection_id: {
-			$this->connectionId = DataTypes::decode_int32(substr($this->packet, $off));
-			$off += 4;
-			goto read_auth_plugin_data1;
-		}
+		$this->connectionId = DataTypes::decode_int32(substr($packet, $off));
+		$off += 4;
 
-		read_auth_plugin_data1: {
-			$this->authPluginData = substr($this->packet, $off, 8);
-			$off += 8;
-			// goto filler;
-		}
+		$this->authPluginData = substr($packet, $off, 8);
+		$off += 8;
 
-		filler: {
+		$off += 1; // filler byte
+
+		$this->serverCapabilities = DataTypes::decode_int16(substr($packet, $off));
+		$off += 2;
+
+		if (\strlen($packet) > $off) {
+			$this->connInfo->charset = ord(substr($packet, $off));
 			$off += 1;
-			// goto read_capability_flags1;
-		}
 
-		read_capability_flags1: {
-			$this->serverCapabilities = DataTypes::decode_int16(substr($this->packet, $off));
+			$this->connInfo->statusFlags = DataTypes::decode_int16(substr($packet, $off));
 			$off += 2;
-			if ($this->packetSize > $off) {
-				// goto charset;
-			} else {
-				goto do_handshake;
-			}
-		}
 
-		charset: {
-			$this->connInfo->charset = ord(substr($this->packet, $off));
+			$this->serverCapabilities += DataTypes::decode_int16(substr($packet, $off)) << 16;
+			$off += 2;
+
+			$this->authPluginDataLen = $this->serverCapabilities & self::CLIENT_PLUGIN_AUTH ? ord(substr($packet, $off)) : 0;
 			$off += 1;
-			// goto handshake_status_flags;
-		}
 
-		handshake_status_flags: {
-			$this->connInfo->statusFlags = DataTypes::decode_int16(substr($this->packet, $off));
-			$off += 2;
-			// goto read_capability_flags2;
-		}
-
-		read_capability_flags2: {
-			$this->serverCapabilities += DataTypes::decode_int16(substr($this->packet, $off)) << 16;
-			$off += 2;
-			// goto get_plugin_auth_data;
-		}
-
-		get_plugin_auth_data: {
-			$this->authPluginDataLen = $this->serverCapabilities & self::CLIENT_PLUGIN_AUTH ? ord(substr($this->packet, $off)) : 0;
-			$off += 1;
 			if ($this->serverCapabilities & self::CLIENT_SECURE_CONNECTION) {
-				// goto skip_reserved;
-			} else {
-				goto do_handshake;
+				$off += 10;
+
+				$strlen = max(13, $this->authPluginDataLen - 8);
+				$this->authPluginData .= substr($packet, $off, $strlen);
+				$off += $strlen;
+
+				if ($this->serverCapabilities & self::CLIENT_PLUGIN_AUTH) {
+					$this->authPluginName = DataTypes::decodeNullString(substr($packet, $off));
+				}
 			}
 		}
 
-		skip_reserved: {
-			$off += 10;
-			goto read_plugin_auth_data2;
-		}
-
-		read_plugin_auth_data2: {
-			$strlen = max(13, $this->authPluginDataLen - 8);
-			$this->authPluginData .= substr($this->packet, $off, $strlen);
-			$off += $strlen;
-			if ($this->serverCapabilities & self::CLIENT_PLUGIN_AUTH) {
-				// goto fetch_auth_plugin_name;
-			} else {
-				goto do_handshake;
-			}
-		}
-
-		fetch_auth_plugin_name: {
-			$this->authPluginName = DataTypes::decodeNullString(substr($this->packet, $off));
-			// goto do_handshake;
-		}
-
-		do_handshake: {
-			$this->sendHandshake();
-			$this->mysqlState = ParseState::START;
-			return NULL;
-		}
+		$this->sendHandshake();
 	}
 
 	/** @see 14.6.4.1.2 LOCAL INFILE Request */
-	private function handleLocalInfileRequest() {
+	private function handleLocalInfileRequest($packet) {
 		// @TODO async file fetch @rdlowrey
-		$file = file_get_contents($this->packet);
+		$file = file_get_contents($packet);
 		if ($file != "") {
 			$this->sendPacket($file);
 		}
@@ -900,81 +780,81 @@ REGEX;
 	}
 
 	/** @see 14.6.4.1.1 Text Resultset */
-	private function handleQuery() {
+	private function handleQuery($packet) {
 		$this->parseCallback = [$this, "handleTextColumnDefinition"];
 		$this->getDeferred()->succeed(new ResultSet($this->connInfo, $result = new ResultProxy));
 		/* we need to succeed before assigning vars, so that a when() handler won't have a partial result available */
 		$this->result = $result;
-		$this->result->setColumns(ord($this->packet));
+		$this->result->setColumns(ord($packet));
 	}
 
 	/** @see 14.7.1 Binary Protocol Resultset */
-	private function handleExecute() {
+	private function handleExecute($packet) {
 		$this->parseCallback = [$this, "handleBinaryColumnDefinition"];
 		$this->getDeferred()->succeed(new ResultSet($this->connInfo, $result = new ResultProxy));
 		/* we need to succeed before assigning vars, so that a when() handler won't have a partial result available */
 		$this->result = $result;
-		$this->result->setColumns(ord($this->packet));
+		$this->result->setColumns(ord($packet));
 	}
 
-	private function handleFieldList() {
-		if (ord($this->packet) == self::ERR_PACKET) {
+	private function handleFieldList($packet) {
+		if (ord($packet) == self::ERR_PACKET) {
 			$this->parseCallback = null;
-			$this->handleError();
-		} elseif (ord($this->packet) == self::EOF_PACKET) {
+			$this->handleError($packet);
+		} elseif (ord($packet) == self::EOF_PACKET) {
 			$this->parseCallback = null;
-			$this->parseEof();
+			$this->parseEof($packet);
 			$this->getDeferred()->succeed(null);
 			$this->ready();
 		} else {
-			$this->getDeferred()->succeed([$this->parseColumnDefinition(), $this->deferreds[] = new Deferred]);
+			$this->getDeferred()->succeed([$this->parseColumnDefinition($packet), $this->deferreds[] = new Deferred]);
 		}
 	}
 
-	private function handleTextColumnDefinition() {
-		$this->handleColumnDefinition("handleTextResultsetRow");
+	private function handleTextColumnDefinition($packet) {
+		$this->handleColumnDefinition($packet, "handleTextResultsetRow");
 	}
 
-	private function handleBinaryColumnDefinition() {
-		$this->handleColumnDefinition("handleBinaryResultsetRow");
+	private function handleBinaryColumnDefinition($packet) {
+		$this->handleColumnDefinition($packet, "handleBinaryResultsetRow");
 	}
 
-	private function handleColumnDefinition($cbMethod) {
+	private function handleColumnDefinition($packet, $cbMethod) {
 		if (!$this->result->columnsToFetch--) {
 			$this->result->updateState(ResultProxy::COLUMNS_FETCHED);
-			if (ord($this->packet) == self::ERR_PACKET) {
+			if (ord($packet) == self::ERR_PACKET) {
 				$this->parseCallback = null;
-				$this->handleError();
+				$this->handleError($packet);
 			} else {
 				$cb = $this->parseCallback = [$this, $cbMethod];
 				if ($this->capabilities & self::CLIENT_DEPRECATE_EOF) {
-					$cb();
+					$cb($packet);
 				} else {
-					$this->parseEof();
+					$this->parseEof($packet);
 					// we don't need the EOF packet, skip!
 				}
 			}
 			return;
 		}
 
-		$this->result->columns[] = $this->parseColumnDefinition();
+		$this->result->columns[] = $this->parseColumnDefinition($packet);
 	}
 
-	private function prepareParams() {
+	private function prepareParams($packet) {
 		if (!$this->result->columnsToFetch--) {
 			$this->result->columnsToFetch = $this->result->columnCount;
 			if (!$this->result->columnsToFetch) {
-				$this->prepareFields();
+				$this->prepareFields($packet);
 			} else {
 				$this->parseCallback = [$this, "prepareFields"];
 			}
 			return;
 		}
 
-		$this->result->params[] = $this->parseColumnDefinition();
+		$this->result->params[] = $this->parseColumnDefinition($packet);
 	}
 
-	private function prepareFields() {
+	private function prepareFields($packet) {
 		if (!$this->result->columnsToFetch--) {
 			$this->parseCallback = null;
 			$this->result->updateState(ResultProxy::COLUMNS_FETCHED);
@@ -984,142 +864,89 @@ REGEX;
 			return;
 		}
 
-		$this->result->columns[] = $this->parseColumnDefinition();
+		$this->result->columns[] = $this->parseColumnDefinition($packet);
 	}
 
 	/** @see 14.6.4.1.1.2 Column Defintion */
-	private function parseColumnDefinition() {
+	private function parseColumnDefinition($packet) {
 		$off = 0;
 
 		$column = [];
 
 		if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
-			get_catalog: {
-				$column["catalog"] = DataTypes::decodeString(substr($this->packet, $off), $intlen, $len);
-				$off += $intlen + $len;
-				// goto get_schema;
-			}
+			$column["catalog"] = DataTypes::decodeString(substr($packet, $off), $intlen, $len);
+			$off += $intlen + $len;
 
-			get_schema: {
-				$column["schema"] = DataTypes::decodeString(substr($this->packet, $off), $intlen, $len);
-				$off += $intlen + $len;
-				// goto get_table_41;
-			}
+			$column["schema"] = DataTypes::decodeString(substr($packet, $off), $intlen, $len);
+			$off += $intlen + $len;
 
-			get_table_41: {
-				$column["table"] = DataTypes::decodeString(substr($this->packet, $off), $intlen, $len);
-				$off += $intlen + $len;
-				// goto get_original_table;
-			}
+			$column["table"] = DataTypes::decodeString(substr($packet, $off), $intlen, $len);
+			$off += $intlen + $len;
 
-			get_original_table: {
-				$column["original_table"] = DataTypes::decodeString(substr($this->packet, $off), $intlen, $len);
-				$off += $intlen + $len;
-				// goto get_name_41;
-			}
+			$column["original_table"] = DataTypes::decodeString(substr($packet, $off), $intlen, $len);
+			$off += $intlen + $len;
 
-			get_name_41: {
-				$column["name"] = DataTypes::decodeString(substr($this->packet, $off), $intlen, $len);
-				$off += $intlen + $len;
-				// goto get_original_name;
-			}
+			$column["name"] = DataTypes::decodeString(substr($packet, $off), $intlen, $len);
+			$off += $intlen + $len;
 
-			get_original_name: {
-				$column["original_name"] = DataTypes::decodeString(substr($this->packet, $off), $intlen, $len);
-				$off += $intlen + $len;
-				// goto get_fixlen_len;
-			}
+			$column["original_name"] = DataTypes::decodeString(substr($packet, $off), $intlen, $len);
+			$off += $intlen + $len;
 
-			get_fixlen_len: {
-				$fixlen = DataTypes::decodeInt(substr($this->packet, $off), $len);
-				$off += $len;
-				// goto get_fixlen;
-			}
+			$fixlen = DataTypes::decodeInt(substr($packet, $off), $len);
+			$off += $len;
 
-			get_fixlen: {
-				$len = 0;
-				$column["charset"] = DataTypes::decode_int16(substr($this->packet, $off + $len));
-				$len += 2;
-				$column["columnlen"] = DataTypes::decode_int32(substr($this->packet, $off + $len));
-				$len += 4;
-				$column["type"] = ord($this->packet[$off + $len]);
-				$len += 1;
-				$column["flags"] = DataTypes::decode_int16(substr($this->packet, $off + $len));
-				$len += 2;
-				$column["decimals"] = ord($this->packet[$off + $len]);
-				$len += 1;
+			$len = 0;
+			$column["charset"] = DataTypes::decode_int16(substr($packet, $off + $len));
+			$len += 2;
+			$column["columnlen"] = DataTypes::decode_int32(substr($packet, $off + $len));
+			$len += 4;
+			$column["type"] = ord($packet[$off + $len]);
+			$len += 1;
+			$column["flags"] = DataTypes::decode_int16(substr($packet, $off + $len));
+			$len += 2;
+			$column["decimals"] = ord($packet[$off + $len]);
+			//$len += 1;
 
-				$off += $fixlen;
-				// goto field_fetch;
-			}
+			$off += $fixlen;
 		} else {
-			get_table_320: {
-				$column["table"] = DataTypes::decodeString(substr($this->packet, $off), $intlen, $len);
-				$off += $intlen + $len;
-				// goto get_name_320;
-			}
+			$column["table"] = DataTypes::decodeString(substr($packet, $off), $intlen, $len);
+			$off += $intlen + $len;
 
-			get_name_320: {
-				$column["name"] = DataTypes::decodeString(substr($this->packet, $off), $intlen, $len);
-				$off += $intlen + $len;
-				// goto get_columnlen_len;
-			}
+			$column["name"] = DataTypes::decodeString(substr($packet, $off), $intlen, $len);
+			$off += $intlen + $len;
 
-			get_columnlen_len: {
-				$collen = DataTypes::decodeInt(substr($this->packet, $off), $len);
-				$off += $len;
-				// goto get_columnlen;
-			}
+			$collen = DataTypes::decodeInt(substr($packet, $off), $len);
+			$off += $len;
 
-			get_columnlen: {
-				$column["columnlen"] = DataTypes::decode_intByLen(substr($this->packet, $off), $collen);
-				$off += $collen;
-				// goto type_len;
-			}
+			$column["columnlen"] = DataTypes::decode_intByLen(substr($packet, $off), $collen);
+			$off += $collen;
 
-			get_type_len: {
-				$typelen = DataTypes::decodeInt(substr($this->packet, $off), $len);
-				$off += $len;
-				// goto get_type;
-			}
+			$typelen = DataTypes::decodeInt(substr($packet, $off), $len);
+			$off += $len;
 
-			get_type: {
-				$column["type"] = DataTypes::decode_intByLen(substr($this->packet, $off), $typelen);
-				$off += $typelen;
-				// goto get_flaglen;
-			}
+			$column["type"] = DataTypes::decode_intByLen(substr($packet, $off), $typelen);
+			$off += $typelen;
 
-			get_flaglen: {
+			$len = 1;
+			$flaglen = $this->capabilities & self::CLIENT_LONG_FLAG ? DataTypes::decodeInt(substr($packet, $off), $len) : ord($packet[$off]);
+			$off += $len;
+
+			if ($flaglen > 2) {
+				$len = 2;
+				$column["flags"] = DataTypes::decode_int16(substr($packet, $off));
+			} else {
 				$len = 1;
-				$flaglen = $this->capabilities & self::CLIENT_LONG_FLAG ? DataTypes::decodeInt(substr($this->packet, $off), $len) : ord($this->packet[$off]);
-				$off += $len;
-				// goto get_flags;
+				$column["flags"] = ord($packet[$off]);
 			}
-
-			get_flags: {
-				if ($flaglen > 2) {
-					$len = 2;
-					$column["flags"] = DataTypes::decode_int16(substr($this->packet, $off));
-				} else {
-					$len = 1;
-					$column["flags"] = ord($this->packet[$off]);
-				}
-				$column["decimals"] = ord($this->packet[$off + $len]);
-				$off += $flaglen;
-				// goto field_fetch;
-			}
+			$column["decimals"] = ord($packet[$off + $len]);
+			$off += $flaglen;
 		}
 
-		field_fetch: {
-			if ($off < $this->packetSize) {
-				$column["defaults"] = DataTypes::decodeString(substr($this->packet, $off));
-			}
-			// goto finished;
+		if ($off < \strlen($packet)) {
+			$column["defaults"] = DataTypes::decodeString(substr($packet, $off));
 		}
 
-		finished: {
-			return $column;
-		}
+		return $column;
 	}
 
 	private function successfulResultsetFetch() {
@@ -1128,28 +955,26 @@ REGEX;
 			$this->parseCallback = [$this, "handleQuery"];
 			$this->deferreds[] = $deferred ?: $deferred = new Deferred;
 		} else {
-			if ($deferred) {
-				$deferred->succeed(null);
-			} else {
-				$deferred = new Success(null);
+			if (!$deferred) {
+				$deferred = new Deferred;
 			}
+			$deferred->succeed();
 			$this->parseCallback = null;
 		}
 		$this->query = null;
 		$this->ready();
 		$this->result->updateState(ResultProxy::ROWS_FETCHED);
-
 	}
 
 	/** @see 14.6.4.1.1.3 Resultset Row */
-	private function handleTextResultsetRow() {
-		switch ($type = ord($this->packet)) {
+	private function handleTextResultsetRow($packet) {
+		switch ($type = ord($packet)) {
 			case self::OK_PACKET:
-				$this->parseOk();
-				/* intentional fall through */
+				$this->parseOk($packet);
+				/* intentional fallthrough */
 			case self::EOF_PACKET:
 				if ($type == self::EOF_PACKET) {
-					$this->parseEof();
+					$this->parseEof($packet);
 				}
 				$this->successfulResultsetFetch();
 				return;
@@ -1158,12 +983,12 @@ REGEX;
 		$off = 0;
 
 		$fields = [];
-		while ($off < $this->packetSize) {
-			if (ord($this->packet[$off]) == 0xfb) {
+		while ($off < \strlen($packet)) {
+			if (ord($packet[$off]) == 0xfb) {
 				$fields[] = null;
 				$off += 1;
 			} else {
-				$fields[] = DataTypes::decodeString(substr($this->packet, $off), $intlen, $len);
+				$fields[] = DataTypes::decodeString(substr($packet, $off), $intlen, $len);
 				$off += $intlen + $len;
 			}
 		}
@@ -1171,9 +996,9 @@ REGEX;
 	}
 
 	/** @see 14.7.2 Binary Protocol Resultset Row */
-	private function handleBinaryResultsetRow() {
-		if (ord($this->packet) == self::EOF_PACKET) {
-			$this->parseEof();
+	private function handleBinaryResultsetRow($packet) {
+		if (ord($packet) == self::EOF_PACKET) {
+			$this->parseEof($packet);
 			$this->successfulResultsetFetch();
 			return;
 		}
@@ -1185,15 +1010,15 @@ REGEX;
 		$fields = [];
 
 		for ($i = 0; $i < $columnCount; $i++) {
-			if (ord($this->packet[$off + (($i + 2) >> 3)]) & (1 << (($i + 2) % 8))) {
+			if (ord($packet[$off + (($i + 2) >> 3)]) & (1 << (($i + 2) % 8))) {
 				$fields[$i] = null;
 			}
 		}
 		$off += ($columnCount + 9) >> 3;
 
-		for ($i = 0; $off < $this->packetSize; $i++) {
+		for ($i = 0; $off < \strlen($packet); $i++) {
 			while (array_key_exists($i, $fields)) $i++;
-			$fields[$i] = DataTypes::decodeBinary($columns[$i]["type"], substr($this->packet, $off), $len);
+			$fields[$i] = DataTypes::decodeBinary($columns[$i]["type"], substr($packet, $off), $len);
 			$off += $len;
 		}
 		ksort($fields);
@@ -1201,67 +1026,45 @@ REGEX;
 	}
 
 	/** @see 14.7.4.1 COM_STMT_PREPARE Response */
-	private function handlePrepare() {
-		switch (ord($this->packet)) {
+	private function handlePrepare($packet) {
+		switch (ord($packet)) {
 			case self::OK_PACKET:
 				break;
 			case self::ERR_PACKET:
-				$this->handleError();
+				$this->handleError($packet);
 				break;
 			default:
 				throw new \UnexpectedValueException("Unexpected value for first byte of COM_STMT_PREPARE Response");
 		}
 		$off = 1;
 
-		stmt_id: {
-			$stmtId = DataTypes::decode_int32(substr($this->packet, $off));
-			$off += 4;
+		$stmtId = DataTypes::decode_int32(substr($packet, $off));
+		$off += 4;
 
-			// goto get_columns;
-		}
+		$columns = DataTypes::decode_int16(substr($packet, $off));
+		$off += 2;
 
-		get_columns: {
-			$columns = DataTypes::decode_int16(substr($this->packet, $off));
-			$off += 2;
+		$params = DataTypes::decode_int16(substr($packet, $off));
+		$off += 2;
 
-			// gotoo get_params;
-		}
+		$off += 1; // filler
 
-		get_params: {
-			$params = DataTypes::decode_int16(substr($this->packet, $off));
-			$off += 2;
+		$this->connInfo->warnings = DataTypes::decode_int16(substr($packet, $off));
 
-			// goto skip_filler;
-		}
-
-		skip_filler: {
-			$off += 1;
-
-			// goto warning_count;
-		}
-
-		warning_count: {
-			$this->connInfo->warnings = DataTypes::decode_int16(substr($this->packet, $off));
-
-			// goto finish;
-		}
-
-		finish: {
-			$this->result = new ResultProxy;
-			$this->result->columnsToFetch = $params;
-			$this->result->columnCount = $columns;
-			$this->getDeferred()->succeed(new Stmt($this, $this->query, $stmtId, $this->named, $this->result));
-			$this->named = [];
-			if ($params) {
-				$this->parseCallback = [$this, "prepareParams"];
-			} else {
-				$this->prepareParams();
-			}
+		$this->result = new ResultProxy;
+		$this->result->columnsToFetch = $params;
+		$this->result->columnCount = $columns;
+		$this->getDeferred()->succeed(new Stmt($this, $this->query, $stmtId, $this->named, $this->result));
+		$this->named = [];
+		if ($params) {
+			$this->parseCallback = [$this, "prepareParams"];
+		} else {
+			$this->prepareParams($packet);
 		}
 	}
 
-	private function readStatistics() {
-		$this->getDeferred()->succeed($this->packet);
+	private function readStatistics($packet) {
+		$this->getDeferred()->succeed($packet);
 		$this->ready();
 		$this->parseCallback = null;
 	}
@@ -1344,10 +1147,8 @@ REGEX;
 
 	public function onWrite() {
 		if ($this->outBuflen == 0) {
-			$doCompress = ($this->capabilities & self::CLIENT_COMPRESS) && $this->connectionState >= self::READY;
-
 			$packet = $this->compilePacket();
-			if ($doCompress) {
+			if (($this->capabilities & self::CLIENT_COMPRESS) && $this->connectionState >= self::READY) {
 				$packet = $this->compressPacket($packet);
 			}
 
@@ -1375,11 +1176,14 @@ REGEX;
 	public function onRead() {
 		$bytes = @fread($this->socket, $this->readGranularity);
 		if ($bytes != "") {
-			if (($this->capabilities & self::CLIENT_COMPRESS) && $this->connectionState >= self::READY) {
-				$bytes = $this->parseCompression($bytes);
+			foreach ($this->processors as $processor) {
+				if ("" == $bytes = $processor->send($bytes)) {
+					return;
+				}
 			}
-			if ($bytes != "") {
-				$this->parseMysql($bytes);
+
+			foreach ($bytes as $packet) {
+				$this->parsePayload($packet);
 			}
 		} else {
 			$this->goneAway();
@@ -1406,68 +1210,36 @@ REGEX;
 	}
 
 	/** @see 14.4 Compression */
-	private function parseCompression($inBuf) {
-		$this->compressionBuf .= $inBuf;
-		$this->compressionBuflen += strlen($inBuf);
+	private function parseCompression() {
 		$inflated = "";
+		$buf = "";
 
-		start: {
-			switch ($this->compressionState) {
-				case ParseState::START:
-					goto determine_header;
-				case ParseState::FETCH_PACKET:
-					goto fetch_packet;
-				default:
-					throw new \Exception("{$this->compressionState} is not a valid ParseState constant");
-			}
-		}
-
-		determine_header: {
-			if ($this->compressionBuflen < 4) {
-				goto more_data_needed;
+		while (true) {
+			while (\strlen($buf) < 4) {
+				$buf .= (yield $inflated);
+				$inflated = "";
 			}
 
-			$this->compressionSize = DataTypes::decode_int24($this->compressionBuf);
+			$size = DataTypes::decode_int24($buf);
+			$this->compressionId = ord($buf[3]);
+			$uncompressed = DataTypes::decode_int24(substr($buf, 4, 3));
 
-			$this->compressionId = ord($this->compressionBuf[3]);
+			$buf = substr($buf, 7);
 
-			$this->uncompressedSize = DataTypes::decode_int24(substr($this->compressionBuf, 4, 3));
-
-			$this->compressionBuf = substr($this->compressionBuf, 7);
-			$this->compressionBuflen -= 7;
-			$this->compressionState = ParseState::FETCH_PACKET;
-
-			// goto fetch_packet;
-		}
-
-		fetch_packet: {
-			if ($this->compressionBuflen < $this->compressionSize) {
-				goto more_data_needed;
-			}
-
-			if ($this->compressionSize > 0) {
-				if ($this->uncompressedSize == 0) {
-					$inflated .= substr($this->compressionBuf, 0, $this->compressionSize);
-				} else {
-					$inflated .= zlib_decode(substr($this->compressionBuf, 0, $this->compressionSize), $this->uncompressedSize);
+			if ($size > 0) {
+				while (\strlen($buf) < $size) {
+					$buf .= (yield $inflated);
+					$inflated = "";
 				}
-				$this->compressionBuf = substr($this->compressionBuf, $this->compressionSize);
-				$this->compressionBuflen -= $this->compressionSize;
+
+				if ($uncompressed == 0) {
+					$inflated .= substr($buf, 0, $size);
+				} else {
+					$inflated .= zlib_decode(substr($buf, 0, $size), $uncompressed);
+				}
+
+				$buf = substr($buf, $size);
 			}
-
-			// goto finished;
-		}
-
-		finished: {
-			$this->compressionState = ParseState::START;
-			if ($this->compressionBuflen > 0) {
-				goto start;
-			}
-			return $inflated;
-		}
-
-		more_data_needed: {
-			return $inflated;
 		}
 	}
 
@@ -1475,149 +1247,114 @@ REGEX;
 	 * @see 14.1.2 MySQL Packet
 	 * @see 14.1.3 Generic Response Packets
 	 */
-	private function parseMysql($inBuf) {
-		$this->mysqlBuf .= $inBuf;
-		$this->mysqlBuflen += strlen($inBuf);
+	private function parseMysql() {
+		$buf = "";
+		$parsed = [];
 
-		start: {
-			switch ($this->mysqlState) {
-				case ParseState::START:
-					goto determine_header;
-				case ParseState::FETCH_PACKET:
-					goto fetch_packet;
-				default:
-					throw new \Exception("{$this->mysqlState} is not a valid ParseState constant");
-			}
-		}
+		while (true) {
+			$packet = "";
 
-		determine_header: {
-			if ($this->mysqlBuflen < 4) {
-				goto more_data_needed;
-			}
+			do {
+				while (\strlen($buf) < 4) {
+					$buf .= (yield $parsed);
+					$parsed = [];
+				}
 
-			$len = DataTypes::decode_int24($this->mysqlBuf);
+				$len = DataTypes::decode_int24($buf);
+				$this->seqId = ord($buf[3]);
+				$buf = substr($buf, 4);
 
-			if ($this->lastIn) {
-				$this->packet = "";
-				$this->packetSize = $len;
-			} else {
-				$this->packetSize += $len;
-			}
-			$this->lastIn = $len != 0xffffff;
+				while (\strlen($buf) < ($len & 0xffffff)) {
+					$buf .= (yield $parsed);
+					$parsed = [];
+				}
 
-			$this->seqId = ord($this->mysqlBuf[3]);
+				$lastIn = $len != 0xffffff;
+				if ($lastIn) {
+					$size = $len % 0xffffff;
+				} else {
+					$size = 0xffffff;
+				}
 
-			$this->mysqlBuf = substr($this->mysqlBuf, 4);
-			$this->mysqlBuflen -= 4;
-			$this->mysqlState = ParseState::FETCH_PACKET;
+				$packet .= substr($buf, 0, $size);
+				$buf = substr($buf, $size);
+			} while (!$lastIn);
 
-			// goto fetch_packet;
-		}
-
-		fetch_packet: {
-			if ($this->mysqlBuflen < ($this->packetSize & 0xffffff)) {
-				goto more_data_needed;
-			}
-
-			if ($this->lastIn) {
-				$size = $this->packetSize % 0xffffff;
-			} else {
-				$size = 0xffffff;
-			}
-
-			$this->packet .= substr($this->mysqlBuf, 0, $size);
-			$this->mysqlBuf = substr($this->mysqlBuf, $size);
-			$this->mysqlBuflen -= $size;
-
-			if (!$this->lastIn) {
-				$this->mysqlState = ParseState::START;
-				goto determine_header;
-			}
-
-			if ($this->packetSize > 0) {
+			if (\strlen($packet) > 0) {
 				if (defined("MYSQL_DEBUG")) {
 					fwrite(STDERR, "in: ");
-					$print = substr_replace(pack("V", $this->packetSize), chr($this->seqId), 3, 1);
+					$print = substr_replace(pack("V", \strlen($packet)), chr($this->seqId), 3, 1);
 					for ($i = 0; $i < 4; $i++)
 						fwrite(STDERR, dechex(ord($print[$i])) . " ");
-					for ($i = 0; $i < min(200, $this->packetSize); $i++)
-						fwrite(STDERR, dechex(ord($this->packet[$i])) . " ");
+					for ($i = 0; $i < min(200, \strlen($packet)); $i++)
+						fwrite(STDERR, dechex(ord($packet[$i])) . " ");
 					$r = range("\0", "\x1f");
 					unset($r[10], $r[9]);
-					fwrite(STDERR, "len: ".strlen($this->packet)." ");
+					fwrite(STDERR, "len: " . \strlen($packet) . " ");
 					ob_start();
-					var_dump(str_replace($r, ".", substr($this->packet, 0, 200)));
+					var_dump(str_replace($r, ".", substr($packet, 0, 200)));
 					fwrite(STDERR, ob_get_clean());
 				}
-				if ($this->parseCallback) {
-					$cb = $this->parseCallback;
-					$cb();
-					goto finished;
-				} else {
-					$this->packetType = ord($this->packet);
-					// goto payload;
+
+				$parsed[] = $packet;
+
+			}
+		}
+	}
+
+	private function parsePayload($packet) {
+		if ($this->parseCallback) {
+			$cb = $this->parseCallback;
+			$cb($packet);
+			return;
+		}
+
+		$cb = $this->packetCallback;
+		$this->packetCallback = null;
+		switch (ord($packet)) {
+			case self::OK_PACKET:
+				if (($this->capabilities & self::CLIENT_COMPRESS) && $this->connectionState < self::READY) {
+					$this->processors = array_merge([$this->parseCompression()], $this->processors);
 				}
-			}
-		}
-
-		payload: {
-			$cb = $this->packetCallback;
-			$this->packetCallback = null;
-			switch ($this->packetType) {
-				case self::OK_PACKET:
-					$this->connectionState = self::READY;
-					$this->handleOk();
+				$this->connectionState = self::READY;
+				$this->handleOk($packet);
+				break;
+			case self::LOCAL_INFILE_REQUEST:
+				$this->handleLocalInfileRequest($packet);
+				break;
+			case self::ERR_PACKET:
+				$this->handleError($packet);
+				break;
+			case self::EOF_PACKET:
+				if (\strlen($packet) < 6) {
+					$this->handleEof($packet);
 					break;
-				case self::LOCAL_INFILE_REQUEST:
-					$this->handleLocalInfileRequest();
+				}
+				/* intentionally missing break */
+			case self::EXTRA_AUTH_PACKET:
+				if ($this->connectionState === self::ESTABLISHED) {
+					/** @see 14.2.5 Connection Phase Packets (AuthMoreData) */
+					switch ($this->authPluginName) {
+						case "sha256_password":
+							$key = substr($packet, 1);
+							$this->config->key = $key;
+							$this->sendHandshake();
+							break;
+						default:
+							throw new \UnexpectedValueException("Unexpected EXTRA_AUTH_PACKET in authentication phase for method {$this->authPluginName}");
+					}
 					break;
-				case self::ERR_PACKET:
-					$this->handleError();
-					break;
-				case self::EOF_PACKET:
-					if ($this->packetSize < 6) {
-						$this->handleEof();
-						break;
-					}
-					/* intentionally missing break */
-				case self::EXTRA_AUTH_PACKET:
-					if ($this->connectionState === self::ESTABLISHED) {
-						/** @see 14.2.5 Connection Phase Packets (AuthMoreData) */
-						switch ($this->authPluginName) {
-							case "sha256_password":
-								$key = substr($this->packet, 1);
-								$this->config->key = $key;
-								$this->sendHandshake();
-								break;
-							default:
-								throw new \UnexpectedValueException("Unexpected EXTRA_AUTH_PACKET in authentication phase for method {$this->authPluginName}");
-						}
-						break;
-					}
-					/* intentionally missing break */
-				default:
-					if ($this->connectionState <= self::ESTABLISHED) {
-						$this->established();
-						$this->handleHandshake();
-					} elseif ($cb) {
-						$cb();
-					} else {
-						throw new \UnexpectedValueException("Unexpected packet type: {$this->packetType}");
-					}
-			}
-			goto finished;
-		}
-
-		finished: {
-			$this->mysqlState = ParseState::START;
-			if ($this->mysqlBuflen > 0) {
-				goto start;
-			}
-			return true;
-		}
-
-		more_data_needed: {
-			return NULL;
+				}
+				/* intentionally missing break */
+			default:
+				if ($this->connectionState <= self::ESTABLISHED) {
+					$this->established();
+					$this->handleHandshake($packet);
+				} elseif ($cb) {
+					$cb($packet);
+				} else {
+					throw new \UnexpectedValueException("Unexpected packet type: ".ord($packet));
+				}
 		}
 	}
 
@@ -1631,23 +1368,23 @@ REGEX;
 		return $auth;
 	}
 
-	private function authSwitchRequest() {
+	private function authSwitchRequest($packet) {
 		$this->parseCallback = null;
-		switch (ord($this->packet)) {
+		switch (ord($packet)) {
 			case self::EOF_PACKET:
-				if ($this->packetSize == 1) {
+				if (\strlen($packet) == 1) {
 					break;
 				}
-				$len = strpos($this->packet, "\0");
-				$pluginName = substr($this->packet, 0, $len); // @TODO mysql_native_pass only now...
-				$authPluginData = substr($this->packet, $len + 1);
+				$len = strpos($packet, "\0");
+				$pluginName = substr($packet, 0, $len); // @TODO mysql_native_pass only now...
+				$authPluginData = substr($packet, $len + 1);
 				$this->sendPacket($this->secureAuth($this->config->pass, $authPluginData));
 				break;
 			case self::ERR_PACKET:
-				$this->handleError();
+				$this->handleError($packet);
 				return;
 			default:
-				throw new \UnexpectedValueException("AuthSwitchRequest: Expecting 0xfe (or ERR_Packet), got 0x".dechex(ord($this->packet)));
+				throw new \UnexpectedValueException("AuthSwitchRequest: Expecting 0xfe (or ERR_Packet), got 0x".dechex(ord($packet)));
 		}
 	}
 
@@ -1674,7 +1411,7 @@ REGEX;
 
 		if (!$inSSL && ($this->capabilities & self::CLIENT_SSL)) {
 			$this->_sendPacket($payload);
-			\Amp\onWritable($this->socket, function ($reactor, $watcherId, $socket) {
+			\Amp\onWritable($this->socket, function ($watcherId, $socket) {
 				/* wait until main write watcher has written everything... */
 				if ($this->outBuflen > 0 || !empty($this->out)) {
 					return;
