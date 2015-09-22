@@ -608,8 +608,6 @@ REGEX;
 		// @TODO flags to use?
 		$this->capabilities |= self::CLIENT_SESSION_TRACK | self::CLIENT_TRANSACTIONS | self::CLIENT_PROTOCOL_41 | self::CLIENT_SECURE_CONNECTION | self::CLIENT_MULTI_RESULTS | self::CLIENT_PS_MULTI_RESULTS | self::CLIENT_MULTI_STATEMENTS | self::CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA;
 
-		$this->connectionState = self::ESTABLISHED;
-
 		if (extension_loaded("zlib")) {
 			$this->capabilities |= self::CLIENT_COMPRESS;
 		}
@@ -1303,36 +1301,23 @@ REGEX;
 	}
 
 	private function parsePayload($packet) {
-		if ($this->parseCallback) {
-			$cb = $this->parseCallback;
-			$cb($packet);
-			return;
-		}
-
-		$cb = $this->packetCallback;
-		$this->packetCallback = null;
-		switch (ord($packet)) {
-			case self::OK_PACKET:
-				if (($this->capabilities & self::CLIENT_COMPRESS) && $this->connectionState < self::READY) {
-					$this->processors = array_merge([$this->parseCompression()], $this->processors);
-				}
-				$this->connectionState = self::READY;
-				$this->handleOk($packet);
-				break;
-			case self::LOCAL_INFILE_REQUEST:
-				$this->handleLocalInfileRequest($packet);
-				break;
-			case self::ERR_PACKET:
-				$this->handleError($packet);
-				break;
-			case self::EOF_PACKET:
-				if (\strlen($packet) < 6) {
-					$this->handleEof($packet);
+		if ($this->connectionState === self::UNCONNECTED) {
+			$this->established();
+			$this->connectionState = self::ESTABLISHED;
+			$this->handleHandshake($packet);
+		} elseif ($this->connectionState === self::ESTABLISHED) {
+			switch (ord($packet)) {
+				case self::OK_PACKET:
+					if ($this->capabilities & self::CLIENT_COMPRESS) {
+						$this->processors = array_merge([$this->parseCompression()], $this->processors);
+					}
+					$this->connectionState = self::READY;
+					$this->handleOk($packet);
 					break;
-				}
-				/* intentionally missing break */
-			case self::EXTRA_AUTH_PACKET:
-				if ($this->connectionState === self::ESTABLISHED) {
+				case self::ERR_PACKET:
+					$this->handleError($packet);
+					break;
+				case self::EXTRA_AUTH_PACKET:
 					/** @see 14.2.5 Connection Phase Packets (AuthMoreData) */
 					switch ($this->authPluginName) {
 						case "sha256_password":
@@ -1344,17 +1329,39 @@ REGEX;
 							throw new \UnexpectedValueException("Unexpected EXTRA_AUTH_PACKET in authentication phase for method {$this->authPluginName}");
 					}
 					break;
-				}
+			}
+		} else {
+			if ($this->parseCallback) {
+				$cb = $this->parseCallback;
+				$cb($packet);
+				return;
+			}
+
+			$cb = $this->packetCallback;
+			$this->packetCallback = null;
+			switch (ord($packet)) {
+				case self::OK_PACKET:
+					$this->handleOk($packet);
+					break;
+				case self::LOCAL_INFILE_REQUEST:
+					$this->handleLocalInfileRequest($packet);
+					break;
+				case self::ERR_PACKET:
+					$this->handleError($packet);
+					break;
+				case self::EOF_PACKET:
+					if (\strlen($packet) < 6) {
+						$this->handleEof($packet);
+						break;
+					}
 				/* intentionally missing break */
-			default:
-				if ($this->connectionState <= self::ESTABLISHED) {
-					$this->established();
-					$this->handleHandshake($packet);
-				} elseif ($cb) {
-					$cb($packet);
-				} else {
-					throw new \UnexpectedValueException("Unexpected packet type: ".ord($packet));
-				}
+				default:
+					if ($cb) {
+						$cb($packet);
+					} else {
+						throw new \UnexpectedValueException("Unexpected packet type: " . ord($packet));
+					}
+			}
 		}
 	}
 
