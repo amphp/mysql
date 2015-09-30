@@ -562,6 +562,7 @@ REGEX;
 			$this->deferreds[] = $deferred;
 			$this->sendPacket($payload);
 			$this->packetCallback = [$this, "handleExecute"];
+			$this->enableRead();
 		});
 		return $deferred->promise(); // do not use $this->startCommand(), that might unexpectedly reset the seqId!
 	}
