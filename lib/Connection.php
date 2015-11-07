@@ -462,16 +462,13 @@ class Connection {
 		$promise = $this->startCommand(function() use ($query) {
 			$this->query = $query;
 			$regex = <<<'REGEX'
-("|'|`)((?:\\\\|\\\1|(?!\1).)*+)\1|(\?)|:([a-zA-Z_]+)
+(["'`])(?:\\(?:\\|\1)|(?!\1).)*+\1(*SKIP)(*F)|(\?)|:([a-zA-Z_]+)
 REGEX;
 
 			$index = 0;
 			$query = preg_replace_callback("~$regex~ms", function ($m) use (&$index) {
-				if (!isset($m[3])) {
-					return $m[1] . $m[2] . $m[1];
-				}
-				if ($m[3] !== "?") {
-					$this->named[$m[4]][] = $index;
+				if ($m[2] !== "?") {
+					$this->named[$m[3]][] = $index;
 				}
 				$index++;
 				return "?";
