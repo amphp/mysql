@@ -98,14 +98,14 @@ ResultSet also has `getFields` method which returns an array of arrays with colu
 Pool and Connection classes provides a `prepare()` command for prepared statement handling. Placeholders are `:NAME` or `?` (numeric index).<sup>†</sup>
 
 ```php
-$stmt = \Amp\wait($pool->prepare("SELECT * FROM table WHERE column = :value"));
-$resultSet = \Amp\wait($stmt->execute(["value" => "a value"]));
-$rows = \Amp\wait($resultSet->fetchAll());
+$stmt = yield $pool->prepare("SELECT * FROM table WHERE column = :value");
+$resultSet = yield $stmt->execute(["value" => "a value"]);
+$rows = yield $resultSet->fetchAll();
 ```
 Or short, to immediately execute the prepared statement:
 ```php
-$resultSet = \Amp\wait($pool->prepare("SELECT * FROM table WHERE column = ?", ["a value"]));
-$rows = \Amp\wait($resultSet->fetchAll());
+$resultSet = yield $pool->prepare("SELECT * FROM table WHERE column = ?", ["a value"]);
+$rows = yield $resultSet->fetchAll();
 ```
 
 **Note**: Stmt class also provides `getFields()` (returning Promise which will hold an array of arrays with column info), `bind($paramIdentifier, $value)` (binds a parameter, it's then not necessary to pass it in `execute()`) and `reset()` (to reset values bound via `bind()`) methods.
