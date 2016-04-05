@@ -668,7 +668,7 @@ REGEX;
 				$sessionState = DataTypes::decodeString(substr($packet, $off), $intlen, $sessionStateLen);
 				$len = 0;
 				while ($len < $sessionStateLen) {
-					$data = DataTypes::decodeString(substr($sessionState, $len + 1), $datalen);
+					$data = DataTypes::decodeString(substr($sessionState, $len + 1), $datalen, $intlen);
 
 					switch ($type = DataTypes::decode_int8(substr($sessionState, $len))) {
 						case SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES:
@@ -684,7 +684,7 @@ REGEX;
 							throw new \UnexpectedValueException("$type is not a valid mysql session state type");
 					}
 
-					$len += 1 + $datalen;
+					$len += 1 + $intlen + $datalen;
 				}
 			}
 		} else {
