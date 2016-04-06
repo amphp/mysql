@@ -1028,7 +1028,7 @@ REGEX;
 				break;
 			case self::ERR_PACKET:
 				$this->handleError($packet);
-				break;
+				return;
 			default:
 				throw new \UnexpectedValueException("Unexpected value for first byte of COM_STMT_PREPARE Response");
 		}
