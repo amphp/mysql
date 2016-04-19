@@ -105,19 +105,26 @@ class Stmt {
 	}
 
 	public function execute($data = []) {
-		if (count($data + $this->prebound) != $this->paramCount + count($this->named) - count($this->named, COUNT_RECURSIVE)) {
-			throw new \Exception("Required arguments for executing prepared statement mismatch");
-		}
-
 		$prebound = $args = [];
 		for ($unnamed = $i = 0; $i < $this->paramCount; $i++) {
 			if (isset($this->named[$i])) {
-				if (array_key_exists($this->named[$i], $data)) {
-					$args[$i] = $data[$this->named[$i]];
-				} elseif (!isset($this->prebound[$this->named[$i]])) {
-					throw new \Exception("Named parameter {$this->named[$i]} missing for executing prepared statement");
+				$name = $this->named[$i];
+				if (array_key_exists($name, $data) && $data[$name] !== []) {
+					if (\is_array($data[$name])) {
+						$args[$i] = reset($data[$name]);
+						unset($data[$name][key($data[$name])]);
+					} else {
+						$args[$i] = $data[$name];
+						unset($data[$name]);
+					}
+				} elseif (!isset($this->prebound[$name])) {
+					if ($data[$name] === []) {
+						throw new \Exception("Named parameter $name is not providing enough elements");
+					} else {
+						throw new \Exception("Named parameter $name missing for executing prepared statement");
+					}
 				} else {
-					$prebound[$i] = $this->prebound[$this->named[$i]];
+					$prebound[$i] = $this->prebound[$name];
 				}
 			} elseif (array_key_exists($unnamed, $data)) {
 				$args[$i] = $data[$unnamed];

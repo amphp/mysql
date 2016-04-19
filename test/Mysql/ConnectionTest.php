@@ -62,7 +62,7 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 			$this->assertEquals($got, [[1], [2], [3]]);
 		});
 	}
-
+	
 	function testMultiStmt() {
 		\Amp\reactor(\Amp\driver());
 		\Amp\run(function() {
@@ -102,7 +102,7 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 			$db->connect();
 
 			$db->query("CREATE TEMPORARY TABLE tmp SELECT 1 AS a, 2 AS b");
-			$db->query("INSERT INTO tmp VALUES (5, 6), (8, 9)");
+			$db->query("INSERT INTO tmp VALUES (5, 6), (8, 9), (10, 11), (12, 13)");
 
 			$stmt = (yield $db->prepare("SELECT * FROM tmp WHERE a = ? OR b = :num"));
 			$base = [
@@ -122,6 +122,9 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 
 			$result = (yield $db->prepare("SELECT * FROM tmp WHERE a = ? OR b = ?", [5, 8]));
 			$this->assertEquals((yield $result->rowCount()), 1);
+
+			$result = (yield $db->prepare("SELECT * FROM tmp WHERE a = :a OR b = ? OR a = :a", ["a" => [5, 10], 9]));
+			$this->assertEquals((yield $result->rowCount()), 3);
 
 			$stmt = (yield $db->prepare("INSERT INTO tmp VALUES (:foo, :bar)"));
 			$stmt->bind("foo", 5);
