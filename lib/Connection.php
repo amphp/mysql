@@ -661,8 +661,7 @@ REGEX;
 		}
 
 		if ($this->capabilities & self::CLIENT_SESSION_TRACK) {
-			$this->connInfo->statusInfo = DataTypes::decodeString(substr($packet, $off), $intlen, $strlen);
-			$off += $intlen + $strlen;
+			$this->connInfo->statusInfo = DataTypes::decodeStringOff($packet, $off);
 
 			if ($this->connInfo->statusFlags & StatusFlags::SERVER_SESSION_STATE_CHANGED) {
 				$sessionState = DataTypes::decodeString(substr($packet, $off), $intlen, $sessionStateLen);
@@ -870,26 +869,13 @@ REGEX;
 		$column = [];
 
 		if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
-			$column["catalog"] = DataTypes::decodeString(substr($packet, $off), $intlen, $len);
-			$off += $intlen + $len;
-
-			$column["schema"] = DataTypes::decodeString(substr($packet, $off), $intlen, $len);
-			$off += $intlen + $len;
-
-			$column["table"] = DataTypes::decodeString(substr($packet, $off), $intlen, $len);
-			$off += $intlen + $len;
-
-			$column["original_table"] = DataTypes::decodeString(substr($packet, $off), $intlen, $len);
-			$off += $intlen + $len;
-
-			$column["name"] = DataTypes::decodeString(substr($packet, $off), $intlen, $len);
-			$off += $intlen + $len;
-
-			$column["original_name"] = DataTypes::decodeString(substr($packet, $off), $intlen, $len);
-			$off += $intlen + $len;
-
-			$fixlen = DataTypes::decodeInt(substr($packet, $off), $len);
-			$off += $len;
+			$column["catalog"] = DataTypes::decodeStringOff($packet, $off);
+			$column["schema"] = DataTypes::decodeStringOff($packet, $off);
+			$column["table"] = DataTypes::decodeStringOff($packet, $off);
+			$column["original_table"] = DataTypes::decodeStringOff($packet, $off);
+			$column["name"] = DataTypes::decodeStringOff($packet, $off);
+			$column["original_name"] = DataTypes::decodeStringOff($packet, $off);
+			$fixlen = DataTypes::decodeIntOff($packet, $off);
 
 			$len = 0;
 			$column["charset"] = DataTypes::decode_int16(substr($packet, $off + $len));
@@ -905,31 +891,24 @@ REGEX;
 
 			$off += $fixlen;
 		} else {
-			$column["table"] = DataTypes::decodeString(substr($packet, $off), $intlen, $len);
-			$off += $intlen + $len;
+			$column["table"] = DataTypes::decodeStringOff($packet, $off);
+			$column["name"] = DataTypes::decodeStringOff($packet, $off);
 
-			$column["name"] = DataTypes::decodeString(substr($packet, $off), $intlen, $len);
-			$off += $intlen + $len;
-
-			$collen = DataTypes::decodeInt(substr($packet, $off), $len);
-			$off += $len;
-
+			$collen = DataTypes::decodeIntOff($packet, $off);
 			$column["columnlen"] = DataTypes::decode_intByLen(substr($packet, $off), $collen);
 			$off += $collen;
 
-			$typelen = DataTypes::decodeInt(substr($packet, $off), $len);
-			$off += $len;
-
+			$typelen = DataTypes::decodeIntOff($packet, $off);
 			$column["type"] = DataTypes::decode_intByLen(substr($packet, $off), $typelen);
 			$off += $typelen;
 
 			$len = 1;
-			$flaglen = $this->capabilities & self::CLIENT_LONG_FLAG ? DataTypes::decodeInt(substr($packet, $off), $len) : ord($packet[$off]);
+			$flaglen = $this->capabilities & self::CLIENT_LONG_FLAG ? DataTypes::decodeInt(substr($packet, $off, 9), $len) : ord($packet[$off]);
 			$off += $len;
 
 			if ($flaglen > 2) {
 				$len = 2;
-				$column["flags"] = DataTypes::decode_int16(substr($packet, $off));
+				$column["flags"] = DataTypes::decode_int16(substr($packet, $off, 4));
 			} else {
 				$len = 1;
 				$column["flags"] = ord($packet[$off]);
@@ -984,8 +963,7 @@ REGEX;
 				$fields[] = null;
 				$off += 1;
 			} else {
-				$fields[] = DataTypes::decodeString(substr($packet, $off), $intlen, $len);
-				$off += $intlen + $len;
+				$fields[] = DataTypes::decodeStringOff($packet, $off);
 			}
 		}
 		$this->result->rowFetched($fields);

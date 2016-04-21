@@ -190,6 +190,32 @@ class DataTypes {
 		return substr($str, 0, $len = strpos($str, "\0"));
 	}
 
+	public static function decodeStringOff($str, &$off) {
+		$len = self::decodeIntOff($str, $off);
+		$off += $len;
+		return substr($str, $off - $len, $len);
+	}
+
+	public static function decodeIntOff($str, &$off) {
+		$int = ord($str[$off]);
+		if ($int < 0xfb) {
+			$off += 1;
+			return $int;
+		} elseif ($int == 0xfc) {
+			$off += 3;
+			return self::decode_int16(substr($str, $off - 2, 2));
+		} elseif ($int == 0xfd) {
+			$off += 4;
+			return self::decode_int24(substr($str, $off - 3, 3));
+		} elseif ($int == 0xfe) {
+			$off += 9;
+			return self::decode_int64(substr($str, $off - 8, 8));
+		} else {
+			// If that happens connection is borked...
+			throw new \RangeException("$int is not in ranges [0x00, 0xfa] or [0xfc, 0xfe]");
+		}
+	}
+
 	public static function decodeString($str, &$intlen = 0, &$len = 0) {
 		$len = self::decodeInt($str, $intlen);
 		return substr($str, $intlen, $len);
