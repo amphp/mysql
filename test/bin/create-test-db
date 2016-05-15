@@ -1,0 +1,33 @@
+#!/usr/bin/env php
+<?php
+//this script will create a proper db env for running tests
+
+require_once __DIR__ . "/../../vendor/autoload.php";
+require_once __DIR__ . "/../functions.php";
+
+print "Using MYSQL_BASEDIR=" . MYSQL_BASEDIR . "\n";
+
+$datadir = __DIR__ . DIRECTORY_SEPARATOR . "..";
+$dbPath = implode(DIRECTORY_SEPARATOR, [__DIR__, "..", "mysql_db"]);
+
+if (!chdir($datadir)) {
+	print "Unable to cd into $datadir\n";
+	exit(-1);
+}
+
+if (file_exists($dbPath)) {
+	print "Test db dir $dbPath already exists, aborting\n";
+	exit(0);
+}
+
+if (!mkdir($dbPath)) {
+	print "Unable to create db directory $dbPath\n";
+	exit(-1);
+}
+
+execCommandOrDie(mysqlCmd("mysql_install_db", "--basedir=" . MYSQL_BASEDIR));
+
+startMySQLdOrDie();
+
+execCommandOrDie(mysqlCmd("mysql", "--user=root -e 'CREATE DATABASE IF NOT EXISTS connectiontest'"));
+?>
