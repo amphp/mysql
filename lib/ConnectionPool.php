@@ -13,17 +13,19 @@ class ConnectionPool {
 	private $limit;
 
 	public function __construct($config, $limit) {
-		$config->ready = function($conn) { $this->ready($conn); };
-		/* @TODO ... pending queries ... */
-		$config->restore = function($conn, $init) {
-			$this->unmapConnection($conn);
+		$config->ready = function($hash) {
+			$this->ready($hash);
+		};
+		/* @TODO ... pending queries ... (!!) */
+		$config->restore = function($hash, $init) {
+			$this->unmapConnection($hash);
 			if ($init && empty($this->connections)) {
 				$this->virtualConnection->fail(new \Exception("Connection failed"));
 			}
 			return $this->getReadyConnection();
 		};
-		$config->busy = function($conn) {
-			if (isset($this->readyMap[$hash = spl_object_hash($conn)])) {
+		$config->busy = function($hash) {
+			if (isset($this->readyMap[$hash])) {
 				unset($this->ready[$this->readyMap[$hash]]);
 			}
 		};
@@ -51,7 +53,7 @@ class ConnectionPool {
 			$this->connectionPromise = $conn->connect();
 			$this->connectionPromise->when(function ($error) use ($conn) {
 				if ($error) {
-					$this->unmapConnection($conn);
+					$this->unmapConnection(spl_object_hash($conn));
 					if (empty($this->connections)) {
 						$this->virtualConnection->fail($error);
 					}
@@ -89,13 +91,14 @@ class ConnectionPool {
 		}
 	}
 
-	private function ready($conn) {
+	private function ready($hash) {
+		$conn = $this->connections[$this->connectionMap[$hash]];
 		if (list($deferred, $method, $args) = $this->virtualConnection->getCall()) {
 			$deferred->succeed(call_user_func_array([$conn, $method], $args));
 		} else {
 			$this->ready[] = $conn;
 			end($this->ready);
-			$this->readyMap[spl_object_hash($conn)] = key($this->ready);
+			$this->readyMap[$hash] = key($this->ready);
 			reset($this->ready);
 		}
 	}
@@ -123,13 +126,12 @@ class ConnectionPool {
 
 	public function extractConnection() {
 		return $this->getReadyConnection()->getThis()->when(function($e, $conn) {
-			$this->unmapConnection($conn);
+			$this->unmapConnection(spl_object_hash($conn));
 		});
 	}
 
 	/* This method might be called multiple times with the same hash. Important is that it's unmapped immediately */
-	private function unmapConnection($conn) {
-		$hash = spl_object_hash($conn);
+	private function unmapConnection($hash) {
 		if (isset($this->connectionMap[$hash])) {
 			unset($this->connections[$this->connectionMap[$hash]], $this->connectionMap[$hash]);
 		}
@@ -142,7 +144,7 @@ class ConnectionPool {
 	public function close() {
 		foreach ($this->connections as $conn) {
 			$conn->forceClose();
-			$this->unmapConnection($conn);
+			$this->unmapConnection(spl_object_hash($conn));
 		}
 		$this->ready = [];
 		$this->readyMap = [];

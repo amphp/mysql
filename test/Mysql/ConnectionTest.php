@@ -76,7 +76,7 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 			$db->query("CREATE TABLE tmp SELECT 1 AS a, 2 AS b");
 			$db->query("INSERT INTO tmp VALUES (5, 6), (8, 9)");
 
-			$resultset = (yield $db->query("SELECT a FROM tmp; SELECT b FROM tmp WHERE a = 5; SELECT b AS d, SUM(a) AS c FROM tmp WHERE b < 7"));
+			$resultset = (yield $db->query("SELECT a FROM tmp; SELECT b FROM tmp WHERE a = 5; SELECT b AS d, a + 1 AS c FROM tmp WHERE b < 7"));
 			$this->assertEquals((yield $resultset->rowCount()), 3);
 
 			$resultset = (yield $resultset->next());
@@ -89,7 +89,7 @@ class ConnectionTest extends \PHPUnit_Framework_TestCase {
 			$this->assertEquals($fields[0]["name"], "d");
 			$this->assertEquals($fields[0]["type"], DataTypes::MYSQL_TYPE_LONG);
 			$this->assertEquals($fields[1]["name"], "c");
-			$this->assertEquals($fields[1]["type"], DataTypes::MYSQL_TYPE_NEWDECIMAL);
+			$this->assertEquals($fields[1]["type"], DataTypes::MYSQL_TYPE_LONGLONG);
 
 			yield $db->query("DROP DATABASE alt");
 		});

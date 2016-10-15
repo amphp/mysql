@@ -18,7 +18,7 @@ class Stmt {
 
 	private $result;
 
-	public function __construct(Connection $conn, $query, $stmtId, $named, ResultProxy $result) {
+	public function __construct(Processor $conn, $query, $stmtId, $named, ResultProxy $result) {
 		$this->conn = $conn;
 		$this->query = $query;
 		$this->stmtId = $stmtId;
@@ -37,7 +37,7 @@ class Stmt {
 		if ($this->conn->alive()) {
 			return $this->conn;
 		}
-		$restore = $this->conn->getConfig()->restore;
+		$restore = $this->conn->restore;
 		if (isset($restore)) {
 			$restore()->prepare($this->query)->when(function($error, $stmt) {
 				if ($error) {
@@ -140,7 +140,7 @@ class Stmt {
 	}
 
 	public function close() {
-		if (isset($this->conn) && $this->conn instanceof Connection) { // might be already dtored
+		if (isset($this->conn)) { // might be already dtored
 			$this->conn->closeStmt($this->stmtId);
 		}
 	}
@@ -172,6 +172,9 @@ class Stmt {
 
 	public function __destruct() {
 		$this->close();
+		if (isset($this->conn)) {
+			$this->conn->delRef();
+		}
 	}
 
 	public function __debugInfo() {
