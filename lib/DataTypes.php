@@ -24,6 +24,7 @@ class DataTypes {
 	const MYSQL_TYPE_TIMESTAMP2 = 0x11;
 	const MYSQL_TYPE_DATETIME2 = 0x12;
 	const MYSQL_TYPE_TIME2 = 0x13;
+	const MYSQL_TYPE_JSON = 0xf5;
 	const MYSQL_TYPE_NEWDECIMAL = 0xf6;
 	const MYSQL_TYPE_ENUM = 0xf7;
 	const MYSQL_TYPE_SET = 0xf8;
@@ -102,6 +103,7 @@ class DataTypes {
 			case self::MYSQL_TYPE_TINY_BLOB:
 			case self::MYSQL_TYPE_GEOMETRY:
 			case self::MYSQL_TYPE_BIT:
+			case self::MYSQL_TYPE_JSON:
 			case self::MYSQL_TYPE_DECIMAL:
 			case self::MYSQL_TYPE_NEWDECIMAL:
 				$ret = self::decodeString($str, $intlen, $len);
