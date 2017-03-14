@@ -422,31 +422,36 @@ class Processor {
 		}
 
 		if ($this->capabilities & self::CLIENT_SESSION_TRACK) {
-			$this->connInfo->statusInfo = DataTypes::decodeStringOff($packet, $off);
+			// Even though it seems required according to 14.1.3.1, there is no length encoded string, i.e. no trailing NULL byte ....???
+			if (\strlen($packet) > 7) {
+				$this->connInfo->statusInfo = DataTypes::decodeStringOff($packet, $off);
 
-			if ($this->connInfo->statusFlags & StatusFlags::SERVER_SESSION_STATE_CHANGED) {
-				$sessionState = DataTypes::decodeString(substr($packet, $off), $intlen, $sessionStateLen);
-				$len = 0;
-				while ($len < $sessionStateLen) {
-					$data = DataTypes::decodeString(substr($sessionState, $len + 1), $datalen, $intlen);
+				if ($this->connInfo->statusFlags & StatusFlags::SERVER_SESSION_STATE_CHANGED) {
+					$sessionState = DataTypes::decodeString(substr($packet, $off), $intlen, $sessionStateLen);
+					$len = 0;
+					while ($len < $sessionStateLen) {
+						$data = DataTypes::decodeString(substr($sessionState, $len + 1), $datalen, $intlen);
 
-					switch ($type = DataTypes::decode_int8(substr($sessionState, $len))) {
-						case SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES:
-							$var = DataTypes::decodeString($data, $varintlen, $strlen);
-							$this->connInfo->sessionState[SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES][$var] = DataTypes::decodeString(substr($data, $varintlen + $strlen));
-							break;
-						case SessionStateTypes::SESSION_TRACK_SCHEMA:
-							$this->connInfo->sessionState[SessionStateTypes::SESSION_TRACK_SCHEMA] = DataTypes::decodeString($data);
-							break;
-						case SessionStateTypes::SESSION_TRACK_STATE_CHANGE:
-							$this->connInfo->sessionState[SessionStateTypes::SESSION_TRACK_STATE_CHANGE] = DataTypes::decodeString($data);
-							break;
-						default:
-							throw new \UnexpectedValueException("$type is not a valid mysql session state type");
+						switch ($type = DataTypes::decode_int8(substr($sessionState, $len))) {
+							case SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES:
+								$var = DataTypes::decodeString($data, $varintlen, $strlen);
+								$this->connInfo->sessionState[SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES][$var] = DataTypes::decodeString(substr($data, $varintlen + $strlen));
+								break;
+							case SessionStateTypes::SESSION_TRACK_SCHEMA:
+								$this->connInfo->sessionState[SessionStateTypes::SESSION_TRACK_SCHEMA] = DataTypes::decodeString($data);
+								break;
+							case SessionStateTypes::SESSION_TRACK_STATE_CHANGE:
+								$this->connInfo->sessionState[SessionStateTypes::SESSION_TRACK_STATE_CHANGE] = DataTypes::decodeString($data);
+								break;
+							default:
+								throw new \UnexpectedValueException("$type is not a valid mysql session state type");
+						}
+
+						$len += 1 + $intlen + $datalen;
 					}
-
-					$len += 1 + $intlen + $datalen;
 				}
+			} else {
+				$this->connInfo->statusInfo = "";
 			}
 		} else {
 			$this->connInfo->statusInfo = substr($packet, $off);
@@ -944,7 +949,7 @@ class Processor {
 		}
 		$this->closeSocket();
 		if (null !== $cb = $this->config->restore) {
-			$cb($this, $this->connectionState < self::READY);
+			$cb(spl_object_hash($this), $this->connectionState < self::READY);
 			/* @TODO if packet not completely sent, resend? */
 		}
 	}
