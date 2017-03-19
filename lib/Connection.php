@@ -192,7 +192,7 @@ class Connection {
 				return;
 			}
 			if ($array === null) {
-				$deferred->succeed($columns);
+				$deferred->resolve($columns);
 				return;
 			}
 			list($columns[], $promise) = $array;
@@ -341,7 +341,7 @@ REGEX;
 			if ($error) {
 				$retDeferred->fail($error);
 			} else {
-				$retDeferred->succeed($stmt->execute($data));
+				$retDeferred->resolve($stmt->execute($data));
 			}
 		});
 

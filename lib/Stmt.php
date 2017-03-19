@@ -61,7 +61,7 @@ class Stmt {
 							if ($error) {
 								$deferred->fail($error);
 							} else {
-								$deferred->succeed($result);
+								$deferred->resolve($result);
 							}
 						});
 					}

@@ -6,7 +6,7 @@
 
 require './example_bootstrap.php';
 
-\Amp\run(function() {
+\Amp\Loop::run(function() {
 	/* If you want ssl, pass as second argument an array with ssl options (an empty options array is valid too); if null is passed, ssl is not enabled either */
 
 	$db = new \Amp\Mysql\Pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME);

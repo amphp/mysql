@@ -7,5 +7,5 @@ function genTable(\Amp\Mysql\Pool $db) {
 	foreach (range(1, 5) as $num) {
 		$promises[] = $db->query("INSERT INTO tmp (a, b) VALUES ($num, $num * 2)");
 	}
-	yield \Amp\all($promises);
+	yield \Amp\Promise\all($promises);
 }

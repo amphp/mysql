@@ -152,7 +152,7 @@ class Processor {
 		$this->deferreds[] = $deferred = new Deferred;
 		\Amp\Socket\connect($this->config->resolvedHost)->when(function ($error, $socket) use ($deferred) {
 			if ($this->connectionState === self::CLOSED) {
-				$deferred->succeed(null);
+				$deferred->resolve(null);
 				if ($socket) {
 					fclose($socket);
 				}
@@ -170,8 +170,9 @@ class Processor {
 			$this->processors = [$this->parseMysql()];
 
 			$this->socket = $socket;
-			$this->readWatcher = \Amp\onReadable($this->socket, [$this, "onInit"]);
+			$this->readWatcher = \Amp\Loop::onReadable($this->socket, [$this, "onInit"]);
 		});
+
 		return $deferred->promise();
 	}
 
@@ -180,9 +181,9 @@ class Processor {
 		$this->out = [];
 		$this->seqId = $this->compressionId = -1;
 
-		\Amp\cancel($this->readWatcher);
-		$this->readWatcher = \Amp\onReadable($this->socket, [$this, "onRead"]);
-		$this->writeWatcher = \Amp\onWritable($this->socket, [$this, "onWrite"]);
+		\Amp\Loop::cancel($this->readWatcher);
+		$this->readWatcher = \Amp\Loop::onReadable($this->socket, [$this, "onRead"]);
+		$this->writeWatcher = \Amp\Loop::onWritable($this->socket, [$this, "onWrite"]);
 		$this->onRead();
 	}
 
@@ -392,7 +393,7 @@ class Processor {
 			if ($this->config->exceptions) {
 				$this->getDeferred()->fail(new QueryException("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}", $this->query));
 			} else {
-				$this->getDeferred()->succeed(false);
+				$this->getDeferred()->resolve(false);
 			}
 			$this->query = null;
 			$this->ready();
@@ -460,7 +461,7 @@ class Processor {
 
 	private function handleOk($packet) {
 		$this->parseOk($packet);
-		$this->getDeferred()->succeed($this->getConnInfo());
+		$this->getDeferred()->resolve($this->getConnInfo());
 		$this->ready();
 	}
 
@@ -475,7 +476,7 @@ class Processor {
 
 	private function handleEof($packet) {
 		$this->parseEof($packet);
-		$this->getDeferred()->succeed($this->getConnInfo());
+		$this->getDeferred()->resolve($this->getConnInfo());
 		$this->ready();
 	}
 
@@ -544,7 +545,7 @@ class Processor {
 	/** @see 14.6.4.1.1 Text Resultset */
 	private function handleQuery($packet) {
 		$this->parseCallback = [$this, "handleTextColumnDefinition"];
-		$this->getDeferred()->succeed(new ResultSet($this->connInfo, $result = new ResultProxy));
+		$this->getDeferred()->resolve(new ResultSet($this->connInfo, $result = new ResultProxy));
 		/* we need to succeed before assigning vars, so that a when() handler won't have a partial result available */
 		$this->result = $result;
 		$this->result->setColumns(DataTypes::decodeInt($packet));
@@ -553,7 +554,7 @@ class Processor {
 	/** @see 14.7.1 Binary Protocol Resultset */
 	private function handleExecute($packet) {
 		$this->parseCallback = [$this, "handleBinaryColumnDefinition"];
-		$this->getDeferred()->succeed(new ResultSet($this->connInfo, $result = new ResultProxy));
+		$this->getDeferred()->resolve(new ResultSet($this->connInfo, $result = new ResultProxy));
 		/* we need to succeed before assigning vars, so that a when() handler won't have a partial result available */
 		$this->result = $result;
 		$this->result->setColumns(ord($packet));
@@ -566,10 +567,10 @@ class Processor {
 		} elseif (ord($packet) == self::EOF_PACKET) {
 			$this->parseCallback = null;
 			$this->parseEof($packet);
-			$this->getDeferred()->succeed(null);
+			$this->getDeferred()->resolve(null);
 			$this->ready();
 		} else {
-			$this->getDeferred()->succeed([$this->parseColumnDefinition($packet), $this->deferreds[] = new Deferred]);
+			$this->getDeferred()->resolve([$this->parseColumnDefinition($packet), $this->deferreds[] = new Deferred]);
 		}
 	}
 
@@ -700,7 +701,7 @@ class Processor {
 			if (!$deferred) {
 				$deferred = new Deferred;
 			}
-			$deferred->succeed();
+			$deferred->resolve();
 		}
 		$this->parseCallback = null;
 		$this->query = null;
@@ -796,7 +797,7 @@ class Processor {
 		$this->result->columnsToFetch = $params;
 		$this->result->columnCount = $columns;
 		$this->refcount++;
-		$this->getDeferred()->succeed(new Stmt($this, $this->query, $stmtId, $this->named, $this->result));
+		$this->getDeferred()->resolve(new Stmt($this, $this->query, $stmtId, $this->named, $this->result));
 		$this->named = [];
 		if ($params) {
 			$this->parseCallback = [$this, "prepareParams"];
@@ -806,7 +807,7 @@ class Processor {
 	}
 
 	private function readStatistics($packet) {
-		$this->getDeferred()->succeed($packet);
+		$this->getDeferred()->resolve($packet);
 		$this->ready();
 		$this->parseCallback = null;
 	}
@@ -816,8 +817,8 @@ class Processor {
 	}
 
 	public function closeSocket() {
-		\Amp\cancel($this->readWatcher);
-		\Amp\cancel($this->writeWatcher);
+		\Amp\Loop::cancel($this->readWatcher);
+		\Amp\Loop::cancel($this->writeWatcher);
 		@fclose($this->socket);
 		$this->connectionState = self::CLOSED;
 	}
@@ -902,7 +903,7 @@ class Processor {
 			$this->outBuflen = strlen($packet);
 
 			if ($this->outBuflen == 0) {
-				\Amp\disable($this->writeWatcher);
+				\Amp\Loop::disable($this->writeWatcher);
 				return;
 			}
 		}
@@ -944,7 +945,7 @@ class Processor {
 					$deferred->fail(new QueryException("Connection went away... unable to fulfil this deferred ... It's unknown whether the query was executed...", $this->query));
 				}
 			} else {
-				$deferred->succeed(false);
+				$deferred->resolve(false);
 			}
 		}
 		$this->closeSocket();
@@ -1165,14 +1166,14 @@ class Processor {
 
 		if (!$inSSL && ($this->capabilities & self::CLIENT_SSL)) {
 			$this->_sendPacket($payload);
-			\Amp\onWritable($this->socket, function ($watcherId, $socket) {
+			\Amp\Loop::onWritable($this->socket, function ($watcherId, $socket) {
 				/* wait until main write watcher has written everything... */
 				if ($this->outBuflen > 0 || !empty($this->out)) {
 					return;
 				}
 
-				\Amp\cancel($watcherId);
-				\Amp\disable($this->readWatcher); // temporarily disable, reenable after establishing tls
+				\Amp\Loop::cancel($watcherId);
+				\Amp\Loop::disable($this->readWatcher); // temporarily disable, reenable after establishing tls
 				\Amp\Socket\cryptoEnable($socket, $this->config->ssl + ['peer_name' => $this->config->host])->when(function ($error) {
 					if ($error) {
 						$this->getDeferred()->fail($error);
@@ -1180,7 +1181,7 @@ class Processor {
 						return;
 					}
 
-					\Amp\enable($this->readWatcher);
+					\Amp\Loop::enable($this->readWatcher);
 					$this->sendHandshake(true);
 				});
 			});
@@ -1250,6 +1251,6 @@ class Processor {
 
 	private function _sendPacket($payload) {
 		$this->out[] = $payload;
-		\Amp\enable($this->writeWatcher);
+		\Amp\Loop::enable($this->writeWatcher);
 	}
 }

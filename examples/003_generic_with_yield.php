@@ -2,7 +2,7 @@
 
 require './example_bootstrap.php';
 
-\Amp\run(function() {
+\Amp\Loop::run(function() {
 	$db = new \Amp\Mysql\Pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME);
 
 	/* Create table and insert a few rows */
@@ -15,7 +15,7 @@ require './example_bootstrap.php';
 	}
 
 	/* wait until everything is inserted (in case where we wouldn't have to wait, we also could just  */
-	yield \Amp\all($promises);
+	yield \Amp\Promise\all($promises);
 
 	print "Insertion successful (if it wasn't, an exception would have been thrown by now)\n";
 

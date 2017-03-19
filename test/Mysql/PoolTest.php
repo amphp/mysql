@@ -1,13 +1,11 @@
 <?php
 
 use Amp\Mysql\Pool;
-use Amp\NativeReactor;
 
 class PoolTest extends \PHPUnit_Framework_TestCase {
 	function testConnect() {
 		$complete = false;
-		\Amp\reactor(\Amp\driver());
-		\Amp\run(function() use (&$complete) {
+		\Amp\Loop::run(function() use (&$complete) {
 			$db = new Pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest");
 			yield $db->init(); // force waiting for connection
 			/* use an alternative charset... Default is utf8mb4_general_ci */
@@ -21,8 +19,7 @@ class PoolTest extends \PHPUnit_Framework_TestCase {
 	/** This should throw an exception as the password is incorrect. */
 	function testWrongPassword() {
 		$this->setExpectedException("Exception");
-		\Amp\reactor(\Amp\driver());
-		\Amp\run(function() {
+		\Amp\Loop::run(function() {
 			$db = new Pool("host=".DB_HOST.";user=".DB_USER.";pass=the_wrong_password;db=connectiontest");
 
 			/* Try a query */
@@ -33,8 +30,7 @@ class PoolTest extends \PHPUnit_Framework_TestCase {
 	/* common test for all the Pool functions which are just a thin wrapper for the Connection class */
 	function testVirtualConnection() {
 		$complete = false;
-		\Amp\reactor(\Amp\driver());
-		\Amp\run(function() use (&$complete) {
+		\Amp\Loop::run(function() use (&$complete) {
 			$db = new Pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest");
 
 			/* Multiple queries one after the other must be hold back and dispatched to new connections */
@@ -42,7 +38,7 @@ class PoolTest extends \PHPUnit_Framework_TestCase {
 				$pings[] = $db->ping();
 			}
 
-			yield \Amp\all($pings);
+			yield \Amp\Promise\all($pings);
 			$complete = true;
 		});
 		$this->assertEquals(true, $complete, "Database commands did not complete.");

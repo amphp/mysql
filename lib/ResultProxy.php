@@ -33,7 +33,7 @@ class ResultProxy {
 			return;
 		}
 		foreach ($this->deferreds[$state] as list($deferred, $rows, $cb)) {
-			$deferred->succeed($cb ? $cb($rows) : $rows);
+			$deferred->resolve($cb ? $cb($rows) : $rows);
 		}
 		$this->deferreds[$state] = [];
 	}
@@ -45,7 +45,7 @@ class ResultProxy {
 		list($key, list($entry, , $cb)) = each($this->deferreds[ResultProxy::SINGLE_ROW_FETCH]);
 		if ($key !== null) {
 			unset($this->deferreds[ResultProxy::SINGLE_ROW_FETCH][$key]);
-			$entry->succeed($cb && $row ? $cb($row) : $row);
+			$entry->resolve($cb && $row ? $cb($row) : $row);
 		}
 	}
 
