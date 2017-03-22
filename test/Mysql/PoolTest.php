@@ -19,7 +19,7 @@ class PoolTest extends TestCase {
 
 	/** This should throw an exception as the password is incorrect. */
 	function testWrongPassword() {
-		$this->setExpectedException("Exception");
+		$this->expectException("Exception");
 		\Amp\Loop::run(function() {
 			$db = new Pool("host=".DB_HOST.";user=".DB_USER.";pass=the_wrong_password;db=connectiontest");
 

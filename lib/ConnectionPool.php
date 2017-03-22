@@ -51,7 +51,7 @@ class ConnectionPool {
 			end($this->connections);
 			$this->connectionMap[spl_object_hash($conn)] = key($this->connections);
 			$this->connectionPromise = $conn->connect();
-			$this->connectionPromise->when(function ($error) use ($conn) {
+			$this->connectionPromise->onResolve(function ($error) use ($conn) {
 				if ($error) {
 					$this->unmapConnection(spl_object_hash($conn));
 					if (empty($this->connections)) {
@@ -125,7 +125,7 @@ class ConnectionPool {
 	}
 
 	public function extractConnection() {
-		return $this->getReadyConnection()->getThis()->when(function($e, $conn) {
+		return $this->getReadyConnection()->getThis()->onResolve(function($e, $conn) {
 			$this->unmapConnection(spl_object_hash($conn));
 		});
 	}
