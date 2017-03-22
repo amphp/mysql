@@ -1,8 +1,9 @@
 <?php
 
 use Amp\Mysql\Pool;
+use PHPUnit\Framework\TestCase;
 
-class PoolTest extends \PHPUnit_Framework_TestCase {
+class PoolTest extends TestCase {
 	function testConnect() {
 		$complete = false;
 		\Amp\Loop::run(function() use (&$complete) {
