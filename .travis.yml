@@ -1,18 +1,19 @@
 language: php
 
 php:
-  - nightly
   - 7.0
-  - 5.6
-  - 5.5
+  - 7.1
+  - nightly
 
-before_script:
+install:
   - composer install
   - mysqld --version
+
+before_script:
   - echo '<?php $autoloader = require(__DIR__."/../vendor/autoload.php"); const DB_HOST = "localhost"; const DB_USER = "root"; const DB_PASS = "";' > test/phpunit_bootstrap.php
   - mysql -u root -e "CREATE DATABASE connectiontest; CREATE TABLE connectiontest.main SELECT 1 AS a, 2 AS b; INSERT INTO connectiontest.main VALUES (5, 6);"
  
-script: $(php -r 'if (PHP_MAJOR_VERSION >= 7) echo "phpdbg -qrr"; else echo "php";') vendor/bin/phpunit -c phpunit.xml --coverage-text
+script: phpdbg -qrr vendor/bin/phpunit --coverage-text
 
 cache:
   directories:
