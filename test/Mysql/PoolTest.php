@@ -1,8 +1,9 @@
 <?php
 
 use Amp\Mysql\Pool;
+use PHPUnit\Framework\TestCase;
 
-class PoolTest extends \PHPUnit_Framework_TestCase {
+class PoolTest extends TestCase {
 	function testConnect() {
 		$complete = false;
 		\Amp\Loop::run(function() use (&$complete) {
@@ -18,7 +19,7 @@ class PoolTest extends \PHPUnit_Framework_TestCase {
 
 	/** This should throw an exception as the password is incorrect. */
 	function testWrongPassword() {
-		$this->setExpectedException("Exception");
+		$this->expectException("Exception");
 		\Amp\Loop::run(function() {
 			$db = new Pool("host=".DB_HOST.";user=".DB_USER.";pass=the_wrong_password;db=connectiontest");
 
