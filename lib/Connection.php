@@ -37,10 +37,10 @@ class Connection {
 				$cb($hash);
 			}
 		};
-		$restore = static function() use ($hash, $config) {
+		$restore = static function($init) use ($hash, $config) {
 			$cb = $config->restore;
 			if (isset($cb)) {
-				$cb($hash);
+				$cb($hash, $init);
 			}
 		};
 		$this->processor = new Processor($ready, $busy, $restore);
