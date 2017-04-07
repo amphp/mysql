@@ -39,7 +39,7 @@ class Stmt {
 		}
 		$restore = $this->conn->restore;
 		if (isset($restore)) {
-			$restore(true)->prepare($this->query)->when(function($error, $stmt) {
+			$restore(false)->prepare($this->query)->when(function($error, $stmt) {
 				if ($error) {
 					while (list(, $args) = $this->virtualConn->getCall()) {
 						end($args)->fail($error);
