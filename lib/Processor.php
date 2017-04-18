@@ -818,7 +818,9 @@ class Processor {
 	public function closeSocket() {
 		\Amp\cancel($this->readWatcher);
 		\Amp\cancel($this->writeWatcher);
-		@fclose($this->socket);
+		if (is_resource($this->socket)) {
+			@fclose($this->socket);
+		}
 		$this->connectionState = self::CLOSED;
 	}
 
