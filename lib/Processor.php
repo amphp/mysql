@@ -424,7 +424,7 @@ class Processor {
 
 		if ($this->capabilities & self::CLIENT_SESSION_TRACK) {
 			// Even though it seems required according to 14.1.3.1, there is no length encoded string, i.e. no trailing NULL byte ....???
-			if (\strlen($packet) > 7) {
+			if (\strlen($packet) > $off) {
 				$this->connInfo->statusInfo = DataTypes::decodeStringOff($packet, $off);
 
 				if ($this->connInfo->statusFlags & StatusFlags::SERVER_SESSION_STATE_CHANGED) {
@@ -949,8 +949,8 @@ class Processor {
 			}
 		}
 		$this->closeSocket();
-		if (null !== $cb = $this->config->restore) {
-			$cb(spl_object_hash($this), $this->connectionState < self::READY);
+		if (null !== $cb = $this->restore) {
+			$cb($this->connectionState < self::READY);
 			/* @TODO if packet not completely sent, resend? */
 		}
 	}
