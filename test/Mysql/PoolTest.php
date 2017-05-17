@@ -38,7 +38,7 @@ class PoolTest extends \PHPUnit_Framework_TestCase {
 				$pings[] = $db->ping();
 			}
 
-			yield \Amp\Promise\all($pings);
+			yield $pings;
 			$complete = true;
 		});
 		$this->assertEquals(true, $complete, "Database commands did not complete.");

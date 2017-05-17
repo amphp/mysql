@@ -150,7 +150,7 @@ class Connection {
 		return $processor->startCommand(static function() use ($processor) {
 			$processor->sendPacket("\x01");
 			$processor->initClosing();
-		})->when(static function() use ($processor) {
+		})->onResolve(static function() use ($processor) {
 			$processor->closeSocket();
 		});
 	}
@@ -196,9 +196,9 @@ class Connection {
 				return;
 			}
 			list($columns[], $promise) = $array;
-			$promise->when($when);
+			$promise->onResolve($when);
 		};
-		$this->listFields($table, $like)->when($when);
+		$this->listFields($table, $like)->onResolve($when);
 
 		return $deferred->promise();
 	}
@@ -337,7 +337,7 @@ REGEX;
 		}
 
 		$retDeferred = new Deferred;
-		$promise->when(static function($error, $stmt) use ($retDeferred, $data) {
+		$promise->onResolve(static function($error, $stmt) use ($retDeferred, $data) {
 			if ($error) {
 				$retDeferred->fail($error);
 			} else {

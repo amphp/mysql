@@ -39,7 +39,7 @@ class Stmt {
 		}
 		$restore = $this->conn->restore;
 		if (isset($restore)) {
-			$restore(false)->prepare($this->query)->when(function($error, $stmt) {
+			$restore(false)->prepare($this->query)->onResolve(function($error, $stmt) {
 				if ($error) {
 					while (list(, $args) = $this->virtualConn->getCall()) {
 						end($args)->fail($error);
@@ -57,7 +57,7 @@ class Stmt {
 						if ($method == "execute") {
 							$args[2] = &$this->result->params;
 						}
-						call_user_func_array([$this->conn(), $method], $args)->when(function($error, $result) use ($deferred) {
+						call_user_func_array([$this->conn(), $method], $args)->onResolve(function($error, $result) use ($deferred) {
 							if ($error) {
 								$deferred->fail($error);
 							} else {

@@ -42,28 +42,26 @@ class ConnectionPool {
 	}
 
 	public function addConnection() {
-		\Amp\Loop::defer(function() {
-			if (count($this->connections) >= $this->limit) {
+		if (count($this->connections) >= $this->limit) {
+			return;
+		}
+
+		$this->connections[] = $conn = new Connection($this->config);
+		end($this->connections);
+		$this->connectionMap[spl_object_hash($conn)] = key($this->connections);
+		$this->connectionPromise = $conn->connect();
+		$this->connectionPromise->onResolve(function ($error) use ($conn) {
+			if ($error) {
+				$this->unmapConnection(spl_object_hash($conn));
+				if (empty($this->connections)) {
+					$this->virtualConnection->fail($error);
+				}
 				return;
 			}
 
-			$this->connections[] = $conn = new Connection($this->config);
-			end($this->connections);
-			$this->connectionMap[spl_object_hash($conn)] = key($this->connections);
-			$this->connectionPromise = $conn->connect();
-			$this->connectionPromise->when(function ($error) use ($conn) {
-				if ($error) {
-					$this->unmapConnection(spl_object_hash($conn));
-					if (empty($this->connections)) {
-						$this->virtualConnection->fail($error);
-					}
-					return;
-				}
-
-				if ($this->config->charset != "utf8mb4" || ($this->config->collate != "" && $this->config->collate != "utf8mb4_general_ci")) {
-					$conn->setCharset($this->config->charset, $this->config->collate);
-				}
-			});
+			if ($this->config->charset != "utf8mb4" || ($this->config->collate != "" && $this->config->collate != "utf8mb4_general_ci")) {
+				$conn->setCharset($this->config->charset, $this->config->collate);
+			}
 		});
 	}
 
@@ -103,7 +101,7 @@ class ConnectionPool {
 		}
 	}
 
-	/** @return Connection */
+	/** @return Connection|VirtualConnection */
 	public function getReadyConnection() {
 		if ($this->limit < 0) {
 			$this->limit *= -1;
@@ -125,7 +123,7 @@ class ConnectionPool {
 	}
 
 	public function extractConnection() {
-		return $this->getReadyConnection()->getThis()->when(function($e, $conn) {
+		return $this->getReadyConnection()->getThis()->onResolve(function($e, $conn) {
 			$this->unmapConnection(spl_object_hash($conn));
 		});
 	}

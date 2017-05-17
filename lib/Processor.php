@@ -150,7 +150,7 @@ class Processor {
 		\assert(!$this->deferreds && !$this->socket, self::class."::connect() must not be called twice");
 
 		$this->deferreds[] = $deferred = new Deferred;
-		\Amp\Socket\connect($this->config->resolvedHost)->when(function ($error, $socket) use ($deferred) {
+		\Amp\Socket\rawConnect($this->config->resolvedHost)->onResolve(function ($error, $socket) use ($deferred) {
 			if ($this->connectionState === self::CLOSED) {
 				$deferred->resolve(null);
 				if ($socket) {
@@ -546,7 +546,7 @@ class Processor {
 	private function handleQuery($packet) {
 		$this->parseCallback = [$this, "handleTextColumnDefinition"];
 		$this->getDeferred()->resolve(new ResultSet($this->connInfo, $result = new ResultProxy));
-		/* we need to succeed before assigning vars, so that a when() handler won't have a partial result available */
+		/* we need to succeed before assigning vars, so that a onResolve() handler won't have a partial result available */
 		$this->result = $result;
 		$this->result->setColumns(DataTypes::decodeInt($packet));
 	}
@@ -555,7 +555,7 @@ class Processor {
 	private function handleExecute($packet) {
 		$this->parseCallback = [$this, "handleBinaryColumnDefinition"];
 		$this->getDeferred()->resolve(new ResultSet($this->connInfo, $result = new ResultProxy));
-		/* we need to succeed before assigning vars, so that a when() handler won't have a partial result available */
+		/* we need to succeed before assigning vars, so that a onResolve() handler won't have a partial result available */
 		$this->result = $result;
 		$this->result->setColumns(ord($packet));
 	}
@@ -817,9 +817,13 @@ class Processor {
 	}
 
 	public function closeSocket() {
-		\Amp\Loop::cancel($this->readWatcher);
-		\Amp\Loop::cancel($this->writeWatcher);
-		@fclose($this->socket);
+		if ($this->readWatcher) {
+			\Amp\Loop::cancel($this->readWatcher);
+		}
+		if ($this->writeWatcher) {
+			\Amp\Loop::cancel($this->writeWatcher);
+		}
+		@\fclose($this->socket);
 		$this->connectionState = self::CLOSED;
 	}
 
@@ -1174,7 +1178,7 @@ class Processor {
 
 				\Amp\Loop::cancel($watcherId);
 				\Amp\Loop::disable($this->readWatcher); // temporarily disable, reenable after establishing tls
-				\Amp\Socket\cryptoEnable($socket, $this->config->ssl + ['peer_name' => $this->config->host])->when(function ($error) {
+				\Amp\Socket\cryptoEnable($socket, $this->config->ssl + ['peer_name' => $this->config->host])->onResolve(function ($error) {
 					if ($error) {
 						$this->getDeferred()->fail($error);
 						$this->closeSocket();
