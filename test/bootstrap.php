@@ -1,12 +1,14 @@
 <?php
 
-$autoloader = require(__DIR__.'/../vendor/autoload.php');
+require __DIR__.'/../vendor/autoload.php';
 
 const DB_HOST = 'localhost:10101';
 const DB_USER = 'root';
 const DB_PASS = '';
 
 $pipes = [];
+$buf = "";
+
 /* cleanup in case it wasn't terminated properly... */
 $pidfile = __DIR__."/mysql.pid";
 if (file_exists($pidfile)) {

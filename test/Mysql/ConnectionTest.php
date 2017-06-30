@@ -2,8 +2,9 @@
 
 use Amp\Mysql\Connection;
 use Amp\Mysql\DataTypes;
+use PHPUnit\Framework\TestCase;
 
-class ConnectionTest extends \PHPUnit_Framework_TestCase {
+class ConnectionTest extends TestCase {
 	function testConnect() {
 		$complete = false;
 		\Amp\Loop::run(function() use (&$complete) {

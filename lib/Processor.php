@@ -3,6 +3,7 @@
 namespace Amp\Mysql;
 
 use Amp\Deferred;
+use Amp\Loop;
 
 /* @TODO
  * 14.2.3 Auth switch request??
@@ -150,7 +151,8 @@ class Processor {
 		\assert(!$this->deferreds && !$this->socket, self::class."::connect() must not be called twice");
 
 		$this->deferreds[] = $deferred = new Deferred;
-		\Amp\Socket\rawConnect($this->config->resolvedHost)->onResolve(function ($error, $socket) use ($deferred) {
+		\Amp\Socket\connect($this->config->resolvedHost)->onResolve(function ($error, $socket) use ($deferred) {
+		    $socket = $socket->getResource();
 			if ($this->connectionState === self::CLOSED) {
 				$deferred->resolve(null);
 				if ($socket) {
@@ -170,7 +172,7 @@ class Processor {
 			$this->processors = [$this->parseMysql()];
 
 			$this->socket = $socket;
-			$this->readWatcher = \Amp\Loop::onReadable($this->socket, [$this, "onInit"]);
+			$this->readWatcher = Loop::onReadable($this->socket, [$this, "onInit"]);
 		});
 
 		return $deferred->promise();
@@ -181,9 +183,9 @@ class Processor {
 		$this->out = [];
 		$this->seqId = $this->compressionId = -1;
 
-		\Amp\Loop::cancel($this->readWatcher);
-		$this->readWatcher = \Amp\Loop::onReadable($this->socket, [$this, "onRead"]);
-		$this->writeWatcher = \Amp\Loop::onWritable($this->socket, [$this, "onWrite"]);
+		Loop::cancel($this->readWatcher);
+		$this->readWatcher = Loop::onReadable($this->socket, [$this, "onRead"]);
+		$this->writeWatcher = Loop::onWritable($this->socket, [$this, "onWrite"]);
 		$this->onRead();
 	}
 
@@ -818,10 +820,10 @@ class Processor {
 
 	public function closeSocket() {
 		if ($this->readWatcher) {
-			\Amp\Loop::cancel($this->readWatcher);
+			Loop::cancel($this->readWatcher);
 		}
 		if ($this->writeWatcher) {
-			\Amp\Loop::cancel($this->writeWatcher);
+			Loop::cancel($this->writeWatcher);
 		}
 		@\fclose($this->socket);
 		$this->connectionState = self::CLOSED;
@@ -907,7 +909,7 @@ class Processor {
 			$this->outBuflen = strlen($packet);
 
 			if ($this->outBuflen == 0) {
-				\Amp\Loop::disable($this->writeWatcher);
+				Loop::disable($this->writeWatcher);
 				return;
 			}
 		}
@@ -1170,14 +1172,14 @@ class Processor {
 
 		if (!$inSSL && ($this->capabilities & self::CLIENT_SSL)) {
 			$this->_sendPacket($payload);
-			\Amp\Loop::onWritable($this->socket, function ($watcherId, $socket) {
+			Loop::onWritable($this->socket, function ($watcherId, $socket) {
 				/* wait until main write watcher has written everything... */
 				if ($this->outBuflen > 0 || !empty($this->out)) {
 					return;
 				}
 
-				\Amp\Loop::cancel($watcherId);
-				\Amp\Loop::disable($this->readWatcher); // temporarily disable, reenable after establishing tls
+				Loop::cancel($watcherId);
+				Loop::disable($this->readWatcher); // temporarily disable, reenable after establishing tls
 				\Amp\Socket\cryptoEnable($socket, $this->config->ssl + ['peer_name' => $this->config->host])->onResolve(function ($error) {
 					if ($error) {
 						$this->getDeferred()->fail($error);
@@ -1185,7 +1187,7 @@ class Processor {
 						return;
 					}
 
-					\Amp\Loop::enable($this->readWatcher);
+					Loop::enable($this->readWatcher);
 					$this->sendHandshake(true);
 				});
 			});
@@ -1255,6 +1257,6 @@ class Processor {
 
 	private function _sendPacket($payload) {
 		$this->out[] = $payload;
-		\Amp\Loop::enable($this->writeWatcher);
+		Loop::enable($this->writeWatcher);
 	}
 }
