@@ -15,7 +15,7 @@ if (file_exists($pidfile)) {
 	if (stripos(PHP_OS, "win") === 0) {
 		shell_exec("Taskkill /PID ".file_get_contents($pidfile)." /F");
 	} else {
-		shell_exec("kill -9 `cat '$pidfile'`");
+		shell_exec("kill -9 `cat '$pidfile'` 2>/dev/null");
 	}
 	sleep(1);
 }

@@ -70,12 +70,14 @@ class ConnectionTest extends TestCase {
 
 			$db->query("DROP TABLE tmp"); // just in case it would exist...
 			$db->query("CREATE TABLE tmp SELECT 1 AS a, 2 AS b");
-			$db->query("INSERT INTO tmp VALUES (5, 6), (8, 9)");
 
-			$resultset = yield $db->query("SELECT a FROM tmp; SELECT b FROM tmp WHERE a = 5; SELECT b AS d, a + 1 AS c FROM tmp WHERE b < 7");
-			$this->assertEquals(yield $resultset->rowCount(), 3);
+			$resultset = yield $db->query("INSERT INTO tmp VALUES (5, 6), (8, 9); SELECT a FROM tmp; SELECT b FROM tmp WHERE a = 5; SELECT b AS d, a + 1 AS c FROM tmp WHERE b < 7");
+			$this->assertEquals((yield $resultset->rowCount()), 0);
 
-			$resultset = (yield $resultset->next());
+			$resultset = yield $resultset->next();
+			$this->assertEquals((yield $resultset->rowCount()), 3);
+
+			$resultset = yield $resultset->next();
 			$this->assertEquals(yield $resultset->fetchRow(), [6]);
 
 			$resultset = yield $resultset->next();
