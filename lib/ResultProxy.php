@@ -42,9 +42,9 @@ class ResultProxy {
 		if ($row !== null) {
 			$this->rows[$this->fetchedRows++] = $row;
 		}
-		list($key, list($entry, , $cb)) = each($this->deferreds[ResultProxy::SINGLE_ROW_FETCH]);
-		if ($key !== null) {
-			unset($this->deferreds[ResultProxy::SINGLE_ROW_FETCH][$key]);
+		list($entry, , $cb) = current($this->deferreds[ResultProxy::SINGLE_ROW_FETCH]);
+		if ($entry !== null) {
+			unset($this->deferreds[ResultProxy::SINGLE_ROW_FETCH][key($this->deferreds[ResultProxy::SINGLE_ROW_FETCH])]);
 			$entry->succeed($cb && $row ? $cb($row) : $row);
 		}
 	}
