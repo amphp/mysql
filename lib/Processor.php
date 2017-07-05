@@ -138,8 +138,8 @@ class Processor {
 				$cb = $this->ready;
 				$this->out[] = null;
 			} else {
-				list($key, $cb) = each($this->onReady);
-				unset($this->onReady[$key]);
+				$cb = current($this->onReady);
+				unset($this->onReady[key($this->onReady)]);
 			}
 			if (isset($cb) && is_callable($cb)) {
 				$cb();
@@ -191,8 +191,8 @@ class Processor {
 
 	/** @return Deferred */
 	private function getDeferred() {
-		list($key, $deferred) = each($this->deferreds);
-		unset($this->deferreds[$key]);
+		$deferred = current($this->deferreds);
+		unset($this->deferreds[key($this->deferreds)]);
 		return $deferred;
 	}
 

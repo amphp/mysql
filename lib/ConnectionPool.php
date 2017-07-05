@@ -110,7 +110,7 @@ class ConnectionPool {
 			$this->addConnection();
 		}
 
-		while (list($key, $conn) = each($this->ready)) {
+		foreach ($this->ready as $key => &$conn) {
 			unset($this->ready[$key]);
 			if ($conn->isReady()) {
 				return $conn;
