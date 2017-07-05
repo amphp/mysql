@@ -551,12 +551,12 @@ class Processor {
 			case self::OK_PACKET:
 				$this->parseOk($packet);
 				if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
-					$this->getDeferred()->succeed(new ResultSet($this->connInfo, $result = new ResultProxy));
+					$this->getDeferred()->resolve(new ResultSet($this->connInfo, $result = new ResultProxy));
 					$this->result = $result;
 					$result->updateState(ResultProxy::COLUMNS_FETCHED);
 					$this->successfulResultsetFetch();
 				} else {
-					$this->getDeferred()->succeed($this->getConnInfo());
+					$this->getDeferred()->resolve($this->getConnInfo());
 					$this->ready();
 				}
 				return;
@@ -570,7 +570,7 @@ class Processor {
 
 		$this->parseCallback = [$this, "handleTextColumnDefinition"];
 		$this->getDeferred()->resolve(new ResultSet($this->connInfo, $result = new ResultProxy));
-		/* we need to succeed before assigning vars, so that a onResolve() handler won't have a partial result available */
+		/* we need to resolve before assigning vars, so that a onResolve() handler won't have a partial result available */
 		$this->result = $result;
 		$result->setColumns(DataTypes::decodeInt($packet));
 	}
@@ -579,7 +579,7 @@ class Processor {
 	private function handleExecute($packet) {
 		$this->parseCallback = [$this, "handleBinaryColumnDefinition"];
 		$this->getDeferred()->resolve(new ResultSet($this->connInfo, $result = new ResultProxy));
-		/* we need to succeed before assigning vars, so that a onResolve() handler won't have a partial result available */
+		/* we need to resolve before assigning vars, so that a onResolve() handler won't have a partial result available */
 		$this->result = $result;
 		$result->setColumns(ord($packet));
 	}
