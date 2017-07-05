@@ -221,7 +221,7 @@ class Processor {
 
 	public function setQuery($query) {
 		$this->query = $query;
-		$this->packetCallback = [$this, "handleQuery"];
+		$this->parseCallback = [$this, "handleQuery"];
 	}
 
 	public function setPrepare($query) {
@@ -322,6 +322,7 @@ class Processor {
 			$this->out[] = null;
 			$this->deferreds[] = $deferred;
 			$this->sendPacket($payload);
+			// apparently LOAD DATA LOCAL INFILE requests are not supported via prepared statements
 			$this->packetCallback = [$this, "handleExecute"];
 		});
 		return $deferred->promise(); // do not use $this->startCommand(), that might unexpectedly reset the seqId!
@@ -543,11 +544,32 @@ class Processor {
 
 	/** @see 14.6.4.1.1 Text Resultset */
 	private function handleQuery($packet) {
+		switch (\ord($packet)) {
+			case self::OK_PACKET:
+				$this->parseOk($packet);
+				if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
+					$this->getDeferred()->succeed(new ResultSet($this->connInfo, $result = new ResultProxy));
+					$this->result = $result;
+					$result->updateState(ResultProxy::COLUMNS_FETCHED);
+					$this->successfulResultsetFetch();
+				} else {
+					$this->getDeferred()->succeed($this->getConnInfo());
+					$this->ready();
+				}
+				return;
+			case self::LOCAL_INFILE_REQUEST:
+				$this->handleLocalInfileRequest($packet);
+				return;
+			case self::ERR_PACKET:
+				$this->handleError($packet);
+				return;
+		}
+
 		$this->parseCallback = [$this, "handleTextColumnDefinition"];
 		$this->getDeferred()->succeed(new ResultSet($this->connInfo, $result = new ResultProxy));
 		/* we need to succeed before assigning vars, so that a when() handler won't have a partial result available */
 		$this->result = $result;
-		$this->result->setColumns(DataTypes::decodeInt($packet));
+		$result->setColumns(DataTypes::decodeInt($packet));
 	}
 
 	/** @see 14.7.1 Binary Protocol Resultset */
@@ -556,7 +578,7 @@ class Processor {
 		$this->getDeferred()->succeed(new ResultSet($this->connInfo, $result = new ResultProxy));
 		/* we need to succeed before assigning vars, so that a when() handler won't have a partial result available */
 		$this->result = $result;
-		$this->result->setColumns(ord($packet));
+		$result->setColumns(ord($packet));
 	}
 
 	private function handleFieldList($packet) {
@@ -619,9 +641,9 @@ class Processor {
 	private function prepareFields($packet) {
 		if (!$this->result->columnsToFetch--) {
 			$this->parseCallback = null;
-			$this->result->updateState(ResultProxy::COLUMNS_FETCHED);
 			$this->query = null;
 			$this->ready();
+			$this->result->updateState(ResultProxy::COLUMNS_FETCHED);
 
 			return;
 		}
@@ -694,17 +716,17 @@ class Processor {
 	private function successfulResultsetFetch() {
 		$deferred = &$this->result->next;
 		if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
-			$this->packetCallback = [$this, "handleQuery"];
+			$this->parseCallback = [$this, "handleQuery"];
 			$this->deferreds[] = $deferred ?: $deferred = new Deferred;
 		} else {
 			if (!$deferred) {
 				$deferred = new Deferred;
 			}
 			$deferred->succeed();
+			$this->parseCallback = null;
+			$this->query = null;
+			$this->ready();
 		}
-		$this->parseCallback = null;
-		$this->query = null;
-		$this->ready();
 		$this->result->updateState(ResultProxy::ROWS_FETCHED);
 	}
 
@@ -1089,9 +1111,6 @@ class Processor {
 			switch (ord($packet)) {
 				case self::OK_PACKET:
 					$this->handleOk($packet);
-					break;
-				case self::LOCAL_INFILE_REQUEST:
-					$this->handleLocalInfileRequest($packet);
 					break;
 				case self::ERR_PACKET:
 					$this->handleError($packet);

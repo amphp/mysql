@@ -7,7 +7,7 @@ class ResultProxy {
 	public $columns = [];
 	public $params = [];
 	public $columnsToFetch;
-	public $rows = null;
+	public $rows = [];
 	public $fetchedRows = 0;
 	public $userFetched = 0;
 	public $deferreds = [self::SINGLE_ROW_FETCH => [], self::COLUMNS_FETCHED => [], self::ROWS_FETCHED => []];
@@ -53,7 +53,7 @@ class ResultProxy {
 		$tmp = clone $this;
 		foreach ($tmp->deferreds as &$type) {
 			foreach ($type as &$entry) {
-				$entry[2] = null;
+				unset($entry[0], $entry[2]);
 			}
 		}
 
