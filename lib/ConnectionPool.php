@@ -7,7 +7,7 @@ class ConnectionPool {
 	private $connectionMap = [];
 	private $ready = [];
 	private $readyMap = [];
-	private $connectionPromise;
+	private $connectionDeferred;
 	private $virtualConnection;
 	private $config;
 	private $limit;
@@ -38,7 +38,17 @@ class ConnectionPool {
 	}
 
 	public function getConnectionPromise() {
-		return $this->connectionPromise;
+		if (isset($this->connectionDeferred)) {
+			return $this->connectionDeferred->promise();
+		}
+		if ($this->connections) {
+			foreach ($this->connections as $conn) {
+				if ($conn->isReady()) {
+					return new \Amp\Success;
+				}
+			}
+		}
+		return ($this->connectionDeferred = new \Amp\Deferred)->promise();
 	}
 
 	public function addConnection() {
@@ -49,14 +59,27 @@ class ConnectionPool {
 		$this->connections[] = $conn = new Connection($this->config);
 		end($this->connections);
 		$this->connectionMap[spl_object_hash($conn)] = key($this->connections);
-		$this->connectionPromise = $conn->connect();
-		$this->connectionPromise->onResolve(function ($error) use ($conn) {
+		$conn->connect()->onResolve(function ($error) use ($conn) {
+			if (!$error && !$conn->isReady()) {
+				$error = new InitializationException("Connection closed before being established");
+			}
 			if ($error) {
 				$this->unmapConnection(spl_object_hash($conn));
 				if (empty($this->connections)) {
 					$this->virtualConnection->fail($error);
+					$deferred = $this->connectionDeferred;
+					if ($deferred) {
+						$this->connectionDeferred = null;
+						$deferred->fail($error);
+					}
 				}
 				return;
+			}
+
+			if (isset($this->connectionDeferred)) {
+				$deferred = $this->connectionDeferred;
+				$this->connectionDeferred = null;
+				$deferred->resolve();
 			}
 
 			if ($this->config->charset != "utf8mb4" || ($this->config->collate != "" && $this->config->collate != "utf8mb4_general_ci")) {
@@ -84,9 +107,6 @@ class ConnectionPool {
 
 	public function useExceptions($set) {
 		$this->config->exceptions = $set;
-		foreach ($this->connections as $conn) {
-			$conn->useExceptions($set);
-		}
 	}
 
 	private function ready($hash) {

@@ -46,8 +46,6 @@ class Connection {
 		$this->processor = new Processor($ready, $busy, $restore);
 		$this->processor->config = $config;
 	}
-	
-	
 
 	public static function parseConnStr($connStr, $sslOptions = null) {
 		$db = null;
