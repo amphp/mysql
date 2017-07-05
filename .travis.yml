@@ -13,6 +13,7 @@ install:
   - mysqld --version
 
 before_script:
+  - echo '<?php $autoloader = require(__DIR__."/../vendor/autoload.php"); const DB_HOST = "localhost"; const DB_USER = "root"; const DB_PASS = "";' > test/bootstrap.php
   - mysql -u root -e "CREATE DATABASE connectiontest; CREATE TABLE connectiontest.main SELECT 1 AS a, 2 AS b; INSERT INTO connectiontest.main VALUES (5, 6);"
  
 script: phpdbg -qrr vendor/bin/phpunit --coverage-text
