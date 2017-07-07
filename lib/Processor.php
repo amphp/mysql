@@ -377,7 +377,7 @@ class Processor {
 	private function handleError($packet) {
 		$off = 1;
 
-		$this->connInfo->errorCode = DataTypes::decode_int16(substr($packet, $off, 2));
+		$this->connInfo->errorCode = DataTypes::decode_unsigned16(substr($packet, $off, 2));
 		$off += 2;
 
 		if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
@@ -408,17 +408,17 @@ class Processor {
 	private function parseOk($packet) {
 		$off = 1;
 
-		$this->connInfo->affectedRows = DataTypes::decodeInt(substr($packet, $off), $intlen);
+		$this->connInfo->affectedRows = DataTypes::decodeUnsigned(substr($packet, $off), $intlen);
 		$off += $intlen;
 
-		$this->connInfo->insertId = DataTypes::decodeInt(substr($packet, $off), $intlen);
+		$this->connInfo->insertId = DataTypes::decodeUnsigned(substr($packet, $off), $intlen);
 		$off += $intlen;
 
 		if ($this->capabilities & (self::CLIENT_PROTOCOL_41 | self::CLIENT_TRANSACTIONS)) {
-			$this->connInfo->statusFlags = DataTypes::decode_int16(substr($packet, $off));
+			$this->connInfo->statusFlags = DataTypes::decode_unsigned16(substr($packet, $off));
 			$off += 2;
 
-			$this->connInfo->warnings = DataTypes::decode_int16(substr($packet, $off));
+			$this->connInfo->warnings = DataTypes::decode_unsigned16(substr($packet, $off));
 			$off += 2;
 		}
 
@@ -433,7 +433,7 @@ class Processor {
 					while ($len < $sessionStateLen) {
 						$data = DataTypes::decodeString(substr($sessionState, $len + 1), $datalen, $intlen);
 
-						switch ($type = DataTypes::decode_int8(substr($sessionState, $len))) {
+						switch ($type = DataTypes::decode_unsigned8(substr($sessionState, $len))) {
 							case SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES:
 								$var = DataTypes::decodeString($data, $varintlen, $strlen);
 								$this->connInfo->sessionState[SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES][$var] = DataTypes::decodeString(substr($data, $varintlen + $strlen));
@@ -468,9 +468,9 @@ class Processor {
 	/** @see 14.1.3.3 EOF-Packet */
 	private function parseEof($packet) {
 		if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
-			$this->connInfo->warnings = DataTypes::decode_int16(substr($packet, 1));
+			$this->connInfo->warnings = DataTypes::decode_unsigned16(substr($packet, 1));
 
-			$this->connInfo->statusFlags = DataTypes::decode_int16(substr($packet, 3));
+			$this->connInfo->statusFlags = DataTypes::decode_unsigned16(substr($packet, 3));
 		}
 	}
 
@@ -492,7 +492,7 @@ class Processor {
 		$this->connInfo->serverVersion = DataTypes::decodeNullString(substr($packet, $off), $len);
 		$off += $len + 1;
 
-		$this->connectionId = DataTypes::decode_int32(substr($packet, $off));
+		$this->connectionId = DataTypes::decode_unsigned32(substr($packet, $off));
 		$off += 4;
 
 		$this->authPluginData = substr($packet, $off, 8);
@@ -500,17 +500,17 @@ class Processor {
 
 		$off += 1; // filler byte
 
-		$this->serverCapabilities = DataTypes::decode_int16(substr($packet, $off));
+		$this->serverCapabilities = DataTypes::decode_unsigned16(substr($packet, $off));
 		$off += 2;
 
 		if (\strlen($packet) > $off) {
 			$this->connInfo->charset = ord(substr($packet, $off));
 			$off += 1;
 
-			$this->connInfo->statusFlags = DataTypes::decode_int16(substr($packet, $off));
+			$this->connInfo->statusFlags = DataTypes::decode_unsigned16(substr($packet, $off));
 			$off += 2;
 
-			$this->serverCapabilities += DataTypes::decode_int16(substr($packet, $off)) << 16;
+			$this->serverCapabilities += DataTypes::decode_unsigned16(substr($packet, $off)) << 16;
 			$off += 2;
 
 			$this->authPluginDataLen = $this->serverCapabilities & self::CLIENT_PLUGIN_AUTH ? ord(substr($packet, $off)) : 0;
@@ -569,7 +569,7 @@ class Processor {
 		$this->getDeferred()->succeed(new ResultSet($this->connInfo, $result = new ResultProxy));
 		/* we need to succeed before assigning vars, so that a when() handler won't have a partial result available */
 		$this->result = $result;
-		$result->setColumns(DataTypes::decodeInt($packet));
+		$result->setColumns(DataTypes::decodeUnsigned($packet));
 	}
 
 	/** @see 14.7.1 Binary Protocol Resultset */
@@ -664,16 +664,16 @@ class Processor {
 			$column["original_table"] = DataTypes::decodeStringOff($packet, $off);
 			$column["name"] = DataTypes::decodeStringOff($packet, $off);
 			$column["original_name"] = DataTypes::decodeStringOff($packet, $off);
-			$fixlen = DataTypes::decodeIntOff($packet, $off);
+			$fixlen = DataTypes::decodeUnsignedOff($packet, $off);
 
 			$len = 0;
-			$column["charset"] = DataTypes::decode_int16(substr($packet, $off + $len));
+			$column["charset"] = DataTypes::decode_unsigned16(substr($packet, $off + $len));
 			$len += 2;
-			$column["columnlen"] = DataTypes::decode_int32(substr($packet, $off + $len));
+			$column["columnlen"] = DataTypes::decode_unsigned32(substr($packet, $off + $len));
 			$len += 4;
 			$column["type"] = ord($packet[$off + $len]);
 			$len += 1;
-			$column["flags"] = DataTypes::decode_int16(substr($packet, $off + $len));
+			$column["flags"] = DataTypes::decode_unsigned16(substr($packet, $off + $len));
 			$len += 2;
 			$column["decimals"] = ord($packet[$off + $len]);
 			//$len += 1;
@@ -683,21 +683,21 @@ class Processor {
 			$column["table"] = DataTypes::decodeStringOff($packet, $off);
 			$column["name"] = DataTypes::decodeStringOff($packet, $off);
 
-			$collen = DataTypes::decodeIntOff($packet, $off);
+			$collen = DataTypes::decodeUnsignedOff($packet, $off);
 			$column["columnlen"] = DataTypes::decode_intByLen(substr($packet, $off), $collen);
 			$off += $collen;
 
-			$typelen = DataTypes::decodeIntOff($packet, $off);
+			$typelen = DataTypes::decodeUnsignedOff($packet, $off);
 			$column["type"] = DataTypes::decode_intByLen(substr($packet, $off), $typelen);
 			$off += $typelen;
 
 			$len = 1;
-			$flaglen = $this->capabilities & self::CLIENT_LONG_FLAG ? DataTypes::decodeInt(substr($packet, $off, 9), $len) : ord($packet[$off]);
+			$flaglen = $this->capabilities & self::CLIENT_LONG_FLAG ? DataTypes::decodeUnsigned(substr($packet, $off, 9), $len) : ord($packet[$off]);
 			$off += $len;
 
 			if ($flaglen > 2) {
 				$len = 2;
-				$column["flags"] = DataTypes::decode_int16(substr($packet, $off, 4));
+				$column["flags"] = DataTypes::decode_unsigned16(substr($packet, $off, 4));
 			} else {
 				$len = 1;
 				$column["flags"] = ord($packet[$off]);
@@ -801,18 +801,18 @@ class Processor {
 		}
 		$off = 1;
 
-		$stmtId = DataTypes::decode_int32(substr($packet, $off));
+		$stmtId = DataTypes::decode_unsigned32(substr($packet, $off));
 		$off += 4;
 
-		$columns = DataTypes::decode_int16(substr($packet, $off));
+		$columns = DataTypes::decode_unsigned16(substr($packet, $off));
 		$off += 2;
 
-		$params = DataTypes::decode_int16(substr($packet, $off));
+		$params = DataTypes::decode_unsigned16(substr($packet, $off));
 		$off += 2;
 
 		$off += 1; // filler
 
-		$this->connInfo->warnings = DataTypes::decode_int16(substr($packet, $off));
+		$this->connInfo->warnings = DataTypes::decode_unsigned16(substr($packet, $off));
 
 		$this->result = new ResultProxy;
 		$this->result->columnsToFetch = $params;
@@ -987,9 +987,9 @@ class Processor {
 				$inflated = "";
 			}
 
-			$size = DataTypes::decode_int24($buf);
+			$size = DataTypes::decode_unsigned24($buf);
 			$this->compressionId = ord($buf[3]);
-			$uncompressed = DataTypes::decode_int24(substr($buf, 4, 3));
+			$uncompressed = DataTypes::decode_unsigned24(substr($buf, 4, 3));
 
 			$buf = substr($buf, 7);
 
@@ -1027,7 +1027,7 @@ class Processor {
 					$parsed = [];
 				}
 
-				$len = DataTypes::decode_int24($buf);
+				$len = DataTypes::decode_unsigned24($buf);
 				$this->seqId = ord($buf[3]);
 				$buf = substr($buf, 4);
 

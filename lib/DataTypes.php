@@ -113,21 +113,24 @@ class DataTypes {
 			case self::MYSQL_TYPE_LONGLONG:
 			case self::MYSQL_TYPE_LONGLONG | 0x80:
 				$len = 8;
-				return $unsigned && ($str[7] & "\x80") ? self::decode_unsigned64($str) : self::decode_int64($str);
+				return $unsigned ? self::decode_unsigned64($str) : self::decode_int64($str);
 
 			case self::MYSQL_TYPE_LONG:
 			case self::MYSQL_TYPE_LONG | 0x80:
 			case self::MYSQL_TYPE_INT24:
 			case self::MYSQL_TYPE_INT24 | 0x80:
 				$len = 4;
-				$shift = PHP_INT_MAX >> 31 ? 32 : 0;
-				return $unsigned && ($str[3] & "\x80") ? self::decode_unsigned32($str) : ((self::decode_int32($str) << $shift) >> $shift);
+				return $unsigned ? self::decode_unsigned32($str) : self::decode_int32($str);
+
+			case self::MYSQL_TYPE_SHORT:
+			case self::MYSQL_TYPE_SHORT | 0x80:
+				$len = 2;
+				return $unsigned ? self::decode_unsigned16($str) : self::decode_int16($str);
 
 			case self::MYSQL_TYPE_TINY:
 			case self::MYSQL_TYPE_TINY | 0x80:
 				$len = 1;
-				$shift = PHP_INT_MAX >> 31 ? 56 : 24;
-				return $unsigned ? ord($str) : ((ord($str) << $shift) >> $shift);
+				return $unsigned ? \ord($str) : self::decode_int8($str);
 
 			case self::MYSQL_TYPE_DOUBLE:
 				$len = 8;
@@ -143,7 +146,7 @@ class DataTypes {
 				$year = $month = $day = $hour = $minute = $second = $microsecond = 0;
 				switch ($len = ord($str) + 1) {
 					case 12:
-						$microsecond = self::decode_int32(substr($str, 8));
+						$microsecond = self::decode_unsigned32(substr($str, 8));
 					case 8:
 						$second = ord($str[7]);
 						$minute = ord($str[6]);
@@ -151,7 +154,7 @@ class DataTypes {
 					case 5:
 						$day = ord($str[4]);
 						$month = ord($str[3]);
-						$year = self::decode_int16(substr($str, 1));
+						$year = self::decode_unsigned16(substr($str, 1));
 					case 1:
 						break;
 
@@ -164,12 +167,12 @@ class DataTypes {
 				$negative = $day = $hour = $minute = $second = $microsecond = 0;
 				switch ($len = ord($str) + 1) {
 					case 13:
-						$microsecond = self::decode_int32(substr($str, 9));
+						$microsecond = self::decode_unsigned32(substr($str, 9));
 					case 9:
 						$second = ord($str[8]);
 						$minute = ord($str[7]);
 						$hour = ord($str[6]);
-						$day = self::decode_int32(substr($str, 2));
+						$day = self::decode_unsigned32(substr($str, 2));
 						$negative = ord($str[1]);
 					case 1:
 						break;
@@ -193,25 +196,25 @@ class DataTypes {
 	}
 
 	public static function decodeStringOff($str, &$off) {
-		$len = self::decodeIntOff($str, $off);
+		$len = self::decodeUnsignedOff($str, $off);
 		$off += $len;
 		return substr($str, $off - $len, $len);
 	}
 
-	public static function decodeIntOff($str, &$off) {
+	public static function decodeUnsignedOff($str, &$off) {
 		$int = ord($str[$off]);
 		if ($int < 0xfb) {
 			$off += 1;
 			return $int;
 		} elseif ($int == 0xfc) {
 			$off += 3;
-			return self::decode_int16(substr($str, $off - 2, 2));
+			return self::decode_unsigned16(substr($str, $off - 2, 2));
 		} elseif ($int == 0xfd) {
 			$off += 4;
-			return self::decode_int24(substr($str, $off - 3, 3));
+			return self::decode_unsigned24(substr($str, $off - 3, 3));
 		} elseif ($int == 0xfe) {
 			$off += 9;
-			return self::decode_int64(substr($str, $off - 8, 8));
+			return self::decode_unsigned64(substr($str, $off - 8, 8));
 		} else {
 			// If that happens connection is borked...
 			throw new \RangeException("$int is not in ranges [0x00, 0xfa] or [0xfc, 0xfe]");
@@ -219,24 +222,24 @@ class DataTypes {
 	}
 
 	public static function decodeString($str, &$intlen = 0, &$len = 0) {
-		$len = self::decodeInt($str, $intlen);
+		$len = self::decodeUnsigned($str, $intlen);
 		return substr($str, $intlen, $len);
 	}
 
-	public static function decodeInt($str, &$len = 0) {
-		$int = ord($str);
+	public static function decodeUnsigned($str, &$len = 0) {
+		$int = \ord($str);
 		if ($int < 0xfb) {
 			$len = 1;
 			return $int;
 		} elseif ($int == 0xfc) {
 			$len = 3;
-			return self::decode_int16(substr($str, 1));
+			return self::decode_unsigned16(substr($str, 1, 2));
 		} elseif ($int == 0xfd) {
 			$len = 4;
-			return self::decode_int24(substr($str, 1));
+			return self::decode_unsigned24(substr($str, 1, 4));
 		} elseif ($int == 0xfe) {
 			$len = 9;
-			return self::decode_int64(substr($str, 1));
+			return self::decode_unsigned64(substr($str, 1, 8));
 		} else {
 			// If that happens connection is borked...
 			throw new \RangeException("$int is not in ranges [0x00, 0xfa] or [0xfc, 0xfe]");
@@ -252,23 +255,57 @@ class DataTypes {
 	}
 
 	public static function decode_int8($str) {
-		return ord($str);
+		$int = \ord($str);
+		if ($int < (1 << 7)) {
+			return $int;
+		}
+		$shift = PHP_INT_SIZE * 8 - 8;
+		return $int << $shift >> $shift;
+	}
+
+	public static function decode_unsigned8($str) {
+		return \ord($str);
 	}
 
 	public static function decode_int16($str) {
+		$int = unpack("v", $str)[1];
+		if ($int < (1 << 15)) {
+			return $int;
+		}
+		$shift = PHP_INT_SIZE * 8 - 16;
+		return $int << $shift >> $shift;
+	}
+
+	public static function decode_unsigned16($str) {
 		return unpack("v", $str)[1];
 	}
 
 	public static function decode_int24($str) {
+		$int = unpack("V", substr($str, 0, 3) . "\x00")[1];
+		if ($int < (1 << 23)) {
+			return $int;
+		}
+		$shift = PHP_INT_SIZE * 8 - 24;
+		return $int << $shift >> $shift;
+	}
+
+	public static function decode_unsigned24($str) {
 		return unpack("V", substr($str, 0, 3) . "\x00")[1];
 	}
 
 	public static function decode_int32($str) {
+		if (PHP_INT_SIZE > 4) {
+			$int = unpack("V", $str)[1];
+			if ($int < (1 << 31)) {
+				return $int;
+			}
+			return $int << 32 >> 32;
+		}
 		return unpack("V", $str)[1];
 	}
 
 	public static function decode_unsigned32($str) {
-		if (PHP_INT_MAX >> 31) {
+		if (PHP_INT_SIZE > 4) {
 			return unpack("V", $str)[1];
 		} else {
 			$int = unpack("v", $str)[1];
@@ -277,7 +314,7 @@ class DataTypes {
 	}
 
 	public static function decode_int64($str) {
-		if (PHP_INT_MAX >> 31) {
+		if (PHP_INT_SIZE > 4) {
 			$int = unpack("V2", $str);
 			return $int[1] + ($int[2] << 32);
 		} else {
@@ -287,7 +324,7 @@ class DataTypes {
 	}
 
 	public static function decode_unsigned64($str) {
-		if (PHP_INT_MAX >> 31) {
+		if (PHP_INT_SIZE > 4) {
 			$int = unpack("V2", $str);
 			return $int[1] + $int[2] * (1 << 32);
 		} else {
