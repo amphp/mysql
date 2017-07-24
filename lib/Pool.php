@@ -3,90 +3,90 @@
 namespace Amp\Mysql;
 
 class Pool {
-	private $connectionPool;
+    private $connectionPool;
 
-	public function __construct($connStr, $sslOptions = null) {
-		if (preg_match("((?:^|;)\s*limit\s*=\s*([^;]*?)\s*(?:;|$))is", $connStr, $match, PREG_OFFSET_CAPTURE)) {
-			$limit = (int) $match[1][0];
-			$connStr = substr_replace($connStr, ";", $match[0][1], strlen($match[0][0]));
-		} else {
-			$limit = INF;
-		}
+    public function __construct($connStr, $sslOptions = null) {
+        if (preg_match("((?:^|;)\s*limit\s*=\s*([^;]*?)\s*(?:;|$))is", $connStr, $match, PREG_OFFSET_CAPTURE)) {
+            $limit = (int) $match[1][0];
+            $connStr = substr_replace($connStr, ";", $match[0][1], strlen($match[0][0]));
+        } else {
+            $limit = INF;
+        }
 
-		$config = Connection::parseConnStr($connStr, $sslOptions);
-		$this->connectionPool = new ConnectionPool($config, $limit);
-	}
+        $config = Connection::parseConnStr($connStr, $sslOptions);
+        $this->connectionPool = new ConnectionPool($config, $limit);
+    }
 
-	public function init() {
-		return $this->connectionPool->getConnectionPromise();
-	}
+    public function init() {
+        return $this->connectionPool->getConnectionPromise();
+    }
 
-	public function setCharset($charset, $collate = "") {
-		$this->connectionPool->setCharset($charset, $collate);
-	}
-	
-	public function query($query) {
-		return $this->connectionPool->getReadyConnection()->query($query);
-	}
+    public function setCharset($charset, $collate = "") {
+        $this->connectionPool->setCharset($charset, $collate);
+    }
 
-	public function listFields($table, $like = "%") {
-		return $this->connectionPool->getReadyConnection()->listFields($table, $like);
-	}
+    public function query($query) {
+        return $this->connectionPool->getReadyConnection()->query($query);
+    }
 
-	public function listAllFields($table, $like = "%") {
-		return $this->connectionPool->getReadyConnection()->listAllFields($table, $like);
-	}
+    public function listFields($table, $like = "%") {
+        return $this->connectionPool->getReadyConnection()->listFields($table, $like);
+    }
 
-	public function createDatabase($db) {
-		return $this->connectionPool->getReadyConnection()->createDatabase($db);
-	}
+    public function listAllFields($table, $like = "%") {
+        return $this->connectionPool->getReadyConnection()->listAllFields($table, $like);
+    }
 
-	public function dropDatabase($db) {
-		return $this->connectionPool->getReadyConnection()->dropDatabase($db);
-	}
+    public function createDatabase($db) {
+        return $this->connectionPool->getReadyConnection()->createDatabase($db);
+    }
 
-	public function refresh($subcommand) {
-		return $this->connectionPool->getReadyConnection()->refresh($subcommand);
-	}
+    public function dropDatabase($db) {
+        return $this->connectionPool->getReadyConnection()->dropDatabase($db);
+    }
 
-	public function shutdown() {
-		return $this->connectionPool->getReadyConnection()->shutdown();
-	}
+    public function refresh($subcommand) {
+        return $this->connectionPool->getReadyConnection()->refresh($subcommand);
+    }
 
-	public function statistics() {
-		return $this->connectionPool->getReadyConnection()->statistics();
-	}
+    public function shutdown() {
+        return $this->connectionPool->getReadyConnection()->shutdown();
+    }
 
-	public function processInfo() {
-		return $this->connectionPool->getReadyConnection()->processInfo();
-	}
+    public function statistics() {
+        return $this->connectionPool->getReadyConnection()->statistics();
+    }
 
-	public function killProcess($process) {
-		return $this->connectionPool->getReadyConnection()->killProcess($process);
-	}
+    public function processInfo() {
+        return $this->connectionPool->getReadyConnection()->processInfo();
+    }
 
-	public function debugStdout() {
-		return $this->connectionPool->getReadyConnection()->debugStdout();
-	}
+    public function killProcess($process) {
+        return $this->connectionPool->getReadyConnection()->killProcess($process);
+    }
 
-	public function ping() {
-		return $this->connectionPool->getReadyConnection()->ping();
-	}
+    public function debugStdout() {
+        return $this->connectionPool->getReadyConnection()->debugStdout();
+    }
 
-	public function prepare($query, $data = null) {
-		return $this->connectionPool->getReadyConnection()->prepare($query, $data);
-	}
+    public function ping() {
+        return $this->connectionPool->getReadyConnection()->ping();
+    }
 
-	/* extracts a Connection and returns it, wrapped in a Promise */
-	public function getConnection() {
-		return $this->connectionPool->extractConnection();
-	}
+    public function prepare($query, $data = null) {
+        return $this->connectionPool->getReadyConnection()->prepare($query, $data);
+    }
 
-	public function close() {
-		$this->connectionPool->close();
-	}
+    /* extracts a Connection and returns it, wrapped in a Promise */
+    public function getConnection() {
+        return $this->connectionPool->extractConnection();
+    }
 
-	public function __destruct() {
-		$this->close();
-	}
+    public function close() {
+        $this->connectionPool->close();
+    }
+
+    public function __destruct() {
+        $this->close();
+    }
 }
