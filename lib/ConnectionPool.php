@@ -48,7 +48,8 @@ class ConnectionPool {
 				}
 			}
 		}
-		return ($this->connectionDeferred = new \Amp\Deferred)->promise();
+		$this->connectionDeferred = new \Amp\Deferred;
+		return $this->connectionDeferred->promise();
 	}
 
 	public function addConnection() {
