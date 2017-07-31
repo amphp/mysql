@@ -1,6 +1,6 @@
 <?php
 
-require './example_bootstrap.php';
+require 'support/bootstrap.php';
 
 \Amp\Loop::run(function() {
     $db = new \Amp\Mysql\Pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME);

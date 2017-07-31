@@ -4,7 +4,7 @@
  * Generic example for establishing a connection
  */
 
-require './example_bootstrap.php';
+require 'support/bootstrap.php';
 
 \Amp\Loop::run(function() {
     /* If you want ssl, pass as second argument an array with ssl options (an empty options array is valid too); if null is passed, ssl is not enabled either */
