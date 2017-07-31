@@ -152,26 +152,22 @@ class Processor {
 
         $this->deferreds[] = $deferred = new Deferred;
         \Amp\Socket\connect($this->config->resolvedHost)->onResolve(function ($error, $socket) use ($deferred) {
-            $socket = $socket->getResource();
             if ($this->connectionState === self::CLOSED) {
                 $deferred->resolve(null);
                 if ($socket) {
-                    fclose($socket);
+                    $socket->close();
                 }
                 return;
             }
 
             if ($error) {
                 $deferred->fail($error);
-                if ($socket) {
-                    fclose($socket);
-                }
                 return;
             }
 
             $this->processors = [$this->parseMysql()];
 
-            $this->socket = $socket;
+            $this->socket = $socket->getResource();
             $this->readWatcher = Loop::onReadable($this->socket, [$this, "onInit"]);
         });
 
@@ -1199,7 +1195,7 @@ class Processor {
 
                 Loop::cancel($watcherId);
                 Loop::disable($this->readWatcher); // temporarily disable, reenable after establishing tls
-                \Amp\Socket\cryptoEnable($socket, $this->config->ssl + ['peer_name' => $this->config->host])->onResolve(function ($error) {
+                \Amp\Socket\Internal\enableCrypto($socket, $this->config->ssl + ['peer_name' => $this->config->host])->onResolve(function ($error) {
                     if ($error) {
                         $this->getDeferred()->fail($error);
                         $this->closeSocket();
