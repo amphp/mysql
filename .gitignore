@@ -1,8 +1,5 @@
-test.php
-.idea
-vendor
 composer.lock
-composer.phar
-mysql_config.php
+vendor
+mysql-config.php
 *.pid
 test/mysql_db
