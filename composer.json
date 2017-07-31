@@ -1,33 +1,30 @@
 {
-	"name": "amphp/mysql",
-	"description": "Asynchronous parallel Mysql client built on the Amp concurrency framework",
-	"minimum-stability": "dev",
-	"require": {
-		"amphp/amp": "^2",
-		"amphp/socket": "^0.10"
-	},
-	"licence": "MIT",
-	"authors": [
-		{
-			"name": "Bob Weinand",
-			"email": "bobwei9@hotmail.com"
-		}
-	],
-	"require-dev": {
-		"phpunit/phpunit": "^6",
-		"amphp/phpunit-util": "^1"
-	},
-	"autoload": {
-		"psr-4": {
-			"Amp\\Mysql\\": "lib/"
-		}
-	},
-	"autoload-dev": {
-		"psr-4": {
-			"Amp\\Mysql\\Test\\": "test"
-		},
-		"files": [
-			"test/bootstrap.php"
-		]
-	}
+    "name": "amphp/mysql",
+    "description": "Asynchronous parallel Mysql client built on the Amp concurrency framework",
+    "minimum-stability": "dev",
+    "require": {
+        "amphp/amp": "^2",
+        "amphp/socket": "^0.10"
+    },
+    "licence": "MIT",
+    "authors": [
+        {
+            "name": "Bob Weinand",
+            "email": "bobwei9@hotmail.com"
+        }
+    ],
+    "require-dev": {
+        "phpunit/phpunit": "^6",
+        "amphp/phpunit-util": "^1"
+    },
+    "autoload": {
+        "psr-4": {
+            "Amp\\Mysql\\": "lib/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Amp\\Mysql\\Test\\": "test"
+        }
+    }
 }
