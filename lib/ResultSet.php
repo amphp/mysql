@@ -50,6 +50,15 @@ class ResultSet {
         });
     }
 
+    public function fetchAssocs() {
+        return $this->genericFetchAll(function($rows) {
+            $names = array_column($this->result->columns, "name");
+            return array_map(function($row) use ($names) {
+                return array_combine($names, $row);
+            }, $rows ?: []);
+        });
+    }
+    
     public function fetchObjects() {
         return $this->genericFetchAll(function($rows) {
             $names = array_column($this->result->columns, "name");
@@ -94,6 +103,12 @@ class ResultSet {
         return $this->genericFetch();
     }
 
+    public function fetchAssoc() {
+        return $this->genericFetch(function ($row) {
+            return array_combine(array_column($this->result->columns, "name"), $row);
+        });
+    }
+    
     public function fetchObject() {
         return $this->genericFetch(function ($row) {
             return (object) array_combine(array_column($this->result->columns, "name"), $row);
