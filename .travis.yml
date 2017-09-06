@@ -11,9 +11,10 @@ php:
   - 7.2
   - nightly
 
-matrix:
+jobs:
   include:
-    - addons:
+    - stage: test
+      addons:
          mariadb: 10.1
       php: '7.0'
     - addons:
@@ -43,6 +44,12 @@ matrix:
     - addons:
          mariadb: 10.3
       php: 'nightly'
+    - stage: benchmark
+      php: '7.2'
+      env:
+        - AMP_DEBUG=false
+      script:
+        - PATH=$PATH:$(pwd)/benchmarks/bin vendor/bin/phpbench run --report=aggregate
   allow_failures:
     - php: 'nightly'
     - addons:
@@ -65,7 +72,7 @@ install:
 before_script:
   - echo '<?php $autoloader = require(__DIR__."/../vendor/autoload.php"); const DB_HOST = "localhost"; const DB_USER = "root"; const DB_PASS = "";' > test/bootstrap.php
   - mysql -u root -e "SELECT VERSION(); CREATE DATABASE test; CREATE TABLE test.main (a INT(11), b INT(11)); INSERT INTO test.main VALUES (1, 2), (2, 3), (3, 4), (4, 5), (5, 6);"
- 
+
 script:
   - phpdbg -qrr vendor/bin/phpunit --coverage-text --coverage-clover build/logs/clover.xml
   - PHP_CS_FIXER_IGNORE_ENV=1 php vendor/bin/php-cs-fixer --diff --dry-run -v fix

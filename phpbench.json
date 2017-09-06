@@ -1,0 +1,5 @@
+{
+    "bootstrap": "vendor/autoload.php",
+    "path": "benchmarks",
+    "php_binary": "php_no_xdebug"
+}
