@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+php -n -dopcache.enable_cli=1 -dzend.assertions=-1 "$@"
