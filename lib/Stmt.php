@@ -86,6 +86,10 @@ class Stmt {
             $i = reset($array);
         }
 
+        if (!is_scalar($data) && !(is_object($data) && method_exists($data, '__toString'))) {
+            throw new \TypeError("Data must be scalar or object that implements __toString method");
+        }
+
         do {
             $realId = -1;
             while (isset($this->named[++$realId]) || $i-- > 0) {
