@@ -12,8 +12,8 @@ require 'support/generic-table.php';
     /* multi statements are enabled by default, but generally stored procedures also might return multiple resultsets anyway */
     $promise = $db->query("SELECT a + b FROM tmp; SELECT a - b FROM tmp;");
 
-    for ($rows = (yield $promise); $rows !== null; $rows = (yield $rows->next())) {
-        while (($row = (yield $rows->fetch())) !== null) {
+    for ($rows = yield $promise; $rows !== null; $rows = yield $rows->next()) {
+        while (($row = yield $rows->fetch()) !== null) {
             var_dump($row); // associative array paired with numeric indices
         }
 
