@@ -8,7 +8,7 @@ class Pool {
     public function __construct($connStr, $sslOptions = null) {
         if (preg_match("((?:^|;)\s*limit\s*=\s*([^;]*?)\s*(?:;|$))is", $connStr, $match, PREG_OFFSET_CAPTURE)) {
             $limit = (int) $match[1][0];
-            $connStr = substr_replace($connStr, ";", $match[0][1], strlen($match[0][0]));
+            $connStr = substr_replace($connStr, '', $match[0][1], strlen($match[0][0]));
         } else {
             $limit = INF;
         }
