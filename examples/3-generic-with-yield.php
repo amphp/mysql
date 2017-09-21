@@ -13,7 +13,7 @@ Amp\Loop::run(function() {
 
     $promises = [];
     foreach (range(1, 5) as $num) {
-        $promises[] = yield $db->prepare("INSERT INTO tmp (a, b) VALUES (?, ? * 2)", [$num, $num]);
+        $promises[] = $db->prepare("INSERT INTO tmp (a, b) VALUES (?, ? * 2)", [$num, $num]);
     }
 
     /* wait until everything is inserted */
