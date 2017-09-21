@@ -987,8 +987,8 @@ class Processor {
         $buf = "";
 
         while (true) {
-            while (\strlen($buf) < 4) {
-                $buf .= (yield $inflated);
+            while (\strlen($buf) < 7) {
+                $buf .= yield $inflated;
                 $inflated = "";
             }
 
@@ -1000,7 +1000,7 @@ class Processor {
 
             if ($size > 0) {
                 while (\strlen($buf) < $size) {
-                    $buf .= (yield $inflated);
+                    $buf .= yield $inflated;
                     $inflated = "";
                 }
 
@@ -1028,7 +1028,7 @@ class Processor {
 
             do {
                 while (\strlen($buf) < 4) {
-                    $buf .= (yield $parsed);
+                    $buf .= yield $parsed;
                     $parsed = [];
                 }
 
@@ -1037,7 +1037,7 @@ class Processor {
                 $buf = substr($buf, 4);
 
                 while (\strlen($buf) < ($len & 0xffffff)) {
-                    $buf .= (yield $parsed);
+                    $buf .= yield $parsed;
                     $parsed = [];
                 }
 
