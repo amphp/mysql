@@ -552,6 +552,7 @@ class Processor {
                     $result->updateState(ResultProxy::COLUMNS_FETCHED);
                     $this->successfulResultsetFetch();
                 } else {
+                    $this->parseCallback = null;
                     $this->getDeferred()->resolve($this->getConnInfo());
                     $this->ready();
                 }
