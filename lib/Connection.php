@@ -49,7 +49,7 @@ class Connection {
 
     public static function parseConnStr($connStr, $sslOptions = null) {
         $db = null;
-	$useCompression = "false";
+        $useCompression = "false";
 
         foreach (explode(";", $connStr) as $param) {
             list($key, $$key) = array_map("trim", explode("=", $param, 2) + [1 => null]);
@@ -63,7 +63,7 @@ class Connection {
         $config->user = $user;
         $config->pass = $pass;
         $config->db = $db;
-	$config->useCompression = $useCompression && $useCompression != "false";
+        $config->useCompression = $useCompression && $useCompression != "false";
 
         if (is_array($sslOptions)) {
             if (isset($sslOptions["key"])) {

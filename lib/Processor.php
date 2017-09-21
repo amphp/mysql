@@ -334,6 +334,7 @@ class Processor {
             if ($this->connectionState === self::READY) {
                 $this->out[] = null;
                 $this->sendPacket($payload);
+                $this->out[] = null; // does not expect a reply - must be reset immediately
             }
             $this->ready();
         });
