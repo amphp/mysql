@@ -50,13 +50,8 @@ class Connection {
     public static function parseConnStr($connStr, $sslOptions = null) {
         $db = null;
 
-        // well, yes. I *had* to document that behavior change. Future me, feel free to kill me ;-)
         foreach (explode(";", $connStr) as $param) {
-            if (PHP_VERSION_ID < 70000) {
-                list($$key, $key) = array_reverse(array_map("trim", explode("=", $param, 2)));
-            } else {
-                list($key, $$key) = array_map("trim", explode("=", $param, 2));
-            }
+            list($key, $$key) = array_map("trim", explode("=", $param, 2) + [1 => null]);
         }
         if (!isset($host, $user, $pass)) {
             throw new \Exception("Required parameters host, user and pass need to be passed in connection string");
