@@ -367,7 +367,7 @@ class Processor {
         // @TODO flags to use?
         $this->capabilities |= self::CLIENT_SESSION_TRACK | self::CLIENT_TRANSACTIONS | self::CLIENT_PROTOCOL_41 | self::CLIENT_SECURE_CONNECTION | self::CLIENT_MULTI_RESULTS | self::CLIENT_PS_MULTI_RESULTS | self::CLIENT_MULTI_STATEMENTS | self::CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA;
 
-        if (extension_loaded("zlib")) {
+        if (extension_loaded("zlib") && $this->config->useCompression) {
             $this->capabilities |= self::CLIENT_COMPRESS;
         }
     }
