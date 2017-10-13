@@ -112,6 +112,9 @@ class ConnectionPool {
 
     private function ready($hash) {
         $conn = $this->connections[$this->connectionMap[$hash]];
+        if (!$conn) {
+            return;
+        }
         if (list($deferred, $method, $args) = $this->virtualConnection->getCall()) {
             $deferred->resolve(call_user_func_array([$conn, $method], $args));
         } else {
