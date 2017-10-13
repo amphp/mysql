@@ -10,6 +10,9 @@ class ConnectionConfig {
     public $user;
     public $pass;
     public $db = null;
+
+    public $useCompression = false;
+
     /* null for no ssl, array with eventual ssl context options (peer_name is automatically set) */
     public $ssl = null;
 

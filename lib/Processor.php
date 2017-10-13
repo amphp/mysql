@@ -334,6 +334,7 @@ class Processor {
             if ($this->connectionState === self::READY) {
                 $this->out[] = null;
                 $this->sendPacket($payload);
+                $this->out[] = null; // does not expect a reply - must be reset immediately
             }
             $this->ready();
         });
@@ -367,7 +368,7 @@ class Processor {
         // @TODO flags to use?
         $this->capabilities |= self::CLIENT_SESSION_TRACK | self::CLIENT_TRANSACTIONS | self::CLIENT_PROTOCOL_41 | self::CLIENT_SECURE_CONNECTION | self::CLIENT_MULTI_RESULTS | self::CLIENT_PS_MULTI_RESULTS | self::CLIENT_MULTI_STATEMENTS | self::CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA;
 
-        if (extension_loaded("zlib")) {
+        if (extension_loaded("zlib") && $this->config->useCompression) {
             $this->capabilities |= self::CLIENT_COMPRESS;
         }
     }
@@ -552,6 +553,7 @@ class Processor {
                     $result->updateState(ResultProxy::COLUMNS_FETCHED);
                     $this->successfulResultsetFetch();
                 } else {
+                    $this->parseCallback = null;
                     $this->getDeferred()->resolve($this->getConnInfo());
                     $this->ready();
                 }
@@ -985,8 +987,8 @@ class Processor {
         $buf = "";
 
         while (true) {
-            while (\strlen($buf) < 4) {
-                $buf .= (yield $inflated);
+            while (\strlen($buf) < 7) {
+                $buf .= yield $inflated;
                 $inflated = "";
             }
 
@@ -998,7 +1000,7 @@ class Processor {
 
             if ($size > 0) {
                 while (\strlen($buf) < $size) {
-                    $buf .= (yield $inflated);
+                    $buf .= yield $inflated;
                     $inflated = "";
                 }
 
@@ -1026,7 +1028,7 @@ class Processor {
 
             do {
                 while (\strlen($buf) < 4) {
-                    $buf .= (yield $parsed);
+                    $buf .= yield $parsed;
                     $parsed = [];
                 }
 
@@ -1035,7 +1037,7 @@ class Processor {
                 $buf = substr($buf, 4);
 
                 while (\strlen($buf) < ($len & 0xffffff)) {
-                    $buf .= (yield $parsed);
+                    $buf .= yield $parsed;
                     $parsed = [];
                 }
 
