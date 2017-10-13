@@ -144,9 +144,11 @@ class ConnectionPool {
     }
 
     public function extractConnection() {
-        return $this->getReadyConnection()->getThis()->onResolve(function($e, $conn) {
+        $promise = $this->getReadyConnection()->getThis();
+		$promise->onResolve(function($e, $conn) {
             $this->unmapConnection(spl_object_hash($conn));
         });
+        return $promise;
     }
 
     /* This method might be called multiple times with the same hash. Important is that it's unmapped immediately */
