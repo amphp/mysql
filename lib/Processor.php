@@ -390,10 +390,12 @@ class Processor {
         $this->parseCallback = null;
         if ($this->connectionState == self::READY) {
             // normal error
-            if ($this->config->exceptions) {
-                $this->getDeferred()->fail(new QueryException("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}", $this->query));
-            } else {
-                $this->getDeferred()->resolve(false);
+            if ($deferred = $this->getDeferred()) {
+                if ($this->config->exceptions) {
+                    $deferred->fail(new QueryException("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}", $this->query));
+                } else {
+                    $deferred->resolve(false);
+                }
             }
             $this->query = null;
             $this->ready();
