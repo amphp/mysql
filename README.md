@@ -1,7 +1,7 @@
 Mysql [![Build Status](https://travis-ci.org/amphp/mysql.svg?branch=master)](https://travis-ci.org/amphp/mysql) [![Two Crowns](https://img.shields.io/badge/chat-Two%20Crowns-blue.svg)](https://dev.kelunik.com)
 =====
 
-`amp\mysql` is an asynchronous MySQL client built on the [amp concurrency framework][1]. The library exposes a Promise-based API to dynamically query multiple synchronous MySQL connections concurrently. The client transparently distributes these queries across a scalable pool of available connections and does so using 100% userland PHP; there are no external extension dependencies (e.g. `ext/mysqli`, `ext/pdo`, etc).
+`amp/mysql` is an asynchronous MySQL client built on the [Amp concurrency framework][1]. The library exposes a Promise-based API to dynamically query multiple synchronous MySQL connections concurrently. The client transparently distributes these queries across a scalable pool of available connections and does so using 100% userland PHP; there are no external extension dependencies (e.g. `ext/mysqli`, `ext/pdo`, etc).
 
 ##### Features
 
@@ -17,19 +17,20 @@ Mysql [![Build Status](https://travis-ci.org/amphp/mysql.svg?branch=master)](htt
 * Expose a non-blocking API for issuing multiple MySQL queries in parallel;
 * Support the *full* MySQL protocol and *all* available commands asynchronously.
 
-##### Installation
+## Installation
+
+This package can be installed as a [Composer](https://getcomposer.org/) dependency.
 
 ```bash
-$ git clone https://github.com/amphp/mysql
-$ cd mysql
-$ composer.phar install
+composer require amphp/mysql
 ```
 
-The relevant packagist lib is `amphp/mysql`.
+## Requirements
 
+* PHP 7.0+
+* [Amp framework](https://github.com/amphp/amp) (installed via composer)
 
-Documentation & Examples
-------------------------
+## Documentation & Examples
 
 More extensive code examples reside in the [`examples`](examples) directory.
 
@@ -38,7 +39,7 @@ More extensive code examples reside in the [`examples`](examples) directory.
 *Async Generator*
 
 ```php
-\Amp\run(function() {
+\Amp\Loop::run(function() {
     $connection = new Amp\Mysql\Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS);
     yield $connection->connect();
     $resultSet = yield $connection->query("SELECT 10");
@@ -110,7 +111,7 @@ $rows = yield $resultSet->fetchAll();
 
 **Note**: Stmt class also provides `getFields()` (returning Promise which will hold an array of arrays with column info), `bind($paramIdentifier, $value)` (binds a parameter, it's then not necessary to pass it in `execute()`) and `reset()` (to reset values bound via `bind()`) methods.
 
-<small><sup>†</sup> yes, the MySQL protocol does not support `:NAME` placeholders; they are internally replaced by `?` characters</small>
+<small><sup>†</sup> Yes, the MySQL protocol does not support `:NAME` placeholders; they are internally replaced by `?` characters</small>
 
 ##### Other methods than query() and prepare()
 
