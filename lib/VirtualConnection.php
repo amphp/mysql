@@ -16,14 +16,14 @@ class VirtualConnection {
         return null;
     }
 
-    public function fail($e) {
+    public function fail(\Throwable $e) {
         foreach ($this->call as list($deferred)) {
             $deferred->fail($e);
         }
         $this->call = [];
     }
 
-    public function __call($func, $args) {
+    public function __call(string $func, array $args) {
         $deferred = new Deferred;
         $this->call[] = [$deferred, $func, $args];
         return $deferred->promise();

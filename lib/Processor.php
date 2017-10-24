@@ -4,6 +4,7 @@ namespace Amp\Mysql;
 
 use Amp\Deferred;
 use Amp\Loop;
+use Amp\Promise;
 
 /* @TODO
  * 14.2.3 Auth switch request??
@@ -53,7 +54,9 @@ class Processor {
     private $authPluginDataLen;
     private $query;
     public $named = [];
+    /** @var callable|null */
     private $parseCallback = null;
+    /** @var callable|null */
     private $packetCallback = null;
 
     public $config;
@@ -112,11 +115,11 @@ class Processor {
         $this->connInfo = new ConnectionState;
     }
 
-    public function alive() {
+    public function alive(): bool {
         return $this->connectionState <= self::READY;
     }
 
-    public function isReady() {
+    public function isReady(): bool {
         return $this->connectionState === self::READY;
     }
 
@@ -147,7 +150,7 @@ class Processor {
         }
     }
 
-    public function connect() {
+    public function connect(): Promise {
         \assert(!$this->deferreds && !$this->socket, self::class."::connect() must not be called twice");
 
         $this->deferreds[] = $deferred = new Deferred;
@@ -186,13 +189,13 @@ class Processor {
     }
 
     /** @return Deferred */
-    private function getDeferred() {
+    private function getDeferred(): Deferred {
         $deferred = current($this->deferreds);
         unset($this->deferreds[key($this->deferreds)]);
         return $deferred;
     }
 
-    private function appendTask($callback) {
+    private function appendTask(callable $callback) {
         if ($this->packetCallback || $this->parseCallback || !empty($this->onReady) || !empty($this->deferreds) || $this->connectionState != self::READY) {
             $this->onReady[] = $callback;
         } else {
@@ -204,11 +207,11 @@ class Processor {
         }
     }
 
-    public function getConnInfo() {
+    public function getConnInfo(): ConnectionState {
         return clone $this->connInfo;
     }
 
-    public function startCommand($callback) {
+    public function startCommand(callable $callback): Promise {
         $deferred = new Deferred;
         $this->appendTask(function() use ($callback, $deferred) {
             $this->seqId = $this->compressionId = -1;
@@ -218,12 +221,12 @@ class Processor {
         return $deferred->promise();
     }
 
-    public function setQuery($query) {
+    public function setQuery(string $query) {
         $this->query = $query;
         $this->parseCallback = [$this, "handleQuery"];
     }
 
-    public function setPrepare($query) {
+    public function setPrepare(string $query) {
         $this->query = $query;
         $this->parseCallback = [$this, "handlePrepare"];
     }
@@ -261,7 +264,7 @@ class Processor {
     */
 
     /** @see 14.7.5 COM_STMT_SEND_LONG_DATA */
-    public function bindParam($stmtId, $paramId, $data) {
+    public function bindParam(int $stmtId, int $paramId, string $data) {
         $payload = "\x18";
         $payload .= DataTypes::encode_int32($stmtId);
         $payload .= DataTypes::encode_int16($paramId);
@@ -276,7 +279,7 @@ class Processor {
     /** @see 14.7.6 COM_STMT_EXECUTE */
     // prebound params: null-bit set, type MYSQL_TYPE_LONG_BLOB, no value
     // $params is by-ref, because the actual result object might not yet have been filled completely with data upon call of this method ...
-    public function execute($stmtId, $query, &$params, $prebound, $data = []) {
+    public function execute(int $stmtId, string $query, array &$params, array $prebound, array $data = []): Promise {
         $deferred = new Deferred;
         $this->appendTask(function () use ($stmtId, $query, &$params, $prebound, $data, $deferred) {
             $payload = "\x17";
@@ -328,7 +331,7 @@ class Processor {
     }
 
     /** @see 14.7.7 COM_STMT_CLOSE */
-    public function closeStmt($stmtId) {
+    public function closeStmt(int $stmtId) {
         $payload = "\x19" . DataTypes::encode_int32($stmtId);
         $this->appendTask(function () use ($payload) {
             if ($this->connectionState === self::READY) {
@@ -341,7 +344,7 @@ class Processor {
     }
 
     /** @see 14.7.8 COM_STMT_RESET */
-    public function resetStmt($stmtId) {
+    public function resetStmt(int $stmtId): Promise {
         $payload = "\x1a" . DataTypes::encode_int32($stmtId);
         $deferred = new Deferred;
         $this->appendTask(function () use ($payload, $deferred) {
@@ -353,7 +356,7 @@ class Processor {
     }
 
     /** @see 14.8.4 COM_STMT_FETCH */
-    public function fetchStmt($stmtId) {
+    public function fetchStmt(int $stmtId): Promise {
         $payload = "\x1c" . DataTypes::encode_int32($stmtId) . DataTypes::encode_int32(1);
         $deferred = new Deferred;
         $this->appendTask(function () use ($payload, $deferred) {

@@ -2,6 +2,8 @@
 
 namespace Amp\Mysql;
 
+use Amp\Promise;
+
 class Pool {
     private $connectionPool;
 
@@ -21,64 +23,64 @@ class Pool {
         return $this->connectionPool->getConnectionPromise();
     }
 
-    public function setCharset($charset, $collate = "") {
+    public function setCharset(string $charset, string $collate = "") {
         $this->connectionPool->setCharset($charset, $collate);
     }
 
-    public function query($query) {
+    public function query(string $query): Promise {
         return $this->connectionPool->getReadyConnection()->query($query);
     }
 
-    public function listFields($table, $like = "%") {
+    public function listFields(string $table, string $like = "%"): Promise {
         return $this->connectionPool->getReadyConnection()->listFields($table, $like);
     }
 
-    public function listAllFields($table, $like = "%") {
+    public function listAllFields(string $table, string $like = "%"): Promise {
         return $this->connectionPool->getReadyConnection()->listAllFields($table, $like);
     }
 
-    public function createDatabase($db) {
+    public function createDatabase(string $db): Promise {
         return $this->connectionPool->getReadyConnection()->createDatabase($db);
     }
 
-    public function dropDatabase($db) {
+    public function dropDatabase(string $db): Promise {
         return $this->connectionPool->getReadyConnection()->dropDatabase($db);
     }
 
-    public function refresh($subcommand) {
+    public function refresh(string $subcommand): Promise {
         return $this->connectionPool->getReadyConnection()->refresh($subcommand);
     }
 
-    public function shutdown() {
+    public function shutdown(): Promise {
         return $this->connectionPool->getReadyConnection()->shutdown();
     }
 
-    public function statistics() {
+    public function statistics(): Promise {
         return $this->connectionPool->getReadyConnection()->statistics();
     }
 
-    public function processInfo() {
+    public function processInfo(): Promise {
         return $this->connectionPool->getReadyConnection()->processInfo();
     }
 
-    public function killProcess($process) {
+    public function killProcess($process): Promise {
         return $this->connectionPool->getReadyConnection()->killProcess($process);
     }
 
-    public function debugStdout() {
+    public function debugStdout(): Promise {
         return $this->connectionPool->getReadyConnection()->debugStdout();
     }
 
-    public function ping() {
+    public function ping(): Promise {
         return $this->connectionPool->getReadyConnection()->ping();
     }
 
-    public function prepare($query, $data = null) {
+    public function prepare(string $query, $data = null): Promise {
         return $this->connectionPool->getReadyConnection()->prepare($query, $data);
     }
 
     /* extracts a Connection and returns it, wrapped in a Promise */
-    public function getConnection() {
+    public function getConnection(): Promise {
         return $this->connectionPool->extractConnection();
     }
 

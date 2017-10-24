@@ -3,6 +3,7 @@
 namespace Amp\Mysql;
 
 use Amp\Deferred;
+use Amp\Promise;
 use Amp\Success;
 
 class ResultSet {
@@ -14,7 +15,7 @@ class ResultSet {
         $this->result = $result;
     }
 
-    public function getFields() {
+    public function getFields(): Promise {
         if ($this->result->state >= ResultProxy::COLUMNS_FETCHED) {
             return new Success($this->result->columns);
         } else {
@@ -24,7 +25,7 @@ class ResultSet {
         }
     }
 
-    public function rowCount() {
+    public function rowCount(): Promise {
         if ($this->result->state == ResultProxy::ROWS_FETCHED) {
             return new Success(count($this->result->rows));
         } else {
@@ -34,7 +35,7 @@ class ResultSet {
         }
     }
 
-    protected function genericFetchAll($cb) {
+    protected function genericFetchAll(callable $cb): Promise {
         if ($this->result->state == ResultProxy::ROWS_FETCHED) {
             return new Success($cb($this->result->rows));
         } else {
@@ -44,13 +45,13 @@ class ResultSet {
         }
     }
 
-    public function fetchRows() {
+    public function fetchRows(): Promise {
         return $this->genericFetchAll(function($rows) {
             return $rows ?: [];
         });
     }
 
-    public function fetchAssocs() {
+    public function fetchAssocs(): Promise {
         return $this->genericFetchAll(function($rows) {
             $names = array_column($this->result->columns, "name");
             return array_map(function($row) use ($names) {
@@ -59,7 +60,7 @@ class ResultSet {
         });
     }
     
-    public function fetchObjects() {
+    public function fetchObjects(): Promise {
         return $this->genericFetchAll(function($rows) {
             $names = array_column($this->result->columns, "name");
             return array_map(function($row) use ($names) {
@@ -68,7 +69,7 @@ class ResultSet {
         });
     }
 
-    public function fetchAll() {
+    public function fetchAll(): Promise {
         return $this->genericFetchAll(function($rows) {
             $names = array_column($this->result->columns, "name");
             return array_map(function($row) use ($names) {
@@ -77,7 +78,7 @@ class ResultSet {
         });
     }
 
-    protected function genericFetch(callable $cb = null) {
+    protected function genericFetch(callable $cb = null): Promise {
         if ($this->result->userFetched < $this->result->fetchedRows) {
             $row = $this->result->rows[$this->result->userFetched++];
             return new Success($cb ? $cb($row) : $row);
@@ -99,33 +100,33 @@ class ResultSet {
         }
     }
 
-    public function fetchRow() {
+    public function fetchRow(): Promise {
         return $this->genericFetch();
     }
 
-    public function fetchAssoc() {
+    public function fetchAssoc(): Promise {
         return $this->genericFetch(function ($row) {
             return array_combine(array_column($this->result->columns, "name"), $row);
         });
     }
     
-    public function fetchObject() {
+    public function fetchObject(): Promise {
         return $this->genericFetch(function ($row) {
             return (object) array_combine(array_column($this->result->columns, "name"), $row);
         });
     }
 
-    public function fetch() {
+    public function fetch(): Promise {
         return $this->genericFetch(function ($row) {
             return array_combine(array_column($this->result->columns, "name"), $row) + $row;
         });
     }
 
-    public function getConnInfo() {
+    public function getConnInfo(): ConnectionState {
         return clone $this->connInfo;
     }
 
-    public function next() {
+    public function next(): Promise {
         $deferred = $this->result->next ?: $this->result->next = new Deferred;
         return $deferred->promise();
     }

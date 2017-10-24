@@ -20,11 +20,11 @@ class ResultProxy {
 
     const SINGLE_ROW_FETCH = 255;
 
-    public function setColumns($columns) {
+    public function setColumns(int $columns) {
         $this->columnCount = $this->columnsToFetch = $columns;
     }
 
-    public function updateState($state) {
+    public function updateState(int $state) {
         $this->state = $state;
         if ($state == ResultProxy::ROWS_FETCHED) {
             $this->rowFetched(null);
@@ -59,5 +59,4 @@ class ResultProxy {
 
         return (array) $tmp;
     }
-
 }

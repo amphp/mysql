@@ -36,7 +36,7 @@ class DataTypes {
     const MYSQL_TYPE_STRING = 0xfe;
     const MYSQL_TYPE_GEOMETRY = 0xff;
 
-    private static function isLittleEndian() {
+    private static function isLittleEndian(): bool {
         static $result = null;
         if ($result === null) {
             return $result = unpack('S', "\x01\x00")[1] === 1;
@@ -46,7 +46,7 @@ class DataTypes {
 
 
     /** @see 14.7.3 Binary Value */
-    public static function encodeBinary($param) {
+    public static function encodeBinary($param): array {
         $unsigned = 0;
 
         switch (gettype($param)) {
@@ -89,7 +89,7 @@ class DataTypes {
     }
 
     /** @see 14.7.3 Binary Protocol Value */
-    public static function decodeBinary($type, $str, &$len = 0) {
+    public static function decodeBinary(int $type, string $str, /* ?int */ &$len = 0): string {
         $unsigned = $type & 0x80;
         switch ($type) {
             case self::MYSQL_TYPE_STRING:
@@ -191,17 +191,17 @@ class DataTypes {
         }
     }
 
-    public static function decodeNullString($str, &$len = 0) {
+    public static function decodeNullString(string $str, /* ?int */ &$len = 0): string {
         return substr($str, 0, $len = strpos($str, "\0"));
     }
 
-    public static function decodeStringOff($str, &$off) {
+    public static function decodeStringOff(string $str, int &$off) {
         $len = self::decodeUnsignedOff($str, $off);
         $off += $len;
         return substr($str, $off - $len, $len);
     }
 
-    public static function decodeUnsignedOff($str, &$off) {
+    public static function decodeUnsignedOff(string $str, int &$off) {
         $int = ord($str[$off]);
         if ($int < 0xfb) {
             $off += 1;
@@ -221,12 +221,12 @@ class DataTypes {
         }
     }
 
-    public static function decodeString($str, &$intlen = 0, &$len = 0) {
+    public static function decodeString(string $str, /* ?int */ &$intlen = 0, /* ?int */ &$len = 0): string {
         $len = self::decodeUnsigned($str, $intlen);
         return substr($str, $intlen, $len);
     }
 
-    public static function decodeUnsigned($str, &$len = 0) {
+    public static function decodeUnsigned(string $str, /* ?int */ &$len = 0): string {
         $int = \ord($str);
         if ($int < 0xfb) {
             $len = 1;
@@ -246,7 +246,7 @@ class DataTypes {
         }
     }
 
-    public static function decode_intByLen($str, $len) {
+    public static function decode_intByLen(string $str, int $len): int {
         $int = 0;
         while ($len--) {
             $int = ($int << 8) + ord($str[$len]);
@@ -254,7 +254,7 @@ class DataTypes {
         return $int;
     }
 
-    public static function decode_int8($str) {
+    public static function decode_int8(string $str): int {
         $int = \ord($str);
         if ($int < (1 << 7)) {
             return $int;
@@ -263,11 +263,11 @@ class DataTypes {
         return $int << $shift >> $shift;
     }
 
-    public static function decode_unsigned8($str) {
+    public static function decode_unsigned8(string $str): int {
         return \ord($str);
     }
 
-    public static function decode_int16($str) {
+    public static function decode_int16(string $str): int {
         $int = unpack("v", $str)[1];
         if ($int < (1 << 15)) {
             return $int;
@@ -276,11 +276,11 @@ class DataTypes {
         return $int << $shift >> $shift;
     }
 
-    public static function decode_unsigned16($str) {
+    public static function decode_unsigned16(string $str): int {
         return unpack("v", $str)[1];
     }
 
-    public static function decode_int24($str) {
+    public static function decode_int24(string $str): int {
         $int = unpack("V", substr($str, 0, 3) . "\x00")[1];
         if ($int < (1 << 23)) {
             return $int;
@@ -289,7 +289,7 @@ class DataTypes {
         return $int << $shift >> $shift;
     }
 
-    public static function decode_unsigned24($str) {
+    public static function decode_unsigned24(string $str): int {
         return unpack("V", substr($str, 0, 3) . "\x00")[1];
     }
 
@@ -304,7 +304,7 @@ class DataTypes {
         return unpack("V", $str)[1];
     }
 
-    public static function decode_unsigned32($str) {
+    public static function decode_unsigned32(string $str): int {
         if (PHP_INT_SIZE > 4) {
             return unpack("V", $str)[1];
         } else {
@@ -313,7 +313,7 @@ class DataTypes {
         }
     }
 
-    public static function decode_int64($str) {
+    public static function decode_int64(string $str): int {
         if (PHP_INT_SIZE > 4) {
             $int = unpack("V2", $str);
             return $int[1] + ($int[2] << 32);
@@ -323,7 +323,7 @@ class DataTypes {
         }
     }
 
-    public static function decode_unsigned64($str) {
+    public static function decode_unsigned64(string $str): int {
         if (PHP_INT_SIZE > 4) {
             $int = unpack("V2", $str);
             return $int[1] + $int[2] * (1 << 32);
@@ -333,7 +333,7 @@ class DataTypes {
         }
     }
 
-    public static function encodeInt($int) {
+    public static function encodeInt(int $int): string {
         if ($int < 0xfb) {
             return chr($int);
         } elseif ($int < (1 << 16)) {
@@ -347,19 +347,19 @@ class DataTypes {
         }
     }
 
-    public static function encode_int16($int) {
+    public static function encode_int16(int $int): string {
         return pack("v", $int);
     }
 
-    public static function encode_int24($int) {
+    public static function encode_int24(int $int): string {
         return substr(pack("V", $int), 0, 3);
     }
 
-    public static function encode_int32($int) {
+    public static function encode_int32(int $int): string {
         return pack("V", $int);
     }
 
-    public static function encode_int64($int) {
+    public static function encode_int64(int $int): string {
         return pack("VV", $int & 0xffffffff, $int >> 32);
     }
 }

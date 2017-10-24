@@ -3,6 +3,7 @@
 namespace Amp\Mysql;
 
 use Amp\Deferred;
+use Amp\Promise;
 use Amp\Success;
 
 class Stmt {
@@ -18,7 +19,7 @@ class Stmt {
 
     private $result;
 
-    public function __construct(Processor $conn, $query, $stmtId, $named, ResultProxy $result) {
+    public function __construct(Processor $conn, string $query, int $stmtId, array $named, ResultProxy $result) {
         $this->conn = $conn;
         $this->query = $query;
         $this->stmtId = $stmtId;
@@ -108,7 +109,7 @@ class Stmt {
         }
     }
 
-    public function execute($data = []) {
+    public function execute($data = []): Promise {
         $prebound = $args = [];
         for ($unnamed = $i = 0; $i < $this->paramCount; $i++) {
             if (isset($this->named[$i])) {
@@ -154,11 +155,11 @@ class Stmt {
     }
 
     // @TODO not necessary, see cursor?!
-    public function fetch() {
+    public function fetch(): Promise {
         return $this->conn()->fetchStmt($this->stmtId);
     }
 
-    public function getFields() {
+    public function getFields(): Promise {
         if ($this->result->state >= ResultProxy::COLUMNS_FETCHED) {
             return new Success($this->result->columns);
         } elseif (isset($this->result->deferreds[ResultProxy::COLUMNS_FETCHED][0])) {
@@ -170,7 +171,7 @@ class Stmt {
         }
     }
 
-    public function connInfo() {
+    public function connInfo(): ConnectionState {
         return $this->conn->getConnInfo();
     }
 

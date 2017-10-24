@@ -2,6 +2,8 @@
 
 namespace Amp\Mysql;
 
+use Amp\Promise;
+
 class ConnectionPool {
     private $connections = [];
     private $connectionMap = [];
@@ -12,7 +14,7 @@ class ConnectionPool {
     private $config;
     private $limit;
 
-    public function __construct($config, $limit) {
+    public function __construct($config, float $limit) {
         $config->ready = function($hash) {
             $this->ready($hash);
         };
@@ -37,7 +39,7 @@ class ConnectionPool {
         $this->addConnection();
     }
 
-    public function getConnectionPromise() {
+    public function getConnectionPromise(): Promise {
         if (isset($this->connectionDeferred)) {
             return $this->connectionDeferred->promise();
         }
@@ -90,7 +92,7 @@ class ConnectionPool {
     }
 
     /** First parameter may be collation too, then charset is determined by the prefix of collation */
-    public function setCharset($charset, $collate = "") {
+    public function setCharset(string $charset, string $collate = "") {
         if ($collate === "" && false !== $off = strpos($charset, "_")) {
             $collate = $charset;
             $charset = substr($collate, 0, $off);
@@ -106,11 +108,11 @@ class ConnectionPool {
         }
     }
 
-    public function useExceptions($set) {
+    public function useExceptions(bool $set) {
         $this->config->exceptions = $set;
     }
 
-    private function ready($hash) {
+    private function ready(string $hash) {
         $conn = $this->connections[$this->connectionMap[$hash]];
         if (!$conn) {
             return;
@@ -146,16 +148,16 @@ class ConnectionPool {
         return $this->virtualConnection;
     }
 
-    public function extractConnection() {
+    public function extractConnection(): Promise {
         $promise = $this->getReadyConnection()->getThis();
-		$promise->onResolve(function($e, $conn) {
+        $promise->onResolve(function($e, $conn) {
             $this->unmapConnection(spl_object_hash($conn));
         });
         return $promise;
     }
 
     /* This method might be called multiple times with the same hash. Important is that it's unmapped immediately */
-    private function unmapConnection($hash) {
+    private function unmapConnection(string $hash) {
         if (isset($this->connectionMap[$hash])) {
             unset($this->connections[$this->connectionMap[$hash]], $this->connectionMap[$hash]);
         }

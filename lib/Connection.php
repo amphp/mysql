@@ -3,6 +3,7 @@
 namespace Amp\Mysql;
 
 use Amp\Deferred;
+use Amp\Promise;
 use Amp\Success;
 
 class Connection {
@@ -15,7 +16,8 @@ class Connection {
     const REFRESH_SLAVE = 0x40;
     const REFRESH_MASTER = 0x80;
 
-    protected $processor;
+    /** @var \Amp\Mysql\Processor */
+    private $processor;
 
     public function __construct($config, $sslOptions = null) {
         if (!$config instanceof ConnectionConfig) {
@@ -47,7 +49,7 @@ class Connection {
         $this->processor->config = $config;
     }
 
-    public static function parseConnStr($connStr, $sslOptions = null) {
+    public static function parseConnStr(string $connStr, $sslOptions = null) {
         $db = null;
         $useCompression = "false";
 
@@ -78,7 +80,7 @@ class Connection {
         return $config;
     }
 
-    private function resolveHost($config) {
+    private function resolveHost(ConnectionConfig $config) {
         $index = strpos($config->host, ':');
 
         if ($index === false) {
@@ -93,15 +95,15 @@ class Connection {
         }
     }
 
-    public function useExceptions($set) {
+    public function useExceptions(bool $set) {
         $this->processor->config->exceptions = $set;
     }
 
-    public function alive() {
+    public function alive(): bool {
         return $this->processor->alive();
     }
 
-    public function isReady() {
+    public function isReady(): bool {
         return $this->processor->isReady();
     }
 
@@ -114,19 +116,19 @@ class Connection {
     }
 
     /* Technical function to be used in combination with Pool */
-    public function getThis() {
+    public function getThis(): Promise {
         return new Success($this);
     }
 
-    public function connect() {
+    public function connect(): Promise {
         return $this->processor->connect();
     }
 
-    public function getConnInfo() {
+    public function getConnInfo(): ConnectionState {
         return $this->processor->getConnInfo();
     }
 
-    public function setCharset($charset, $collate = "") {
+    public function setCharset(string $charset, string $collate = ""): Promise {
         if ($collate === "" && false !== $off = strpos($charset, "_")) {
             $collate = $charset;
             $charset = substr($collate, 0, $off);
@@ -142,7 +144,7 @@ class Connection {
     /** @see 14.6.2 COM_QUIT */
     public function close() {
         $processor = $this->processor;
-        return $processor->startCommand(static function() use ($processor) {
+        $processor->startCommand(static function() use ($processor) {
             $processor->sendPacket("\x01");
             $processor->initClosing();
         })->onResolve(static function() use ($processor) {
@@ -151,7 +153,7 @@ class Connection {
     }
 
     /** @see 14.6.3 COM_INIT_DB */
-    public function useDb($db) {
+    public function useDb(string $db): Promise {
         $processor = $this->processor;
         return $processor->startCommand(static function() use ($processor, $db) {
             $processor->config->db = $db;
@@ -160,7 +162,7 @@ class Connection {
     }
 
     /** @see 14.6.4 COM_QUERY */
-    public function query($query) {
+    public function query(string $query): Promise {
         $processor = $this->processor;
         return $processor->startCommand(static function() use ($processor, $query) {
             $processor->setQuery($query);
@@ -169,7 +171,7 @@ class Connection {
     }
 
     /** @see 14.6.5 COM_FIELD_LIST */
-    public function listFields($table, $like = "%") {
+    public function listFields(string $table, string $like = "%"): Promise {
         $processor = $this->processor;
         return $processor->startCommand(static function() use ($processor, $table, $like) {
             $processor->sendPacket("\x04$table\0$like");
@@ -177,7 +179,7 @@ class Connection {
         });
     }
 
-    public function listAllFields($table, $like = "%") {
+    public function listAllFields(string $table, string $like = "%"): Promise {
         $deferred = new Deferred;
 
         $columns = [];
@@ -207,7 +209,7 @@ class Connection {
     }
 
     /** @see 14.6.7 COM_DROP_DB */
-    public function dropDatabase($db) {
+    public function dropDatabase(string $db): Promise {
         $processor = $this->processor;
         return $processor->startCommand(static function() use ($processor, $db) {
             $processor->sendPacket("\x06$db");
@@ -218,7 +220,7 @@ class Connection {
      * @param $subcommand int one of the self::REFRESH_* constants
      * @see 14.6.8 COM_REFRESH
      */
-    public function refresh($subcommand) {
+    public function refresh(int $subcommand): Promise {
         $processor = $this->processor;
         return $processor->startCommand(static function() use ($processor, $subcommand) {
             $processor->sendPacket("\x07" . chr($subcommand));
@@ -226,7 +228,7 @@ class Connection {
     }
 
     /** @see 14.6.9 COM_SHUTDOWN */
-    public function shutdown() {
+    public function shutdown(): Promise {
         $processor = $this->processor;
         return $processor->startCommand(static function() use ($processor) {
             $processor->sendPacket("\x08\x00"); /* SHUTDOWN_DEFAULT / SHUTDOWN_WAIT_ALL_BUFFERS, only one in use */
@@ -234,7 +236,7 @@ class Connection {
     }
 
     /** @see 14.6.10 COM_STATISTICS */
-    public function statistics() {
+    public function statistics(): Promise {
         $processor = $this->processor;
         return $processor->startCommand(static function() use ($processor) {
             $processor->sendPacket("\x09");
@@ -243,7 +245,7 @@ class Connection {
     }
 
     /** @see 14.6.11 COM_PROCESS_INFO */
-    public function processInfo() {
+    public function processInfo(): Promise {
         $processor = $this->processor;
         return $processor->startCommand(static function() use ($processor) {
             $processor->sendPacket("\x0a");
@@ -252,7 +254,7 @@ class Connection {
     }
 
     /** @see 14.6.13 COM_PROCESS_KILL */
-    public function killProcess($process) {
+    public function killProcess($process): Promise {
         $processor = $this->processor;
         return $processor->startCommand(static function() use ($processor, $process) {
             $processor->sendPacket("\x0c" . DataTypes::encode_int32($process));
@@ -260,7 +262,7 @@ class Connection {
     }
 
     /** @see 14.6.14 COM_DEBUG */
-    public function debugStdout() {
+    public function debugStdout(): Promise {
         $processor = $this->processor;
         return $processor->startCommand(static function() use ($processor) {
             $processor->sendPacket("\x0d");
@@ -268,7 +270,7 @@ class Connection {
     }
 
     /** @see 14.6.15 COM_PING */
-    public function ping() {
+    public function ping(): Promise {
         $processor = $this->processor;
         return $processor->startCommand(static function() use ($processor) {
             $processor->sendPacket("\x0e");
@@ -308,7 +310,7 @@ class Connection {
     }
 
     /** @see 14.7.4 COM_STMT_PREPARE */
-    public function prepare($query, $data = null) {
+    public function prepare(string $query, $data = null) {
         $processor = $this->processor;
         $promise = $processor->startCommand(static function() use ($processor, $query) {
             $processor->setPrepare($query);
