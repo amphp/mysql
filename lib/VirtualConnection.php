@@ -8,12 +8,7 @@ class VirtualConnection {
     private $call = [];
 
     public function getCall() {
-        $cur = current($this->call);
-        if ($cur) {
-            unset($this->call[key($this->call)]);
-            return $cur;
-        }
-        return null;
+        return !empty($this->call) ? \array_shift($this->call) : null;
     }
 
     public function fail(\Throwable $e) {

@@ -4,6 +4,7 @@ namespace Amp\Mysql;
 
 use Amp\Deferred;
 use Amp\Promise;
+use Amp\Socket\ClientTlsContext;
 use Amp\Success;
 
 class Connection {
@@ -49,7 +50,7 @@ class Connection {
         $this->processor->config = $config;
     }
 
-    public static function parseConnStr(string $connStr, $sslOptions = null) {
+    public static function parseConnStr(string $connStr, ClientTlsContext $sslOptions = null) {
         $db = null;
         $useCompression = "false";
 
@@ -67,15 +68,7 @@ class Connection {
         $config->db = $db;
         $config->useCompression = $useCompression && $useCompression != "false";
 
-        if (is_array($sslOptions)) {
-            if (isset($sslOptions["key"])) {
-                $config->key = $sslOptions["key"];
-                unset($sslOptions["key"]);
-            }
-            $config->ssl = $sslOptions;
-        } else {
-            $config->ssl = $sslOptions ? [] : null;
-        }
+        $config->ssl = $sslOptions;
 
         return $config;
     }

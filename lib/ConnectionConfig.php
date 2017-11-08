@@ -13,7 +13,7 @@ class ConnectionConfig {
 
     public $useCompression = false;
 
-    /** @var array|null Null for no ssl, array with eventual ssl context options (peer_name is automatically set) */
+    /** @var \Amp\Socket\ClientTlsContext|null Null for no ssl   */
     public $ssl = null;
 
     /** @var callable|null Called when finished fetching all pending data */

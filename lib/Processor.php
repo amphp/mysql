@@ -2,9 +2,11 @@
 
 namespace Amp\Mysql;
 
+use Amp\Coroutine;
 use Amp\Deferred;
-use Amp\Loop;
 use Amp\Promise;
+use Amp\Socket\ClientTlsContext;
+use Amp\Success;
 
 /* @TODO
  * 14.2.3 Auth switch request??
@@ -37,20 +39,16 @@ class SessionStateTypes {
 }
 
 class Processor {
-    private $out = [];
-    private $outBuf;
-    private $outBuflen = 0;
-    private $uncompressedOut = "";
-
+    /** @var \Generator[] */
     private $processors = [];
 
     private $protocol;
     private $seqId = -1;
     private $compressionId = -1;
+
+    /** @var \Amp\Socket\ClientSocket */
     private $socket;
-    private $readGranularity = 8192;
-    private $readWatcher = null;
-    private $writeWatcher = null;
+
     private $authPluginDataLen;
     private $query;
     public $named = [];
@@ -59,12 +57,27 @@ class Processor {
     /** @var callable|null */
     private $packetCallback = null;
 
+    private $pendingWrite;
+
+    /** @var \Amp\Mysql\ConnectionConfig */
     public $config;
+
+    /** @var callable */
     public $ready;
+
+    /** @var callable */
     public $busy;
+
+    /** @var callable */
     public $restore;
+
+    /** @var \Amp\Deferred[] */
     private $deferreds = [];
+
+    /** @var callable[] */
     private $onReady = [];
+
+    /** @var \Amp\Mysql\ResultProxy|null */
     private $result;
 
     public $connectionId;
@@ -108,7 +121,7 @@ class Processor {
     const CLOSING = 3;
     const CLOSED = 4;
 
-    public function __construct($ready, $busy, $restore) {
+    public function __construct(callable $ready, callable $busy, callable $restore) {
         $this->ready = $ready;
         $this->busy = $busy;
         $this->restore = $restore;
@@ -139,12 +152,12 @@ class Processor {
         if (empty($this->deferreds)) {
             if (empty($this->onReady)) {
                 $cb = $this->ready;
-                $this->out[] = null;
+                $this->write();
             } else {
-                $cb = current($this->onReady);
-                unset($this->onReady[key($this->onReady)]);
+                $cb = \array_shift($this->onReady);
             }
-            if (isset($cb) && is_callable($cb)) {
+
+            if (isset($cb) && \is_callable($cb)) {
                 $cb();
             }
         }
@@ -153,10 +166,10 @@ class Processor {
     public function connect(): Promise {
         \assert(!$this->deferreds && !$this->socket, self::class."::connect() must not be called twice");
 
-        $this->deferreds[] = $deferred = new Deferred;
+        $this->deferreds[] = $deferred = new Deferred; // Will be resolved below or in sendHandshake().
         \Amp\Socket\connect($this->config->resolvedHost)->onResolve(function ($error, $socket) use ($deferred) {
             if ($this->connectionState === self::CLOSED) {
-                $deferred->resolve(null);
+                $deferred->resolve();
                 if ($socket) {
                     $socket->close();
                 }
@@ -168,31 +181,55 @@ class Processor {
                 return;
             }
 
+            $this->socket = $socket;
+
             $this->processors = [$this->parseMysql()];
 
-            $this->socket = $socket->getResource();
-            $this->readWatcher = Loop::onReadable($this->socket, [$this, "onInit"]);
+            Promise\rethrow(new Coroutine($this->read()));
         });
 
         return $deferred->promise();
     }
 
-    public function onInit() {
-        // reset internal state
-        $this->out = [];
-        $this->seqId = $this->compressionId = -1;
+    public function read(): \Generator {
+        while ($this->connectionState <= self::READY && ($bytes = yield $this->socket->read()) !== null) {
+            if (defined("MYSQL_DEBUG")) {
+                fwrite(STDERR, "in: ");
+                for ($i = 0; $i < min(strlen($bytes), 200); $i++)
+                    fwrite(STDERR, dechex(ord($bytes[$i])) . " ");
+                $r = range("\0", "\x1f");
+                unset($r[10], $r[9]);
+                fwrite(STDERR, "len: ".strlen($bytes)." ");
+                ob_start();
+                var_dump(str_replace($r, ".", substr($bytes, 0, 200)));
+                fwrite(STDERR, ob_get_clean());
+            }
 
-        Loop::cancel($this->readWatcher);
-        $this->readWatcher = Loop::onReadable($this->socket, [$this, "onRead"]);
-        $this->writeWatcher = Loop::onWritable($this->socket, [$this, "onWrite"]);
-        $this->onRead();
+            $this->processData($bytes);
+        }
+
+        if ($this->connectionState <= self::READY) { // Connection closed unexpectedly.
+            $this->goneAway();
+        }
+    }
+
+    private function processData(string $data) {
+        foreach ($this->processors as $processor) {
+            if (empty($data = $processor->send($data))) {
+                return;
+            }
+        }
+
+        \assert(\is_array($data)); // Final processor should yield an array.
+
+        foreach ($data as $packet) {
+            $this->parsePayload($packet);
+        }
     }
 
     /** @return Deferred */
     private function getDeferred(): Deferred {
-        $deferred = current($this->deferreds);
-        unset($this->deferreds[key($this->deferreds)]);
-        return $deferred;
+        return \array_shift($this->deferreds);
     }
 
     private function appendTask(callable $callback) {
@@ -270,7 +307,7 @@ class Processor {
         $payload .= DataTypes::encode_int16($paramId);
         $payload .= $data;
         $this->appendTask(function () use ($payload) {
-            $this->out[] = null;
+            $this->write();
             $this->sendPacket($payload);
             $this->ready();
         });
@@ -321,7 +358,7 @@ class Processor {
 
             $this->query = $query;
 
-            $this->out[] = null;
+            $this->write();
             $this->deferreds[] = $deferred;
             $this->sendPacket($payload);
             // apparently LOAD DATA LOCAL INFILE requests are not supported via prepared statements
@@ -335,9 +372,9 @@ class Processor {
         $payload = "\x19" . DataTypes::encode_int32($stmtId);
         $this->appendTask(function () use ($payload) {
             if ($this->connectionState === self::READY) {
-                $this->out[] = null;
+                $this->write();
                 $this->sendPacket($payload);
-                $this->out[] = null; // does not expect a reply - must be reset immediately
+                $this->write(); // does not expect a reply - must be reset immediately
             }
             $this->ready();
         });
@@ -348,7 +385,7 @@ class Processor {
         $payload = "\x1a" . DataTypes::encode_int32($stmtId);
         $deferred = new Deferred;
         $this->appendTask(function () use ($payload, $deferred) {
-            $this->out[] = null;
+            $this->write();
             $this->deferreds[] = $deferred;
             $this->sendPacket($payload);
         });
@@ -360,7 +397,7 @@ class Processor {
         $payload = "\x1c" . DataTypes::encode_int32($stmtId) . DataTypes::encode_int32(1);
         $deferred = new Deferred;
         $this->appendTask(function () use ($payload, $deferred) {
-            $this->out[] = null;
+            $this->write();
             $this->deferreds[] = $deferred;
             $this->sendPacket($payload);
         });
@@ -844,25 +881,40 @@ class Processor {
     }
 
     public function closeSocket() {
-        if ($this->readWatcher) {
-            Loop::cancel($this->readWatcher);
+        if ($this->socket) {
+            $this->socket->close();
         }
-        if ($this->writeWatcher) {
-            Loop::cancel($this->writeWatcher);
-        }
-        @\fclose($this->socket);
         $this->connectionState = self::CLOSED;
     }
 
-    private function compilePacket() {
-        do {
-            $pending = current($this->out);
-            unset($this->out[key($this->out)]);
-            if ($pending !== null || empty($this->out)) {
-                break;
+    private function write(string $packet = null): Promise {
+        return $this->pendingWrite = \Amp\call(function () use ($packet) {
+            if ($this->pendingWrite) {
+                yield $this->pendingWrite;
             }
-            $this->seqId = $this->compressionId = -1;
-        } while (1);
+
+            if ($packet === null) {
+                $this->seqId = $this->compressionId = -1;
+                return new Success;
+            }
+
+            $packet = $this->compilePacket($packet);
+
+            if (($this->capabilities & self::CLIENT_COMPRESS) && $this->connectionState >= self::READY) {
+                $packet = $this->compressPacket($packet);
+            }
+
+            try {
+                $bytes = yield $this->socket->write($packet);
+            } finally {
+                $this->pendingWrite = null;
+            }
+
+            return $bytes;
+        });
+    }
+
+    private function compilePacket(string $pending): string {
         if ($pending == "") {
             return $pending;
         }
@@ -896,81 +948,25 @@ class Processor {
         return $packet;
     }
 
-    private function compressPacket($packet) {
-        $packet = $this->uncompressedOut.$packet;
-
+    private function compressPacket(string $packet): string {
         if ($packet == "") {
             return "";
         }
 
         $len = strlen($packet);
-        while ($len < self::MAX_UNCOMPRESSED_BUFLEN && !empty($this->out)) {
-            $packet .= $this->compilePacket();
-            $len = strlen($this->uncompressedOut);
-        }
-
-        $this->uncompressedOut = substr($packet, self::MAX_UNCOMPRESSED_BUFLEN);
-        $packet = substr($packet, 0, self::MAX_UNCOMPRESSED_BUFLEN);
-        $len = strlen($packet);
-
         $deflated = zlib_encode($packet, ZLIB_ENCODING_DEFLATE);
+
         if ($len < strlen($deflated)) {
-            $out = substr_replace(pack("V", strlen($packet)), chr(++$this->compressionId), 3, 1) . "\0\0\0" . $packet;
-        } else {
-            $out = substr_replace(pack("V", strlen($deflated)), chr(++$this->compressionId), 3, 1) . substr(pack("V", $len), 0, 3) . $deflated;
+            return substr_replace(pack("V", strlen($packet)), chr(++$this->compressionId), 3, 1) . "\0\0\0" . $packet;
         }
 
-        return $out;
-    }
-
-    public function onWrite() {
-        if ($this->outBuflen == 0) {
-            $packet = $this->compilePacket();
-            if (($this->capabilities & self::CLIENT_COMPRESS) && $this->connectionState >= self::READY) {
-                $packet = $this->compressPacket($packet);
-            }
-
-            $this->outBuf = $packet;
-            $this->outBuflen = strlen($packet);
-
-            if ($this->outBuflen == 0) {
-                Loop::disable($this->writeWatcher);
-                return;
-            }
-        }
-
-        $bytes = @fwrite($this->socket, $this->outBuf);
-        $this->outBuflen -= $bytes;
-        if ($this->outBuflen > 0) {
-            if ($bytes == 0) {
-                $this->goneAway();
-            } else {
-                $this->outBuf = substr($this->outBuf, $bytes);
-            }
-        }
-    }
-
-    public function onRead() {
-        $bytes = @fread($this->socket, $this->readGranularity);
-        if ($bytes != "") {
-            foreach ($this->processors as $processor) {
-                if ("" == $bytes = $processor->send($bytes)) {
-                    return;
-                }
-            }
-
-            foreach ($bytes as $packet) {
-                $this->parsePayload($packet);
-            }
-        } else {
-            $this->goneAway();
-        }
+        return substr_replace(pack("V", strlen($deflated)), chr(++$this->compressionId), 3, 1) . substr(pack("V", $len), 0, 3) . $deflated;
     }
 
     private function goneAway() {
         foreach ($this->deferreds as $deferred) {
             if ($this->config->exceptions || $this->connectionState < self::READY) {
-                if ($this->query == "") {
+                if ($this->query === "") {
                     $deferred->fail(new InitializationException("Connection went away"));
                 } else {
                     $deferred->fail(new QueryException("Connection went away... unable to fulfil this deferred ... It's unknown whether the query was executed...", $this->query));
@@ -1193,26 +1189,23 @@ class Processor {
         $payload .= str_repeat("\0", 23); // reserved
 
         if (!$inSSL && ($this->capabilities & self::CLIENT_SSL)) {
-            $this->_sendPacket($payload);
-            Loop::onWritable($this->socket, function ($watcherId, $socket) {
-                /* wait until main write watcher has written everything... */
-                if ($this->outBuflen > 0 || !empty($this->out)) {
+            \Amp\call(function () use ($payload) {
+                yield $this->write($payload);
+
+                $context = $this->config->ssl ?: new ClientTlsContext;
+                $context = $context->withPeerName($this->config->host);
+
+                return yield $this->socket->enableCrypto($context);
+            })->onResolve(function ($error) {
+                if ($error) {
+                    $this->closeSocket();
+                    $this->getDeferred()->fail($error);
                     return;
                 }
 
-                Loop::cancel($watcherId);
-                Loop::disable($this->readWatcher); // temporarily disable, reenable after establishing tls
-                \Amp\Socket\Internal\enableCrypto($socket, $this->config->ssl + ['peer_name' => $this->config->host])->onResolve(function ($error) {
-                    if ($error) {
-                        $this->getDeferred()->fail($error);
-                        $this->closeSocket();
-                        return;
-                    }
-
-                    Loop::enable($this->readWatcher);
-                    $this->sendHandshake(true);
-                });
+                $this->sendHandshake(true);
             });
+
             return;
         }
 
@@ -1265,20 +1258,15 @@ class Processor {
         if ($this->capabilities & self::CLIENT_CONNECT_ATTRS) {
             // connection attributes?! 5.6.6+ only!
         }
-        $this->_sendPacket($payload);
+        $this->write($payload);
     }
 
     /** @see 14.1.2 MySQL Packet */
-    public function sendPacket($payload) {
+    public function sendPacket(string $payload): Promise {
         if ($this->connectionState !== self::READY) {
             throw new \Exception("Connection not ready, cannot send any packets");
         }
 
-        $this->_sendPacket($payload);
-    }
-
-    private function _sendPacket($payload) {
-        $this->out[] = $payload;
-        Loop::enable($this->writeWatcher);
+        return $this->write($payload);
     }
 }
