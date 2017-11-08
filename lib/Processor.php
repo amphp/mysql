@@ -151,14 +151,10 @@ class Processor {
     private function ready() {
         if (empty($this->deferreds)) {
             if (empty($this->onReady)) {
-                $cb = $this->ready;
                 $this->write();
+                ($this->ready)();
             } else {
-                $cb = \array_shift($this->onReady);
-            }
-
-            if (isset($cb) && \is_callable($cb)) {
-                $cb();
+                \array_shift($this->onReady)();
             }
         }
     }
@@ -192,18 +188,21 @@ class Processor {
     }
 
     public function read(): \Generator {
-        while ($this->connectionState <= self::READY && ($bytes = yield $this->socket->read()) !== null) {
-            if (defined("MYSQL_DEBUG")) {
-                fwrite(STDERR, "in: ");
-                for ($i = 0; $i < min(strlen($bytes), 200); $i++)
-                    fwrite(STDERR, dechex(ord($bytes[$i])) . " ");
-                $r = range("\0", "\x1f");
-                unset($r[10], $r[9]);
-                fwrite(STDERR, "len: ".strlen($bytes)." ");
-                ob_start();
-                var_dump(str_replace($r, ".", substr($bytes, 0, 200)));
-                fwrite(STDERR, ob_get_clean());
-            }
+        while (($bytes = yield $this->socket->read()) !== null) {
+            \assert((function () use ($bytes) {
+                if (defined("MYSQL_DEBUG")) {
+                    fwrite(STDERR, "in: ");
+                    for ($i = 0; $i < min(strlen($bytes), 200); $i++) {
+                        fwrite(STDERR, dechex(ord($bytes[$i])) . " ");
+                    }
+                    $r = range("\0", "\x1f");
+                    unset($r[10], $r[9]);
+                    fwrite(STDERR, "len: ".strlen($bytes)."\n");
+                    fwrite(STDERR, str_replace($r, ".", substr($bytes, 0, 200))."\n");
+                }
+
+                return true;
+            })());
 
             $this->processData($bytes);
         }
@@ -220,7 +219,7 @@ class Processor {
             }
         }
 
-        \assert(\is_array($data)); // Final processor should yield an array.
+        \assert(\is_array($data), "Final processor should yield an array");
 
         foreach ($data as $packet) {
             $this->parsePayload($packet);
@@ -236,10 +235,7 @@ class Processor {
         if ($this->packetCallback || $this->parseCallback || !empty($this->onReady) || !empty($this->deferreds) || $this->connectionState != self::READY) {
             $this->onReady[] = $callback;
         } else {
-            $cb = $this->busy;
-            if (isset($cb)) {
-                $cb();
-            }
+            ($this->busy)();
             $callback();
         }
     }
@@ -888,7 +884,7 @@ class Processor {
     }
 
     private function write(string $packet = null): Promise {
-        return $this->pendingWrite = \Amp\call(function () use ($packet) {
+        return \Amp\call(function () use ($packet) {
             if ($this->pendingWrite) {
                 yield $this->pendingWrite;
             }
@@ -905,7 +901,22 @@ class Processor {
             }
 
             try {
-                $bytes = yield $this->socket->write($packet);
+                $bytes = yield $this->pendingWrite = $this->socket->write($packet);
+
+                \assert((function () use ($packet) {
+                    if (defined("MYSQL_DEBUG")) {
+                        fwrite(STDERR, "out: ");
+                        for ($i = 0; $i < min(strlen($packet), 200); $i++) {
+                            fwrite(STDERR, dechex(ord($packet[$i])) . " ");
+                        }
+                        $r = range("\0", "\x1f");
+                        unset($r[10], $r[9]);
+                        fwrite(STDERR, "len: ".strlen($packet)."\n");
+                        fwrite(STDERR, str_replace($r, ".", substr($packet, 0, 200))."\n");
+                    }
+
+                    return true;
+                })());
             } finally {
                 $this->pendingWrite = null;
             }
@@ -932,18 +943,6 @@ class Processor {
             }
             $packet .= substr_replace(pack("V", $len), chr(++$this->seqId), 3, 1) . $out; // expects $len < (1 << 24) - 1
         } while ($pending != "");
-
-        if (defined("MYSQL_DEBUG")) {
-            fwrite(STDERR, "out: ");
-            for ($i = 0; $i < min(strlen($packet), 200); $i++)
-                fwrite(STDERR, dechex(ord($packet[$i])) . " ");
-            $r = range("\0", "\x1f");
-            unset($r[10], $r[9]);
-            fwrite(STDERR, "len: ".strlen($packet)." ");
-            ob_start();
-            var_dump(str_replace($r, ".", substr($packet, 0, 200)));
-            fwrite(STDERR, ob_get_clean());
-        }
 
         return $packet;
     }
@@ -976,8 +975,8 @@ class Processor {
             }
         }
         $this->closeSocket();
-        if (null !== $cb = $this->restore) {
-            $cb($this->connectionState < self::READY);
+        if ($this->restore) {
+            ($this->restore)($this->connectionState < self::READY);
             /* @TODO if packet not completely sent, resend? */
         }
     }
@@ -1054,23 +1053,7 @@ class Processor {
             } while (!$lastIn);
 
             if (\strlen($packet) > 0) {
-                if (defined("MYSQL_DEBUG")) {
-                    fwrite(STDERR, "in: ");
-                    $print = substr_replace(pack("V", \strlen($packet)), chr($this->seqId), 3, 1);
-                    for ($i = 0; $i < 4; $i++)
-                        fwrite(STDERR, dechex(ord($print[$i])) . " ");
-                    for ($i = 0; $i < min(200, \strlen($packet)); $i++)
-                        fwrite(STDERR, dechex(ord($packet[$i])) . " ");
-                    $r = range("\0", "\x1f");
-                    unset($r[10], $r[9]);
-                    fwrite(STDERR, "len: " . \strlen($packet) . " ");
-                    ob_start();
-                    var_dump(str_replace($r, ".", substr($packet, 0, 200)));
-                    fwrite(STDERR, ob_get_clean());
-                }
-
                 $parsed[] = $packet;
-
             }
         }
     }
@@ -1107,8 +1090,7 @@ class Processor {
             }
         } else {
             if ($this->parseCallback) {
-                $cb = $this->parseCallback;
-                $cb($packet);
+                ($this->parseCallback)($packet);
                 return;
             }
 
