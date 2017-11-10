@@ -877,10 +877,10 @@ class Processor {
     }
 
     public function closeSocket() {
+        $this->connectionState = self::CLOSED;
         if ($this->socket) {
             $this->socket->close();
         }
-        $this->connectionState = self::CLOSED;
     }
 
     private function write(string $packet = null): Promise {
