@@ -84,7 +84,7 @@ class Statement {
         do {
             $realId = -1;
             while (isset($this->named[++$realId]) || $i-- > 0) {
-                if (!is_numeric($paramId) && $this->named[$realId] == $paramId) {
+                if (!is_numeric($paramId) && isset($this->named[$realId]) && $this->named[$realId] == $paramId) {
                     break;
                 }
             }
@@ -103,29 +103,18 @@ class Statement {
      * @param mixed ...$data Data to bind to parameters.
      *
      * @return \Amp\Promise
+     *
+     * @throws \Error If a named parameter was not bound or a parameter is missing.
      */
     public function execute(...$data): Promise {
         $prebound = $args = [];
         for ($unnamed = $i = 0; $i < $this->paramCount; $i++) {
             if (isset($this->named[$i])) {
                 $name = $this->named[$i];
-                if (array_key_exists($name, $data) && $data[$name] !== []) {
-                    if (\is_array($data[$name])) {
-                        $args[$i] = reset($data[$name]);
-                        unset($data[$name][key($data[$name])]);
-                    } else {
-                        $args[$i] = $data[$name];
-                        unset($data[$name]);
-                    }
-                } elseif (!isset($this->prebound[$name])) {
-                    if ($data[$name] === []) {
-                        throw new \Error("Named parameter $name is not providing enough elements");
-                    } else {
-                        throw new \Error("Named parameter $name missing for executing prepared statement");
-                    }
-                } else {
-                    $prebound[$i] = $this->prebound[$name];
+                if (!isset($this->prebound[$name])) {
+                    throw new \Error("Named parameters must be bound using Statement::bind(); '$name' unbound");
                 }
+                $prebound[$i] = $this->prebound[$name];
             } elseif (array_key_exists($unnamed, $data)) {
                 $args[$i] = $data[$unnamed];
                 $unnamed++;
