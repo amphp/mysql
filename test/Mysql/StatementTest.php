@@ -2,31 +2,31 @@
 
 use Amp\Mysql\Statement;
 use PHPUnit\Framework\TestCase;
-use Amp\Mysql\ResultProxy;
+use Amp\Mysql\Internal\ResultProxy;
 
-class StmtTest extends TestCase
-{
+class StatementTest extends TestCase {
+    /** @var \Prophecy\Prophecy\ObjectProphecy */
     protected $processor;
+
+    /** @var \Amp\Mysql\Internal\ResultProxy */
     protected $resultProxy;
 
-    public function setUp()
-    {
-        $this->processor = $this->prophesize('Amp\Mysql\Processor');
-        $this->resultProxy = new ResultProxy();
+    public function setUp() {
+        $this->processor = $this->prophesize('Amp\Mysql\Internal\Processor');
+        $this->resultProxy = new ResultProxy;
     }
 
     /**
      * @dataProvider provideTestBindDataTypes
      */
-    public function testBindDataTypes($data, $expectedException)
-    {
+    public function testBindDataTypes($data, $expectedException) {
         // arrange
         $query = 'SELECT * FROM test WHERE id = ?';
         $stmtId = 1;
         $paramId = 0;
         $named = [];
 
-        $this->processor->alive()->willReturn(true);
+        $this->processor->isAlive()->willReturn(true);
         $this->processor->delRef()->shouldBeCalled();
         $this->processor->closeStmt(\Prophecy\Argument::any())->shouldBeCalled();
         $this->resultProxy->columnsToFetch = 1;
@@ -45,8 +45,7 @@ class StmtTest extends TestCase
         $stmt->bind($paramId, $data);
     }
 
-    public function provideTestBindDataTypes()
-    {
+    public function provideTestBindDataTypes() {
         return [
             'test scalar' => [
                 'data' => 1,
