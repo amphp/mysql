@@ -159,7 +159,7 @@ abstract class AbstractPool implements Pool {
         $connection = yield from $this->pop();
 
         try {
-            /** @var \Amp\Mysql\Stmt $statement */
+            /** @var \Amp\Mysql\Statement $statement */
             $statement = yield $connection->prepare($sql);
         } catch (\Throwable $exception) {
             $this->push($connection);

@@ -6,7 +6,7 @@ use Amp\Deferred;
 use Amp\Promise;
 use Amp\Success;
 
-class Stmt {
+class Statement {
     private $paramCount;
     private $numParamCount;
     private $named = [];

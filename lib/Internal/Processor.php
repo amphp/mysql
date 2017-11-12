@@ -10,7 +10,7 @@ use Amp\Mysql\ConnectionState;
 use Amp\Mysql\InitializationException;
 use Amp\Mysql\QueryError;
 use Amp\Mysql\ResultSet;
-use Amp\Mysql\Stmt;
+use Amp\Mysql\Statement;
 use Amp\Promise;
 use Amp\Socket\ClientTlsContext;
 use Amp\Success;
@@ -865,7 +865,7 @@ class Processor {
         $this->result->columnsToFetch = $params;
         $this->result->columnCount = $columns;
         $this->refcount++;
-        $this->getDeferred()->resolve(new Stmt($this, $this->query, $stmtId, $this->named, $this->result));
+        $this->getDeferred()->resolve(new Statement($this, $this->query, $stmtId, $this->named, $this->result));
         $this->named = [];
         if ($params) {
             $this->parseCallback = [$this, "prepareParams"];

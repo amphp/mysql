@@ -1,6 +1,6 @@
 <?php
 
-use Amp\Mysql\Stmt;
+use Amp\Mysql\Statement;
 use PHPUnit\Framework\TestCase;
 use Amp\Mysql\ResultProxy;
 
@@ -30,7 +30,7 @@ class StmtTest extends TestCase
         $this->processor->delRef()->shouldBeCalled();
         $this->processor->closeStmt(\Prophecy\Argument::any())->shouldBeCalled();
         $this->resultProxy->columnsToFetch = 1;
-        $stmt = new Stmt($this->processor->reveal(), $query, $stmtId, $named, $this->resultProxy);
+        $stmt = new Statement($this->processor->reveal(), $query, $stmtId, $named, $this->resultProxy);
 
         // assert
         if ($expectedException) {
