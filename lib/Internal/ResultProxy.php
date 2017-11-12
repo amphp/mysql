@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Mysql;
+namespace Amp\Mysql\Internal;
 
 class ResultProxy {
     public $columnCount;

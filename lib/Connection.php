@@ -5,9 +5,8 @@ namespace Amp\Mysql;
 use Amp\Deferred;
 use Amp\Promise;
 use Amp\Socket\ClientTlsContext;
-use Amp\Success;
 
-class Connection {
+class Connection implements Link {
     const REFRESH_GRANT = 0x01;
     const REFRESH_LOG = 0x02;
     const REFRESH_TABLES = 0x04;
@@ -17,40 +16,23 @@ class Connection {
     const REFRESH_SLAVE = 0x40;
     const REFRESH_MASTER = 0x80;
 
-    /** @var \Amp\Mysql\Processor */
+    /** @var \Amp\Mysql\Internal\Processor */
     private $processor;
 
-    public function __construct($config, $sslOptions = null) {
-        if (!$config instanceof ConnectionConfig) {
-            $config = self::parseConnStr($config, $sslOptions);
-        }
-        if ($config->resolvedHost === null) {
-            $this->resolveHost($config);
-        }
-        $hash = spl_object_hash($this);
-        $ready = static function() use ($hash, $config) {
-            $cb = $config->ready;
-            if (isset($cb)) {
-                $cb($hash);
-            }
-        };
-        $busy = static function() use ($hash, $config) {
-            $cb = $config->busy;
-            if (isset($cb)) {
-                $cb($hash);
-            }
-        };
-        $restore = static function($init) use ($hash, $config) {
-            $cb = $config->restore;
-            if (isset($cb)) {
-                return $cb($hash, $init);
-            }
-        };
-        $this->processor = new Processor($ready, $busy, $restore);
-        $this->processor->config = $config;
+    public static function connect(ConnectionConfig $config): Promise {
+        $processor = new Internal\Processor($config);
+
+        return \Amp\call(function () use ($config, $processor) {
+            yield $processor->connect();
+            return new self($processor);
+        });
     }
 
-    public static function parseConnStr(string $connStr, ClientTlsContext $sslOptions = null) {
+    public function __construct(Internal\Processor $processor) {
+        $this->processor = $processor;
+    }
+
+    public static function parseConnectionString(string $connStr, ClientTlsContext $sslOptions = null): ConnectionConfig {
         $db = null;
         $useCompression = "false";
 
@@ -58,7 +40,7 @@ class Connection {
             list($key, $$key) = array_map("trim", explode("=", $param, 2) + [1 => null]);
         }
         if (!isset($host, $user, $pass)) {
-            throw new \Exception("Required parameters host, user and pass need to be passed in connection string");
+            throw new \Error("Required parameters host, user and pass need to be passed in connection string");
         }
 
         $config = new ConnectionConfig;
@@ -70,30 +52,13 @@ class Connection {
 
         $config->ssl = $sslOptions;
 
+        $config->resolveHost();
+
         return $config;
     }
 
-    private function resolveHost(ConnectionConfig $config) {
-        $index = strpos($config->host, ':');
-
-        if ($index === false) {
-            $config->resolvedHost = "tcp://{$config->host}:3306";
-        } else if ($index === 0) {
-            $config->host = "localhost";
-            $config->resolvedHost = "tcp://localhost:" . (int) substr($config->host, 1);
-        } else {
-            list($host, $port) = explode(':', $config->host, 2);
-            $config->host = $host;
-            $config->resolvedHost = "tcp://$host:" . (int) $port;
-        }
-    }
-
-    public function useExceptions(bool $set) {
-        $this->processor->config->exceptions = $set;
-    }
-
-    public function alive(): bool {
-        return $this->processor->alive();
+    public function isAlive(): bool {
+        return $this->processor->isAlive();
     }
 
     public function isReady(): bool {
@@ -106,15 +71,6 @@ class Connection {
 
     public function getConfig() {
         return clone $this->processor->config;
-    }
-
-    /* Technical function to be used in combination with Pool */
-    public function getThis(): Promise {
-        return new Success($this);
-    }
-
-    public function connect(): Promise {
-        return $this->processor->connect();
     }
 
     public function getConnInfo(): ConnectionState {
@@ -160,6 +116,33 @@ class Connection {
         return $processor->startCommand(static function() use ($processor, $query) {
             $processor->setQuery($query);
             $processor->sendPacket("\x03$query");
+        });
+    }
+
+    public function transaction(int $isolation = Transaction::COMMITTED): Promise {
+        return \Amp\call(function () use ($isolation) {
+            switch ($isolation) {
+                case Transaction::UNCOMMITTED:
+                    yield $this->query("BEGIN TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
+                    break;
+
+                case Transaction::COMMITTED:
+                    yield $this->query("BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED");
+                    break;
+
+                case Transaction::REPEATABLE:
+                    yield $this->query("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ");
+                    break;
+
+                case Transaction::SERIALIZABLE:
+                    yield $this->query("BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE");
+                    break;
+
+                default:
+                    throw new \Error("Invalid transaction type");
+            }
+
+            return new Transaction($this);
         });
     }
 
@@ -303,7 +286,7 @@ class Connection {
     }
 
     /** @see 14.7.4 COM_STMT_PREPARE */
-    public function prepare(string $query, $data = null) {
+    public function prepare(string $query): Promise {
         $processor = $this->processor;
         $promise = $processor->startCommand(static function() use ($processor, $query) {
             $processor->setPrepare($query);
@@ -322,20 +305,7 @@ REGEX;
             $processor->sendPacket("\x16$query");
         });
 
-        if ($data === null) {
-            return $promise;
-        }
-
-        $retDeferred = new Deferred;
-        $promise->onResolve(static function($error, $stmt) use ($retDeferred, $data) {
-            if ($error) {
-                $retDeferred->fail($error);
-            } else {
-                $retDeferred->resolve($stmt->execute($data));
-            }
-        });
-
-        return $retDeferred->promise();
+        return $promise;
     }
 
     public function __destruct() {

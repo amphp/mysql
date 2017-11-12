@@ -1,9 +1,16 @@
 <?php
 
-namespace Amp\Mysql;
+namespace Amp\Mysql\Internal;
 
 use Amp\Coroutine;
 use Amp\Deferred;
+use Amp\Mysql\ConnectionConfig;
+use Amp\Mysql\ConnectionException;
+use Amp\Mysql\ConnectionState;
+use Amp\Mysql\InitializationException;
+use Amp\Mysql\QueryError;
+use Amp\Mysql\ResultSet;
+use Amp\Mysql\Stmt;
 use Amp\Promise;
 use Amp\Socket\ClientTlsContext;
 use Amp\Success;
@@ -62,22 +69,16 @@ class Processor {
     /** @var \Amp\Mysql\ConnectionConfig */
     public $config;
 
-    /** @var callable */
-    public $ready;
-
-    /** @var callable */
-    public $busy;
-
-    /** @var callable */
-    public $restore;
-
     /** @var \Amp\Deferred[] */
     private $deferreds = [];
 
     /** @var callable[] */
     private $onReady = [];
 
-    /** @var \Amp\Mysql\ResultProxy|null */
+    /** @var \Amp\Deferred|null */
+    private $waiting;
+
+    /** @var \Amp\Mysql\Internal\ResultProxy|null */
     private $result;
 
     public $connectionId;
@@ -121,14 +122,12 @@ class Processor {
     const CLOSING = 3;
     const CLOSED = 4;
 
-    public function __construct(callable $ready, callable $busy, callable $restore) {
-        $this->ready = $ready;
-        $this->busy = $busy;
-        $this->restore = $restore;
+    public function __construct(ConnectionConfig $config) {
         $this->connInfo = new ConnectionState;
+        $this->config = $config;
     }
 
-    public function alive(): bool {
+    public function isAlive(): bool {
         return $this->connectionState <= self::READY;
     }
 
@@ -152,17 +151,25 @@ class Processor {
         if (empty($this->deferreds)) {
             if (empty($this->onReady)) {
                 $this->write();
-                ($this->ready)();
             } else {
                 \array_shift($this->onReady)();
             }
         }
     }
 
+    private function addDeferred(Deferred $deferred) {
+        $this->deferreds[] = $deferred;
+        if ($this->waiting) {
+            $deferred = $this->waiting;
+            $this->waiting = null;
+            $deferred->resolve();
+        }
+    }
+
     public function connect(): Promise {
         \assert(!$this->deferreds && !$this->socket, self::class."::connect() must not be called twice");
 
-        $this->deferreds[] = $deferred = new Deferred; // Will be resolved below or in sendHandshake().
+        $this->addDeferred($deferred = new Deferred); // Will be resolved below or in sendHandshake().
         \Amp\Socket\connect($this->config->resolvedHost)->onResolve(function ($error, $socket) use ($deferred) {
             if ($this->connectionState === self::CLOSED) {
                 $deferred->resolve();
@@ -205,6 +212,11 @@ class Processor {
             })());
 
             $this->processData($bytes);
+
+            if (empty($this->deferreds)) {
+                $this->waiting = new Deferred;
+                yield $this->waiting->promise();
+            }
         }
 
         if ($this->connectionState <= self::READY) { // Connection closed unexpectedly.
@@ -235,7 +247,6 @@ class Processor {
         if ($this->packetCallback || $this->parseCallback || !empty($this->onReady) || !empty($this->deferreds) || $this->connectionState != self::READY) {
             $this->onReady[] = $callback;
         } else {
-            ($this->busy)();
             $callback();
         }
     }
@@ -248,7 +259,7 @@ class Processor {
         $deferred = new Deferred;
         $this->appendTask(function() use ($callback, $deferred) {
             $this->seqId = $this->compressionId = -1;
-            $this->deferreds[] = $deferred;
+            $this->addDeferred($deferred);
             $callback();
         });
         return $deferred->promise();
@@ -355,7 +366,7 @@ class Processor {
             $this->query = $query;
 
             $this->write();
-            $this->deferreds[] = $deferred;
+            $this->addDeferred($deferred);
             $this->sendPacket($payload);
             // apparently LOAD DATA LOCAL INFILE requests are not supported via prepared statements
             $this->packetCallback = [$this, "handleExecute"];
@@ -382,7 +393,7 @@ class Processor {
         $deferred = new Deferred;
         $this->appendTask(function () use ($payload, $deferred) {
             $this->write();
-            $this->deferreds[] = $deferred;
+            $this->addDeferred($deferred);
             $this->sendPacket($payload);
         });
         return $deferred->promise();
@@ -394,7 +405,7 @@ class Processor {
         $deferred = new Deferred;
         $this->appendTask(function () use ($payload, $deferred) {
             $this->write();
-            $this->deferreds[] = $deferred;
+            $this->addDeferred($deferred);
             $this->sendPacket($payload);
         });
         return $deferred->promise();
@@ -427,11 +438,7 @@ class Processor {
         if ($this->connectionState == self::READY) {
             // normal error
             if ($deferred = $this->getDeferred()) {
-                if ($this->config->exceptions) {
-                    $deferred->fail(new QueryException("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}", $this->query));
-                } else {
-                    $deferred->resolve(false);
-                }
+                $deferred->fail(new QueryError("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}", $this->query));
             }
             $this->query = null;
             $this->ready();
@@ -483,7 +490,7 @@ class Processor {
                                 $this->connInfo->sessionState[SessionStateTypes::SESSION_TRACK_STATE_CHANGE] = DataTypes::decodeString($data);
                                 break;
                             default:
-                                throw new \UnexpectedValueException("$type is not a valid mysql session state type");
+                                throw new \Error("$type is not a valid mysql session state type");
                         }
 
                         $len += 1 + $intlen + $datalen;
@@ -524,7 +531,7 @@ class Processor {
 
         $this->protocol = ord($packet);
         if ($this->protocol !== 0x0a) {
-            throw new \UnexpectedValueException("Unsupported protocol version ".ord($packet)." (Expected: 10)");
+            throw new ConnectionException("Unsupported protocol version ".ord($packet)." (Expected: 10)");
         }
 
         $this->connInfo->serverVersion = DataTypes::decodeNullString(substr($packet, $off), $len);
@@ -630,7 +637,8 @@ class Processor {
             $this->getDeferred()->resolve(null);
             $this->ready();
         } else {
-            $this->getDeferred()->resolve([$this->parseColumnDefinition($packet), $this->deferreds[] = new Deferred]);
+            $this->addDeferred($deferred = new Deferred);
+            $this->getDeferred()->resolve([$this->parseColumnDefinition($packet), $deferred]);
         }
     }
 
@@ -756,7 +764,7 @@ class Processor {
         $deferred = &$this->result->next;
         if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
             $this->parseCallback = [$this, "handleQuery"];
-            $this->deferreds[] = $deferred ?: $deferred = new Deferred;
+            $this->addDeferred($deferred ?: $deferred = new Deferred);
         } else {
             if (!$deferred) {
                 $deferred = new Deferred;
@@ -836,7 +844,7 @@ class Processor {
                 $this->handleError($packet);
                 return;
             default:
-                throw new \UnexpectedValueException("Unexpected value for first byte of COM_STMT_PREPARE Response");
+                throw new ConnectionException("Unexpected value for first byte of COM_STMT_PREPARE Response");
         }
         $off = 1;
 
@@ -964,21 +972,13 @@ class Processor {
 
     private function goneAway() {
         foreach ($this->deferreds as $deferred) {
-            if ($this->config->exceptions || $this->connectionState < self::READY) {
-                if ($this->query === "") {
-                    $deferred->fail(new InitializationException("Connection went away"));
-                } else {
-                    $deferred->fail(new QueryException("Connection went away... unable to fulfil this deferred ... It's unknown whether the query was executed...", $this->query));
-                }
+            if ($this->query === "") {
+                $deferred->fail(new InitializationException("Connection went away"));
             } else {
-                $deferred->resolve(false);
+                $deferred->fail(new ConnectionException("Connection went away... unable to fulfil this deferred ... It's unknown whether the query was executed...", $this->query));
             }
         }
         $this->closeSocket();
-        if ($this->restore) {
-            ($this->restore)($this->connectionState < self::READY);
-            /* @TODO if packet not completely sent, resend? */
-        }
     }
 
     /** @see 14.4 Compression */
@@ -1084,7 +1084,7 @@ class Processor {
                             $this->sendHandshake();
                             break;
                         default:
-                            throw new \UnexpectedValueException("Unexpected EXTRA_AUTH_PACKET in authentication phase for method {$this->authPluginName}");
+                            throw new ConnectionException("Unexpected EXTRA_AUTH_PACKET in authentication phase for method {$this->authPluginName}");
                     }
                     break;
             }
@@ -1113,7 +1113,7 @@ class Processor {
                     if ($cb) {
                         $cb($packet);
                     } else {
-                        throw new \UnexpectedValueException("Unexpected packet type: " . ord($packet));
+                        throw new ConnectionException("Unexpected packet type: " . ord($packet));
                     }
             }
         }
@@ -1145,7 +1145,7 @@ class Processor {
                 $this->handleError($packet);
                 return;
             default:
-                throw new \UnexpectedValueException("AuthSwitchRequest: Expecting 0xfe (or ERR_Packet), got 0x".dechex(ord($packet)));
+                throw new ConnectionException("AuthSwitchRequest: Expecting 0xfe (or ERR_Packet), got 0x".dechex(ord($packet)));
         }
     }
 
@@ -1214,9 +1214,9 @@ class Processor {
                     }
                     break;
                 case "mysql_old_password":
-                    throw new \UnexpectedValueException("mysql_old_password is outdated and insecure. Intentionally not implemented!");
+                    throw new ConnectionException("mysql_old_password is outdated and insecure. Intentionally not implemented!");
                 default:
-                    throw new \UnexpectedValueException("Invalid (or unimplemented?) auth method requested by server: {$this->authPluginName}");
+                    throw new ConnectionException("Invalid (or unimplemented?) auth method requested by server: {$this->authPluginName}");
             }
         } else {
             $auth = $this->secureAuth($this->config->pass, $this->authPluginData);
@@ -1246,7 +1246,7 @@ class Processor {
     /** @see 14.1.2 MySQL Packet */
     public function sendPacket(string $payload): Promise {
         if ($this->connectionState !== self::READY) {
-            throw new \Exception("Connection not ready, cannot send any packets");
+            throw new \Error("Connection not ready, cannot send any packets");
         }
 
         return $this->write($payload);

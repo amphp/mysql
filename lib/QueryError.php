@@ -2,21 +2,21 @@
 
 namespace Amp\Mysql;
 
-class QueryException extends Exception {
+class QueryError extends \Error {
     protected $query = "";
 
-    public function __construct($message, $query = "", \Exception $previous = null) {
+    public function __construct(string $message, string $query = "", \Throwable $previous = null) {
         if ($query != "") {
             $this->query = $query;
         }
         parent::__construct($message, 0, $previous);
     }
 
-    final public function getQuery() {
+    final public function getQuery(): string {
         return $this->query;
     }
 
-    public function __toString() {
+    public function __toString(): string {
         if ($this->query == "") {
             return parent::__toString();
         }

@@ -10,37 +10,39 @@ class ResultSet {
     private $connInfo;
     private $result;
 
-    public function __construct(ConnectionState $state, ResultProxy $result) {
+    public function __construct(ConnectionState $state, Internal\ResultProxy $result) {
         $this->connInfo = $state;
         $this->result = $result;
     }
 
     public function getFields(): Promise {
-        if ($this->result->state >= ResultProxy::COLUMNS_FETCHED) {
+        if ($this->result->state >= Internal\ResultProxy::COLUMNS_FETCHED) {
             return new Success($this->result->columns);
         } else {
             $deferred = new Deferred;
-            $this->result->deferreds[ResultProxy::COLUMNS_FETCHED][] = [$deferred, &$this->result->columns, null];
+            $this->result->deferreds[Internal\ResultProxy::COLUMNS_FETCHED][] = [$deferred, &$this->result->columns, null];
             return $deferred->promise();
         }
     }
 
     public function rowCount(): Promise {
-        if ($this->result->state == ResultProxy::ROWS_FETCHED) {
+        if ($this->result->state == Internal\ResultProxy::ROWS_FETCHED) {
             return new Success(count($this->result->rows));
         } else {
             $deferred = new Deferred;
-            $this->result->deferreds[ResultProxy::ROWS_FETCHED][] = [$deferred, null, function () { return count($this->result->rows); }];
+            $this->result->deferreds[Internal\ResultProxy::ROWS_FETCHED][] = [$deferred, null, function () {
+                return count($this->result->rows);
+            }];
             return $deferred->promise();
         }
     }
 
     protected function genericFetchAll(callable $cb): Promise {
-        if ($this->result->state == ResultProxy::ROWS_FETCHED) {
+        if ($this->result->state == Internal\ResultProxy::ROWS_FETCHED) {
             return new Success($cb($this->result->rows));
         } else {
             $deferred = new Deferred;
-            $this->result->deferreds[ResultProxy::ROWS_FETCHED][] = [$deferred, &$this->result->rows, $cb];
+            $this->result->deferreds[Internal\ResultProxy::ROWS_FETCHED][] = [$deferred, &$this->result->rows, $cb];
             return $deferred->promise();
         }
     }
@@ -82,7 +84,7 @@ class ResultSet {
         if ($this->result->userFetched < $this->result->fetchedRows) {
             $row = $this->result->rows[$this->result->userFetched++];
             return new Success($cb ? $cb($row) : $row);
-        } elseif ($this->result->state == ResultProxy::ROWS_FETCHED) {
+        } elseif ($this->result->state == Internal\ResultProxy::ROWS_FETCHED) {
             return new Success(null);
         } else {
             $deferred = new Deferred;
@@ -95,7 +97,7 @@ class ResultSet {
                 return $cb && $row ? $cb($row) : $row;
             };
 
-            $this->result->deferreds[ResultProxy::SINGLE_ROW_FETCH][] = [$deferred, null, $incRow];
+            $this->result->deferreds[Internal\ResultProxy::SINGLE_ROW_FETCH][] = [$deferred, null, $incRow];
             return $deferred->promise();
         }
     }
@@ -130,5 +132,4 @@ class ResultSet {
         $deferred = $this->result->next ?: $this->result->next = new Deferred;
         return $deferred->promise();
     }
-
 }

@@ -2,4 +2,5 @@
 
 namespace Amp\Mysql;
 
-class InitializationException extends Exception {}
+class InitializationException extends FailureException {
+}

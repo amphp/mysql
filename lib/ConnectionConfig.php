@@ -5,7 +5,7 @@ namespace Amp\Mysql;
 class ConnectionConfig {
     /* <domain/IP-string>(:<port>) */
     public $host;
-    /* automatically resolved by Connection class */
+    /* Can be resolved with resolveHost() method */
     public $resolvedHost;
     public $user;
     public $pass;
@@ -30,4 +30,19 @@ class ConnectionConfig {
     public $collate = "utf8mb4_general_ci";
     /* private key to use for sha256_password auth method */
     public $key = null;
+
+    public function resolveHost() {
+        $index = strpos($this->host, ':');
+
+        if ($index === false) {
+            $this->resolvedHost = "tcp://{$this->host}:3306";
+        } else if ($index === 0) {
+            $this->host = "localhost";
+            $this->resolvedHost = "tcp://localhost:" . (int) substr($this->host, 1);
+        } else {
+            list($host, $port) = explode(':', $this->host, 2);
+            $this->host = $host;
+            $this->resolvedHost = "tcp://$host:" . (int) $port;
+        }
+    }
 }

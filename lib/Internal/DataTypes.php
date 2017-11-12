@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Mysql;
+namespace Amp\Mysql\Internal;
 
 /** @see 14.6.4.1.1.1 Column Type */
 class DataTypes {

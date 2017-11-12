@@ -20,7 +20,10 @@
     "autoload": {
         "psr-4": {
             "Amp\\Mysql\\": "lib/"
-        }
+        },
+        "files": [
+            "lib/functions.php"
+        ]
     },
     "autoload-dev": {
         "psr-4": {

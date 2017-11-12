@@ -2,6 +2,8 @@
 
 require __DIR__ . '/../../vendor/autoload.php';
 
+//define('MYSQL_DEBUG', true);
+
 /*
  * This file is not in VCS - create it if you want to set
  * the DB credentials without having them commited to VCS.
