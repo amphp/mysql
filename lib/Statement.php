@@ -6,7 +6,7 @@ use Amp\Deferred;
 use Amp\Promise;
 use Amp\Success;
 
-class Statement {
+class Statement implements Operation {
     private $paramCount;
     private $numParamCount;
     private $named = [];
@@ -125,7 +125,21 @@ class Statement {
             }
         }
 
-        return $this->getProcessor()->execute($this->stmtId, $this->query, $this->result->params, $prebound, $args);
+        $promise = $this->getProcessor()->execute($this->stmtId, $this->query, $this->result->params, $prebound, $args);
+
+        return \Amp\call(static function () use ($promise) {
+            $result = yield $promise;
+
+            if ($result instanceof Internal\ResultProxy) {
+                return new ResultSet($result);
+            }
+
+            if ($result instanceof ConnectionState) {
+                return new CommandResult($result->affectedRows, $result->insertId);
+            }
+
+            throw new FailureException("Unrecognized result type");
+        });
     }
 
     public function close() {

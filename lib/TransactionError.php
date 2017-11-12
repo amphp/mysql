@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Postgres;
+namespace Amp\Mysql;
 
 class TransactionError extends \Error {
 }

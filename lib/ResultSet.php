@@ -2,19 +2,143 @@
 
 namespace Amp\Mysql;
 
+use Amp\Coroutine;
 use Amp\Deferred;
+use Amp\Iterator;
+use Amp\Producer;
 use Amp\Promise;
 use Amp\Success;
 
-class ResultSet {
-    private $connInfo;
+class ResultSet implements Iterator, Operation {
+    const FETCH_ARRAY = 0;
+    const FETCH_ASSOC = 1;
+    const FETCH_OBJECT = 2;
+
+    /** @var \Amp\Mysql\Internal\ResultProxy */
     private $result;
 
-    public function __construct(ConnectionState $state, Internal\ResultProxy $result) {
-        $this->connInfo = $state;
+    /** @var \Amp\Producer */
+    private $producer;
+
+    /** @var \Amp\Mysql\Internal\CompletionQueue */
+    private $queue;
+
+    /** @var array|object Last emitted row. */
+    private $currentRow;
+
+    /** @var int Fetch type of next row. */
+    private $type;
+
+    public function __construct(Internal\ResultProxy $result) {
         $this->result = $result;
+        $queue = $this->queue = new Internal\CompletionQueue;
+
+        $last = &$this->result;
+        $this->producer = new Producer(static function (callable $emit) use (&$last, $result, $queue) {
+            try {
+                do {
+                    $last = $result;
+                    $row = yield self::fetch($result);
+                    while ($row !== null) {
+                        $next = self::fetch($result); // Fetch next row while emitting last row.
+                        yield $emit($row);
+                        $row = yield $next;
+                    }
+                } while ($result = yield self::getNextResultSet($result));
+            } finally {
+                $queue->complete();
+            }
+        });
     }
 
+    public function __destruct() {
+        if (!$this->queue->isComplete()) { // Producer above did not complete, so consume remaining results.
+            Promise\rethrow(new Coroutine($this->dispose()));
+        }
+    }
+
+    private function dispose(): \Generator {
+        try {
+            while (yield $this->producer->advance()); // Discard unused result rows.
+        } catch (\Throwable $exception) {
+            // Ignore failure while discarding results.
+        }
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function onComplete(callable $onComplete) {
+        $this->queue->onComplete($onComplete);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function advance(int $type = self::FETCH_ASSOC): Promise {
+        $this->currentRow = null;
+        $this->type = $type;
+
+        return $this->producer->advance();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getCurrent() {
+        if ($this->currentRow !== null) {
+            return $this->currentRow;
+        }
+
+        switch ($this->type) {
+            case self::FETCH_ASSOC:
+                return $this->currentRow = \array_combine(
+                    \array_column($this->result->columns, "name"), $this->producer->getCurrent()
+                );
+            case self::FETCH_ARRAY:
+                return $this->currentRow = $this->producer->getCurrent();
+            case self::FETCH_OBJECT:
+                return $this->currentRow = (object) \array_combine(
+                    \array_column($this->result->columns, "name"), $this->producer->getCurrent()
+                );
+            default:
+                throw new \Error("Invalid result fetch type");
+        }
+    }
+
+    private static function fetch(Internal\ResultProxy $result): Promise {
+        if ($result->userFetched < $result->fetchedRows) {
+            $row = $result->rows[$result->userFetched++];
+            return new Success($row);
+        } elseif ($result->state == Internal\ResultProxy::ROWS_FETCHED) {
+            return new Success(null);
+        } else {
+            $deferred = new Deferred;
+
+            /* We need to increment the internal counter, else the next time fetch is called,
+             * it'll simply return the row we fetch here instead of fetching a new row
+             * since callback order on promises isn't defined, we can't do this via onResolve() */
+            $incRow = function ($row) use ($result) {
+                $result->userFetched++;
+                return $row;
+            };
+
+            $result->deferreds[Internal\ResultProxy::SINGLE_ROW_FETCH][] = [$deferred, null, $incRow];
+            return $deferred->promise();
+        }
+    }
+
+    /**
+     * @return \Amp\Promise<\Amp\Mysql\Internal\ResultProxy|null>
+     */
+    private static function getNextResultSet(Internal\ResultProxy $result): Promise {
+        $deferred = $result->next ?: $result->next = new Deferred;
+        return $deferred->promise();
+    }
+
+    /**
+     * @return \Amp\Promise<string[]>
+     */
     public function getFields(): Promise {
         if ($this->result->state >= Internal\ResultProxy::COLUMNS_FETCHED) {
             return new Success($this->result->columns);
@@ -23,113 +147,5 @@ class ResultSet {
             $this->result->deferreds[Internal\ResultProxy::COLUMNS_FETCHED][] = [$deferred, &$this->result->columns, null];
             return $deferred->promise();
         }
-    }
-
-    public function rowCount(): Promise {
-        if ($this->result->state == Internal\ResultProxy::ROWS_FETCHED) {
-            return new Success(count($this->result->rows));
-        } else {
-            $deferred = new Deferred;
-            $this->result->deferreds[Internal\ResultProxy::ROWS_FETCHED][] = [$deferred, null, function () {
-                return count($this->result->rows);
-            }];
-            return $deferred->promise();
-        }
-    }
-
-    protected function genericFetchAll(callable $cb): Promise {
-        if ($this->result->state == Internal\ResultProxy::ROWS_FETCHED) {
-            return new Success($cb($this->result->rows));
-        } else {
-            $deferred = new Deferred;
-            $this->result->deferreds[Internal\ResultProxy::ROWS_FETCHED][] = [$deferred, &$this->result->rows, $cb];
-            return $deferred->promise();
-        }
-    }
-
-    public function fetchRows(): Promise {
-        return $this->genericFetchAll(function($rows) {
-            return $rows ?: [];
-        });
-    }
-
-    public function fetchAssocs(): Promise {
-        return $this->genericFetchAll(function($rows) {
-            $names = array_column($this->result->columns, "name");
-            return array_map(function($row) use ($names) {
-                return array_combine($names, $row);
-            }, $rows ?: []);
-        });
-    }
-    
-    public function fetchObjects(): Promise {
-        return $this->genericFetchAll(function($rows) {
-            $names = array_column($this->result->columns, "name");
-            return array_map(function($row) use ($names) {
-                return (object) array_combine($names, $row);
-            }, $rows ?: []);
-        });
-    }
-
-    public function fetchAll(): Promise {
-        return $this->genericFetchAll(function($rows) {
-            $names = array_column($this->result->columns, "name");
-            return array_map(function($row) use ($names) {
-                return array_combine($names, $row) + $row;
-            }, $rows ?: []);
-        });
-    }
-
-    protected function genericFetch(callable $cb = null): Promise {
-        if ($this->result->userFetched < $this->result->fetchedRows) {
-            $row = $this->result->rows[$this->result->userFetched++];
-            return new Success($cb ? $cb($row) : $row);
-        } elseif ($this->result->state == Internal\ResultProxy::ROWS_FETCHED) {
-            return new Success(null);
-        } else {
-            $deferred = new Deferred;
-
-            /* We need to increment the internal counter, else the next time genericFetch is called,
-             * it'll simply return the row we fetch here instead of fetching a new row
-             * since callback order on promises isn't defined, we can't do this via onResolve() */
-            $incRow = function ($row) use ($cb) {
-                $this->result->userFetched++;
-                return $cb && $row ? $cb($row) : $row;
-            };
-
-            $this->result->deferreds[Internal\ResultProxy::SINGLE_ROW_FETCH][] = [$deferred, null, $incRow];
-            return $deferred->promise();
-        }
-    }
-
-    public function fetchRow(): Promise {
-        return $this->genericFetch();
-    }
-
-    public function fetchAssoc(): Promise {
-        return $this->genericFetch(function ($row) {
-            return array_combine(array_column($this->result->columns, "name"), $row);
-        });
-    }
-    
-    public function fetchObject(): Promise {
-        return $this->genericFetch(function ($row) {
-            return (object) array_combine(array_column($this->result->columns, "name"), $row);
-        });
-    }
-
-    public function fetch(): Promise {
-        return $this->genericFetch(function ($row) {
-            return array_combine(array_column($this->result->columns, "name"), $row) + $row;
-        });
-    }
-
-    public function getConnInfo(): ConnectionState {
-        return clone $this->connInfo;
-    }
-
-    public function next(): Promise {
-        $deferred = $this->result->next ?: $this->result->next = new Deferred;
-        return $deferred->promise();
     }
 }

@@ -19,8 +19,8 @@ Amp\Loop::run(function() {
 
     list($result1, $result2) = yield $promises;
 
-    while ((list($result) = yield $result1->fetchRow()) !== null) {
-        var_dump($result);
+    while (yield $result1->advance()) {
+        var_dump($result1->getCurrent());
     }
 
     yield $db->query("DROP TABLE tmp");

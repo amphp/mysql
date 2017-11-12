@@ -113,9 +113,21 @@ class Connection implements Link {
     /** @see 14.6.4 COM_QUERY */
     public function query(string $query): Promise {
         $processor = $this->processor;
-        return $processor->startCommand(static function() use ($processor, $query) {
-            $processor->setQuery($query);
-            $processor->sendPacket("\x03$query");
+        return \Amp\call(static function () use ($processor, $query) {
+            $result = yield $processor->startCommand(static function() use ($processor, $query) {
+                $processor->setQuery($query);
+                $processor->sendPacket("\x03$query");
+            });
+
+            if ($result instanceof Internal\ResultProxy) {
+                return new ResultSet($result);
+            }
+
+            if ($result instanceof ConnectionState) {
+                return new CommandResult($result->affectedRows, $result->insertId);
+            }
+
+            throw new FailureException("Unrecognized result type");
         });
     }
 

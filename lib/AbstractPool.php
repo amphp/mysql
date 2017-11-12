@@ -140,7 +140,16 @@ abstract class AbstractPool implements Pool {
 
         try {
             $result = yield $connection->query($sql);
-        } finally {
+        } catch (\Throwable $exception) {
+            $this->push($connection);
+            throw $exception;
+        }
+
+        if ($result instanceof Operation) {
+            $result->onComplete(function () use ($connection) {
+                $this->push($connection);
+            });
+        } else {
             $this->push($connection);
         }
 

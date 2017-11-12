@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Mysql\Internal;
+namespace Amp\Mysql;
 
 /** @see 14.6.4.1.1.1 Column Type */
 class DataTypes {
@@ -89,7 +89,7 @@ class DataTypes {
     }
 
     /** @see 14.7.3 Binary Protocol Value */
-    public static function decodeBinary(int $type, string $str, /* ?int */ &$len = 0): string {
+    public static function decodeBinary(int $type, string $str, /* ?int */ &$len = 0) {
         $unsigned = $type & 0x80;
         switch ($type) {
             case self::MYSQL_TYPE_STRING:
@@ -195,13 +195,13 @@ class DataTypes {
         return substr($str, 0, $len = strpos($str, "\0"));
     }
 
-    public static function decodeStringOff(string $str, int &$off) {
+    public static function decodeStringOff(string $str, int &$off): string {
         $len = self::decodeUnsignedOff($str, $off);
         $off += $len;
         return substr($str, $off - $len, $len);
     }
 
-    public static function decodeUnsignedOff(string $str, int &$off) {
+    public static function decodeUnsignedOff(string $str, int &$off): int {
         $int = ord($str[$off]);
         if ($int < 0xfb) {
             $off += 1;
@@ -226,7 +226,7 @@ class DataTypes {
         return substr($str, $intlen, $len);
     }
 
-    public static function decodeUnsigned(string $str, /* ?int */ &$len = 0): string {
+    public static function decodeUnsigned(string $str, /* ?int */ &$len = 0): int {
         $int = \ord($str);
         if ($int < 0xfb) {
             $len = 1;

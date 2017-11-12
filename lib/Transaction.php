@@ -4,7 +4,7 @@ namespace Amp\Mysql;
 
 use Amp\Promise;
 
-class Transaction implements Executor {
+class Transaction implements Executor, Operation {
     const UNCOMMITTED  = 0;
     const COMMITTED    = 1;
     const REPEATABLE   = 2;
