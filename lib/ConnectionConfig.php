@@ -2,7 +2,11 @@
 
 namespace Amp\Mysql;
 
+use Amp\Struct;
+
 class ConnectionConfig {
+    use Struct;
+
     /* <domain/IP-string>(:<port>) */
     public $host;
     /* Can be resolved with resolveHost() method */

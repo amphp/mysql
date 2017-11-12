@@ -4,9 +4,11 @@ namespace Amp\Mysql\Internal;
 
 use Amp\Coroutine;
 use Amp\Deferred;
+use Amp\Mysql\CommandResult;
 use Amp\Mysql\ConnectionConfig;
 use Amp\Mysql\ConnectionException;
 use Amp\Mysql\ConnectionState;
+use Amp\Mysql\FailureException;
 use Amp\Mysql\InitializationException;
 use Amp\Mysql\QueryError;
 use Amp\Mysql\ResultSet;
@@ -506,7 +508,8 @@ class Processor {
 
     private function handleOk($packet) {
         $this->parseOk($packet);
-        $this->getDeferred()->resolve($this->getConnInfo());
+        $result = new CommandResult($this->connInfo->affectedRows, $this->connInfo->insertId);
+        $this->getDeferred()->resolve($result);
         $this->ready();
     }
 
@@ -521,7 +524,8 @@ class Processor {
 
     private function handleEof($packet) {
         $this->parseEof($packet);
-        $this->getDeferred()->resolve($this->getConnInfo());
+        $exception = new FailureException($this->connInfo->errorMsg, $this->connInfo->errorCode);
+        $this->getDeferred()->fail($exception);
         $this->ready();
     }
 
