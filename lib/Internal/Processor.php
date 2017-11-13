@@ -1173,21 +1173,20 @@ class Processor {
         $payload .= str_repeat("\0", 23); // reserved
 
         if (!$inSSL && ($this->capabilities & self::CLIENT_SSL)) {
-            \Amp\call(function () use ($payload) {
-                yield $this->write($payload);
+            \Amp\asyncCall(function () use ($payload) {
+                try {
+                    yield $this->write($payload);
 
-                $context = $this->config->ssl ?: new ClientTlsContext;
-                $context = $context->withPeerName($this->config->host);
+                    $context = $this->config->ssl ?: new ClientTlsContext;
+                    $context = $context->withPeerName($this->config->host);
 
-                return yield $this->socket->enableCrypto($context);
-            })->onResolve(function ($error) {
-                if ($error) {
+                    yield $this->socket->enableCrypto($context);
+
+                    $this->sendHandshake(true);
+                } catch (\Throwable $e) {
                     $this->closeSocket();
-                    $this->getDeferred()->fail($error);
-                    return;
+                    $this->getDeferred()->fail($e);
                 }
-
-                $this->sendHandshake(true);
             });
 
             return;
