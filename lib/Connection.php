@@ -65,11 +65,11 @@ class Connection implements Link {
         return $this->processor->isReady();
     }
 
-    public function forceClose() {
-        $this->processor->closeSocket();
+    protected function forceClose() {
+        $this->processor->close();
     }
 
-    public function getConfig() {
+    public function getConfig(): ConnectionConfig {
         return clone $this->processor->config;
     }
 
@@ -97,7 +97,7 @@ class Connection implements Link {
             $processor->sendPacket("\x01");
             $processor->initClosing();
         })->onResolve(static function() use ($processor) {
-            $processor->closeSocket();
+            $processor->close();
         });
     }
 

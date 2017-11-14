@@ -46,7 +46,7 @@ class Statement implements Operation {
 
     private function getProcessor(): Internal\Processor {
         if (!$this->processor->isAlive()) {
-            throw new ConnectionException("Connection went away, no way provided to restore connection via callable in ConnectionConfig::ready");
+            throw new ConnectionException("Connection went away");
         }
 
         return $this->processor;
@@ -64,17 +64,19 @@ class Statement implements Operation {
      * @throws \TypeError
      */
     public function bind($paramId, $data) {
-        if (is_numeric($paramId)) {
+        if (is_int($paramId)) {
             if ($paramId >= $this->numParamCount) {
                 throw new \Error("Parameter id $paramId is not defined for this prepared statement");
             }
             $i = $paramId;
-        } else {
+        } elseif (is_string($paramId)) {
             if (!isset($this->byNamed[$paramId])) {
                 throw new \Error("Parameter :$paramId is not defined for this prepared statement");
             }
             $array = $this->byNamed[$paramId];
             $i = reset($array);
+        } else {
+            throw new \TypeError("Invalid parameter ID type");
         }
 
         if (!is_scalar($data) && !(is_object($data) && method_exists($data, '__toString'))) {

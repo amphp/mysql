@@ -82,7 +82,7 @@ class DataTypes {
                 $value = "";
                 break;
             default:
-                throw new \UnexpectedValueException("Unexpected type for binding parameter: " . gettype($param));
+                throw new FailureException("Unexpected type for binding parameter: " . gettype($param));
         }
 
         return [$unsigned, $type, $value];
@@ -159,7 +159,7 @@ class DataTypes {
                         break;
 
                     default:
-                        throw new \UnexpectedValueException("Unexpected string length for date in binary protocol: " . ($len - 1));
+                        throw new FailureException("Unexpected string length for date in binary protocol: " . ($len - 1));
                 }
                 return str_pad($year, 2, "0", STR_PAD_LEFT) . "-" . str_pad($month, 2, "0", STR_PAD_LEFT) . "-" . str_pad($day, 2, "0", STR_PAD_LEFT) . " " . str_pad($hour, 2, "0", STR_PAD_LEFT) . ":" . str_pad($minute, 2, "0", STR_PAD_LEFT) . ":" . str_pad($second, 2, "0", STR_PAD_LEFT) . "." . str_pad($microsecond, 5, "0", STR_PAD_LEFT);
 
@@ -178,7 +178,7 @@ class DataTypes {
                         break;
 
                     default:
-                        throw new \UnexpectedValueException("Unexpected string length for time in binary protocol: " . ($len - 1));
+                        throw new FailureException("Unexpected string length for time in binary protocol: " . ($len - 1));
                 }
                 return ($negative ? "" : "-") . str_pad($day, 2, "0", STR_PAD_LEFT) . "d " . str_pad($hour, 2, "0", STR_PAD_LEFT) . ":" . str_pad($minute, 2, "0", STR_PAD_LEFT) . ":" . str_pad($second, 2, "0", STR_PAD_LEFT) . "." . str_pad($microsecond, 5, "0", STR_PAD_LEFT);
 
@@ -187,7 +187,7 @@ class DataTypes {
                 return null;
 
             default:
-                throw new \UnexpectedValueException("Invalid type for Binary Protocol: 0x" . dechex($type));
+                throw new FailureException("Invalid type for Binary Protocol: 0x" . dechex($type));
         }
     }
 
@@ -217,7 +217,7 @@ class DataTypes {
             return self::decode_unsigned64(substr($str, $off - 8, 8));
         } else {
             // If that happens connection is borked...
-            throw new \RangeException("$int is not in ranges [0x00, 0xfa] or [0xfc, 0xfe]");
+            throw new FailureException("$int is not in ranges [0x00, 0xfa] or [0xfc, 0xfe]");
         }
     }
 
@@ -242,7 +242,7 @@ class DataTypes {
             return self::decode_unsigned64(substr($str, 1, 8));
         } else {
             // If that happens connection is borked...
-            throw new \RangeException("$int is not in ranges [0x00, 0xfa] or [0xfc, 0xfe]");
+            throw new FailureException("$int is not in ranges [0x00, 0xfa] or [0xfc, 0xfe]");
         }
     }
 
@@ -343,7 +343,7 @@ class DataTypes {
         } elseif ($int < (1 << 62) * 4) {
             return "\xfe" . self::encode_int64($int);
         } else {
-            throw new \OutOfRangeException("encodeInt doesn't allow integers bigger than 2^64 - 1 (current: $int)");
+            throw new FailureException("encodeInt doesn't allow integers bigger than 2^64 - 1 (current: $int)");
         }
     }
 

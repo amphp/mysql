@@ -50,7 +50,9 @@ class Processor {
     /** @var \Generator[] */
     private $processors = [];
 
+    /** @var int */
     private $protocol;
+
     private $seqId = -1;
     private $compressionId = -1;
 
@@ -60,11 +62,13 @@ class Processor {
     private $authPluginDataLen;
     private $query;
     public $named = [];
+
     /** @var callable|null */
     private $parseCallback = null;
     /** @var callable|null */
     private $packetCallback = null;
 
+    /** @var \Amp\Promise|null */
     private $pendingWrite;
 
     /** @var \Amp\Mysql\ConnectionConfig */
@@ -139,13 +143,9 @@ class Processor {
     public function delRef() {
         if (!--$this->refcount) {
             $this->appendTask(function() {
-                $this->closeSocket();
+                $this->close();
             });
         }
-    }
-
-    public function forceClose() {
-        $this->closeSocket();
     }
 
     private function ready() {
@@ -445,7 +445,7 @@ class Processor {
             $this->ready();
         } elseif ($this->connectionState < self::READY) {
             // connection failure
-            $this->closeSocket();
+            $this->close();
             $this->getDeferred()->fail(new InitializationException("Could not connect to {$this->config->resolvedHost}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
         }
     }
@@ -886,7 +886,7 @@ class Processor {
         $this->connectionState = self::CLOSING;
     }
 
-    public function closeSocket() {
+    public function close() {
         $this->connectionState = self::CLOSED;
         if ($this->socket) {
             $this->socket->close();
@@ -980,7 +980,7 @@ class Processor {
                 $deferred->fail(new ConnectionException("Connection went away... unable to fulfil this deferred ... It's unknown whether the query was executed...", $this->query));
             }
         }
-        $this->closeSocket();
+        $this->close();
     }
 
     /** @see 14.4 Compression */
@@ -1184,7 +1184,7 @@ class Processor {
 
                     $this->sendHandshake(true);
                 } catch (\Throwable $e) {
-                    $this->closeSocket();
+                    $this->close();
                     $this->getDeferred()->fail($e);
                 }
             });

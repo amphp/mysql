@@ -10,8 +10,14 @@ class ResultProxy {
     public $rows = [];
     public $fetchedRows = 0;
     public $userFetched = 0;
+
+    /** @var \Amp\Deferred[][] */
     public $deferreds = [self::SINGLE_ROW_FETCH => [], self::COLUMNS_FETCHED => [], self::ROWS_FETCHED => []];
+
+    /** @var int */
     public $state = self::UNFETCHED;
+
+    /** @var \Amp\Deferred|null */
     public $next;
 
     const UNFETCHED = 0;

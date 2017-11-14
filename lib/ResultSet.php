@@ -74,6 +74,8 @@ class ResultSet implements Iterator, Operation {
 
     /**
      * {@inheritdoc}
+     *
+     * @param int $type Result fetch type. Use the FETCH_* constant defined by this class.
      */
     public function advance(int $type = self::FETCH_ASSOC): Promise {
         $this->currentRow = null;
@@ -137,7 +139,7 @@ class ResultSet implements Iterator, Operation {
     }
 
     /**
-     * @return \Amp\Promise<string[]>
+     * @return \Amp\Promise<mixed[][]>
      */
     public function getFields(): Promise {
         if ($this->result->state >= Internal\ResultProxy::COLUMNS_FETCHED) {
