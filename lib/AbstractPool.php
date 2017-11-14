@@ -185,6 +185,35 @@ abstract class AbstractPool implements Pool {
     /**
      * {@inheritdoc}
      */
+    public function execute(string $sql, ...$data): Promise {
+        return new Coroutine($this->doExecute($sql, $data));
+    }
+
+    private function doExecute(string $sql, array $data): \Generator {
+        /** @var \Amp\Mysql\Connection $connection */
+        $connection = yield from $this->pop();
+
+        try {
+            $result = yield $connection->execute($sql, ...$data);
+        } catch (\Throwable $exception) {
+            $this->push($connection);
+            throw $exception;
+        }
+
+        if ($result instanceof Operation) {
+            $result->onComplete(function () use ($connection) {
+                $this->push($connection);
+            });
+        } else {
+            $this->push($connection);
+        }
+
+        return $result;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
     public function transaction(int $isolation = Transaction::COMMITTED): Promise {
         return new Coroutine($this->doTransaction($isolation));
     }

@@ -320,6 +320,17 @@ REGEX;
         return $promise;
     }
 
+    /**
+     * {@inheritdoc}
+     */
+    public function execute(string $sql, ...$data): Promise {
+        return \Amp\call(function () use ($sql, $data) {
+            /** @var \Amp\Mysql\Statement $statment */
+            $statment = yield $this->prepare($sql);
+            return yield $statment->execute(...$data);
+        });
+    }
+
     public function __destruct() {
         $this->processor->delRef();
     }

@@ -33,6 +33,11 @@ class Transaction implements Executor, Operation {
         }
     }
 
+    /**
+     * {@inheritdoc}
+     *
+     * Closes and commits all changes in the transaction.
+     */
     public function close() {
         if ($this->connection) {
             $this->commit(); // Invokes $this->queue->complete().
@@ -84,6 +89,19 @@ class Transaction implements Executor, Operation {
         }
 
         return $this->connection->prepare($sql);
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * @throws \Amp\Mysql\TransactionError If the transaction has been committed or rolled back.
+     */
+    public function execute(string $sql, ...$data): Promise {
+        if ($this->connection === null) {
+            throw new TransactionError("The transaction has been committed or rolled back");
+        }
+
+        return $this->connection->execute($sql, ...$data);
     }
 
     /**

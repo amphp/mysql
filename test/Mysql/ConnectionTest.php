@@ -1,5 +1,6 @@
 <?php
 
+use Amp\Mysql\CommandResult;
 use Amp\Mysql\DataTypes;
 use Amp\Mysql\ResultSet;
 use PHPUnit\Framework\TestCase;
@@ -28,6 +29,7 @@ class ConnectionTest extends TestCase {
 
             /** @var \Amp\Mysql\ResultSet $resultset */
             $resultset = yield $db->query("SELECT 1 AS a");
+            $this->assertInstanceOf(ResultSet::class, $resultset);
 
             for ($i = 0; yield $resultset->advance(); ++$i) {
                 $this->assertEquals(["a" => 1], $resultset->getCurrent());
@@ -48,6 +50,7 @@ class ConnectionTest extends TestCase {
 
             /** @var \Amp\Mysql\ResultSet $resultset */
             $resultset = yield $db->query('SELECT a FROM tmp');
+            $this->assertInstanceOf(ResultSet::class, $resultset);
 
             $got = [];
             while (yield $resultset->advance(ResultSet::FETCH_ARRAY)) {
@@ -71,7 +74,7 @@ class ConnectionTest extends TestCase {
 
             /** @var \Amp\Mysql\ResultSet $resultset */
             $resultset = yield $db->query("INSERT INTO tmp VALUES (5, 6), (8, 9); SELECT a FROM tmp; SELECT b FROM tmp WHERE a = 5; SELECT b AS d, a + 1 AS c FROM tmp WHERE b < 7");
-
+            $this->assertInstanceOf(ResultSet::class, $resultset);
 
             $got = [];
             while (yield $resultset->advance(ResultSet::FETCH_ARRAY)) {
@@ -119,6 +122,7 @@ class ConnectionTest extends TestCase {
             $this->assertEquals(yield $stmt->getFields(), [$base + ["name" => "a", "original_name" => "a"], $base + ["name" => "b", "original_name" => "b"]]);
             $stmt->bind("num", 9);
             $result = yield $stmt->execute(5);
+            $this->assertInstanceOf(ResultSet::class, $result);
             $got = [];
             while (yield $result->advance(ResultSet::FETCH_ARRAY)) {
                 $got[] = $result->getCurrent();
@@ -128,6 +132,7 @@ class ConnectionTest extends TestCase {
             /** @var \Amp\Mysql\Statement $stmt */
             $stmt = yield $db->prepare("SELECT * FROM tmp WHERE a = ? OR b = ?");
             $result = yield $stmt->execute(5, 8);
+            $this->assertInstanceOf(ResultSet::class, $result);
             $got = [];
             while (yield $result->advance(ResultSet::FETCH_ARRAY)) {
                 $got[] = $result->getCurrent();
@@ -138,6 +143,7 @@ class ConnectionTest extends TestCase {
             $stmt = yield $db->prepare("SELECT * FROM tmp WHERE a = :a OR b = ?");
             $stmt->bind("a", 5);
             $result = yield $stmt->execute(9);
+            $this->assertInstanceOf(ResultSet::class, $result);
             $got = [];
             while (yield $result->advance(ResultSet::FETCH_ARRAY)) {
                 $got[] = $result->getCurrent();
@@ -149,6 +155,32 @@ class ConnectionTest extends TestCase {
             $stmt->bind("bar", 9);
             /** @var \Amp\Mysql\CommandResult $result */
             $result = yield $stmt->execute();
+            $this->assertInstanceOf(CommandResult::class, $result);
+            $this->assertSame(1, $result->affectedRows());
+        });
+    }
+
+    function testExecute() {
+        \Amp\Loop::run(function () {
+            /** @var \Amp\Mysql\Connection $db */
+            $db = yield connect("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest");
+
+            $db->query("CREATE TEMPORARY TABLE tmp SELECT 1 AS a, 2 AS b");
+            $db->query("INSERT INTO tmp VALUES (5, 6), (8, 9), (10, 11), (12, 13)");
+
+            /** @var \Amp\Mysql\ResultSet $result */
+            $result = yield $db->execute("SELECT * FROM tmp WHERE a = ? OR b = ?", 5, 9);
+            $this->assertInstanceOf(ResultSet::class, $result);
+            $got = [];
+            while (yield $result->advance(ResultSet::FETCH_ARRAY)) {
+                $got[] = $result->getCurrent();
+            }
+            $this->assertCount(2, $got);
+            $this->assertSame([[5, 6], [8, 9]], $got);
+
+            /** @var \Amp\Mysql\CommandResult $result */
+            $result = yield $db->execute("INSERT INTO tmp VALUES (?, ?)", 14, 15);
+            $this->assertInstanceOf(CommandResult::class, $result);
             $this->assertSame(1, $result->affectedRows());
         });
     }
