@@ -1,8 +1,8 @@
 <?php
 
+use Amp\Mysql\Internal\ResultProxy;
 use Amp\Mysql\Statement;
 use PHPUnit\Framework\TestCase;
-use Amp\Mysql\Internal\ResultProxy;
 
 class StatementTest extends TestCase {
     /** @var \Prophecy\Prophecy\ObjectProphecy */
@@ -60,7 +60,11 @@ class StatementTest extends TestCase {
                 'expectedException' => 'TypeError',
             ],
             'test object with __toString defined' => [
-                'data' => new class { public function __toString() {return '';} },
+                'data' => new class {
+                    public function __toString() {
+                        return '';
+                    }
+                },
                 'expectedException' => false,
             ],
         ];

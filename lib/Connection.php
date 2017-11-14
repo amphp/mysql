@@ -4,7 +4,6 @@ namespace Amp\Mysql;
 
 use Amp\Deferred;
 use Amp\Promise;
-use Amp\Socket\ClientTlsContext;
 
 class Connection implements Link {
     const REFRESH_GRANT = 0x01;
@@ -30,31 +29,6 @@ class Connection implements Link {
 
     public function __construct(Internal\Processor $processor) {
         $this->processor = $processor;
-    }
-
-    public static function parseConnectionString(string $connStr, ClientTlsContext $sslOptions = null): ConnectionConfig {
-        $db = null;
-        $useCompression = "false";
-
-        foreach (explode(";", $connStr) as $param) {
-            list($key, $$key) = array_map("trim", explode("=", $param, 2) + [1 => null]);
-        }
-        if (!isset($host, $user, $pass)) {
-            throw new \Error("Required parameters host, user and pass need to be passed in connection string");
-        }
-
-        $config = new ConnectionConfig;
-        $config->host = $host;
-        $config->user = $user;
-        $config->pass = $pass;
-        $config->db = $db;
-        $config->useCompression = $useCompression && $useCompression != "false";
-
-        $config->ssl = $sslOptions;
-
-        $config->resolveHost();
-
-        return $config;
     }
 
     public function isAlive(): bool {
@@ -93,10 +67,10 @@ class Connection implements Link {
     /** @see 14.6.2 COM_QUIT */
     public function close() {
         $processor = $this->processor;
-        $processor->startCommand(static function() use ($processor) {
+        $processor->startCommand(static function () use ($processor) {
             $processor->sendPacket("\x01");
             $processor->initClosing();
-        })->onResolve(static function() use ($processor) {
+        })->onResolve(static function () use ($processor) {
             $processor->close();
         });
     }
@@ -104,7 +78,7 @@ class Connection implements Link {
     /** @see 14.6.3 COM_INIT_DB */
     public function useDb(string $db): Promise {
         $processor = $this->processor;
-        return $processor->startCommand(static function() use ($processor, $db) {
+        return $processor->startCommand(static function () use ($processor, $db) {
             $processor->config->db = $db;
             $processor->sendPacket("\x02$db");
         });
@@ -114,7 +88,7 @@ class Connection implements Link {
     public function query(string $query): Promise {
         $processor = $this->processor;
         return \Amp\call(static function () use ($processor, $query) {
-            $result = yield $processor->startCommand(static function() use ($processor, $query) {
+            $result = yield $processor->startCommand(static function () use ($processor, $query) {
                 $processor->setQuery($query);
                 $processor->sendPacket("\x03$query");
             });
@@ -161,7 +135,7 @@ class Connection implements Link {
     /** @see 14.6.5 COM_FIELD_LIST */
     public function listFields(string $table, string $like = "%"): Promise {
         $processor = $this->processor;
-        return $processor->startCommand(static function() use ($processor, $table, $like) {
+        return $processor->startCommand(static function () use ($processor, $table, $like) {
             $processor->sendPacket("\x04$table\0$like");
             $processor->setFieldListing();
         });
@@ -171,7 +145,7 @@ class Connection implements Link {
         $deferred = new Deferred;
 
         $columns = [];
-        $when = function($error, $array) use (&$columns, &$when, $deferred) {
+        $onResolve = function ($error, $array) use (&$columns, &$onResolve, $deferred) {
             if ($error) {
                 $deferred->fail($error);
                 return;
@@ -181,9 +155,9 @@ class Connection implements Link {
                 return;
             }
             list($columns[], $promise) = $array;
-            $promise->onResolve($when);
+            $promise->onResolve($onResolve);
         };
-        $this->listFields($table, $like)->onResolve($when);
+        $this->listFields($table, $like)->onResolve($onResolve);
 
         return $deferred->promise();
     }
@@ -191,7 +165,7 @@ class Connection implements Link {
     /** @see 14.6.6 COM_CREATE_DB */
     public function createDatabase($db) {
         $processor = $this->processor;
-        return $processor->startCommand(static function() use ($processor, $db) {
+        return $processor->startCommand(static function () use ($processor, $db) {
             $processor->sendPacket("\x05$db");
         });
     }
@@ -199,7 +173,7 @@ class Connection implements Link {
     /** @see 14.6.7 COM_DROP_DB */
     public function dropDatabase(string $db): Promise {
         $processor = $this->processor;
-        return $processor->startCommand(static function() use ($processor, $db) {
+        return $processor->startCommand(static function () use ($processor, $db) {
             $processor->sendPacket("\x06$db");
         });
     }
@@ -210,7 +184,7 @@ class Connection implements Link {
      */
     public function refresh(int $subcommand): Promise {
         $processor = $this->processor;
-        return $processor->startCommand(static function() use ($processor, $subcommand) {
+        return $processor->startCommand(static function () use ($processor, $subcommand) {
             $processor->sendPacket("\x07" . chr($subcommand));
         });
     }
@@ -218,7 +192,7 @@ class Connection implements Link {
     /** @see 14.6.9 COM_SHUTDOWN */
     public function shutdown(): Promise {
         $processor = $this->processor;
-        return $processor->startCommand(static function() use ($processor) {
+        return $processor->startCommand(static function () use ($processor) {
             $processor->sendPacket("\x08\x00"); /* SHUTDOWN_DEFAULT / SHUTDOWN_WAIT_ALL_BUFFERS, only one in use */
         });
     }
@@ -226,7 +200,7 @@ class Connection implements Link {
     /** @see 14.6.10 COM_STATISTICS */
     public function statistics(): Promise {
         $processor = $this->processor;
-        return $processor->startCommand(static function() use ($processor) {
+        return $processor->startCommand(static function () use ($processor) {
             $processor->sendPacket("\x09");
             $processor->setStatisticsReading();
         });
@@ -235,7 +209,7 @@ class Connection implements Link {
     /** @see 14.6.11 COM_PROCESS_INFO */
     public function processInfo(): Promise {
         $processor = $this->processor;
-        return $processor->startCommand(static function() use ($processor) {
+        return $processor->startCommand(static function () use ($processor) {
             $processor->sendPacket("\x0a");
             $processor->setQuery("SHOW PROCESSLIST");
         });
@@ -244,7 +218,7 @@ class Connection implements Link {
     /** @see 14.6.13 COM_PROCESS_KILL */
     public function killProcess($process): Promise {
         $processor = $this->processor;
-        return $processor->startCommand(static function() use ($processor, $process) {
+        return $processor->startCommand(static function () use ($processor, $process) {
             $processor->sendPacket("\x0c" . DataTypes::encode_int32($process));
         });
     }
@@ -252,7 +226,7 @@ class Connection implements Link {
     /** @see 14.6.14 COM_DEBUG */
     public function debugStdout(): Promise {
         $processor = $this->processor;
-        return $processor->startCommand(static function() use ($processor) {
+        return $processor->startCommand(static function () use ($processor) {
             $processor->sendPacket("\x0d");
         });
     }
@@ -260,7 +234,7 @@ class Connection implements Link {
     /** @see 14.6.15 COM_PING */
     public function ping(): Promise {
         $processor = $this->processor;
-        return $processor->startCommand(static function() use ($processor) {
+        return $processor->startCommand(static function () use ($processor) {
             $processor->sendPacket("\x0e");
         });
     }
@@ -292,7 +266,7 @@ class Connection implements Link {
     /** @see 14.6.19 COM_RESET_CONNECTION */
     public function resetConnection() {
         $processor = $this->processor;
-        return $processor->startCommand(static function() use ($processor) {
+        return $processor->startCommand(static function () use ($processor) {
             $processor->sendPacket("\x1f");
         });
     }
@@ -300,7 +274,7 @@ class Connection implements Link {
     /** @see 14.7.4 COM_STMT_PREPARE */
     public function prepare(string $query): Promise {
         $processor = $this->processor;
-        $promise = $processor->startCommand(static function() use ($processor, $query) {
+        $promise = $processor->startCommand(static function () use ($processor, $query) {
             $processor->setPrepare($query);
             $regex = <<<'REGEX'
 (["'`])(?:\\(?:\\|\1)|(?!\1).)*+\1(*SKIP)(*F)|(\?)|:([a-zA-Z_]+)

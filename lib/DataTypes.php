@@ -113,24 +113,24 @@ class DataTypes {
             case self::MYSQL_TYPE_LONGLONG:
             case self::MYSQL_TYPE_LONGLONG | 0x80:
                 $len = 8;
-                return $unsigned ? self::decode_unsigned64($str) : self::decode_int64($str);
+                return $unsigned ? self::decodeUnsigned64($str) : self::decodeInt64($str);
 
             case self::MYSQL_TYPE_LONG:
             case self::MYSQL_TYPE_LONG | 0x80:
             case self::MYSQL_TYPE_INT24:
             case self::MYSQL_TYPE_INT24 | 0x80:
                 $len = 4;
-                return $unsigned ? self::decode_unsigned32($str) : self::decode_int32($str);
+                return $unsigned ? self::decodeUnsigned32($str) : self::decodeInt32($str);
 
             case self::MYSQL_TYPE_SHORT:
             case self::MYSQL_TYPE_SHORT | 0x80:
                 $len = 2;
-                return $unsigned ? self::decode_unsigned16($str) : self::decode_int16($str);
+                return $unsigned ? self::decodeUnsigned16($str) : self::decodeInt16($str);
 
             case self::MYSQL_TYPE_TINY:
             case self::MYSQL_TYPE_TINY | 0x80:
                 $len = 1;
-                return $unsigned ? \ord($str) : self::decode_int8($str);
+                return $unsigned ? \ord($str) : self::decodeInt8($str);
 
             case self::MYSQL_TYPE_DOUBLE:
                 $len = 8;
@@ -146,15 +146,18 @@ class DataTypes {
                 $year = $month = $day = $hour = $minute = $second = $microsecond = 0;
                 switch ($len = ord($str) + 1) {
                     case 12:
-                        $microsecond = self::decode_unsigned32(substr($str, 8));
+                        $microsecond = self::decodeUnsigned32(substr($str, 8));
+                        // no break
                     case 8:
                         $second = ord($str[7]);
                         $minute = ord($str[6]);
                         $hour = ord($str[5]);
+                        // no break
                     case 5:
                         $day = ord($str[4]);
                         $month = ord($str[3]);
-                        $year = self::decode_unsigned16(substr($str, 1));
+                        $year = self::decodeUnsigned16(substr($str, 1));
+                        // no break
                     case 1:
                         break;
 
@@ -167,13 +170,15 @@ class DataTypes {
                 $negative = $day = $hour = $minute = $second = $microsecond = 0;
                 switch ($len = ord($str) + 1) {
                     case 13:
-                        $microsecond = self::decode_unsigned32(substr($str, 9));
+                        $microsecond = self::decodeUnsigned32(substr($str, 9));
+                        // no break
                     case 9:
                         $second = ord($str[8]);
                         $minute = ord($str[7]);
                         $hour = ord($str[6]);
-                        $day = self::decode_unsigned32(substr($str, 2));
+                        $day = self::decodeUnsigned32(substr($str, 2));
                         $negative = ord($str[1]);
+                        // no break
                     case 1:
                         break;
 
@@ -206,19 +211,25 @@ class DataTypes {
         if ($int < 0xfb) {
             $off += 1;
             return $int;
-        } elseif ($int == 0xfc) {
-            $off += 3;
-            return self::decode_unsigned16(substr($str, $off - 2, 2));
-        } elseif ($int == 0xfd) {
-            $off += 4;
-            return self::decode_unsigned24(substr($str, $off - 3, 3));
-        } elseif ($int == 0xfe) {
-            $off += 9;
-            return self::decode_unsigned64(substr($str, $off - 8, 8));
-        } else {
-            // If that happens connection is borked...
-            throw new FailureException("$int is not in ranges [0x00, 0xfa] or [0xfc, 0xfe]");
         }
+
+        if ($int == 0xfc) {
+            $off += 3;
+            return self::decodeUnsigned16(substr($str, $off - 2, 2));
+        }
+
+        if ($int == 0xfd) {
+            $off += 4;
+            return self::decodeUnsigned24(substr($str, $off - 3, 3));
+        }
+
+        if ($int == 0xfe) {
+            $off += 9;
+            return self::decodeUnsigned64(substr($str, $off - 8, 8));
+        }
+
+        // If that happens connection is borked...
+        throw new FailureException("$int is not in ranges [0x00, 0xfa] or [0xfc, 0xfe]");
     }
 
     public static function decodeString(string $str, /* ?int */ &$intlen = 0, /* ?int */ &$len = 0): string {
@@ -231,22 +242,28 @@ class DataTypes {
         if ($int < 0xfb) {
             $len = 1;
             return $int;
-        } elseif ($int == 0xfc) {
-            $len = 3;
-            return self::decode_unsigned16(substr($str, 1, 2));
-        } elseif ($int == 0xfd) {
-            $len = 4;
-            return self::decode_unsigned24(substr($str, 1, 4));
-        } elseif ($int == 0xfe) {
-            $len = 9;
-            return self::decode_unsigned64(substr($str, 1, 8));
-        } else {
-            // If that happens connection is borked...
-            throw new FailureException("$int is not in ranges [0x00, 0xfa] or [0xfc, 0xfe]");
         }
+
+        if ($int == 0xfc) {
+            $len = 3;
+            return self::decodeUnsigned16(substr($str, 1, 2));
+        }
+
+        if ($int == 0xfd) {
+            $len = 4;
+            return self::decodeUnsigned24(substr($str, 1, 4));
+        }
+
+        if ($int == 0xfe) {
+            $len = 9;
+            return self::decodeUnsigned64(substr($str, 1, 8));
+        }
+
+        // If that happens connection is borked...
+        throw new FailureException("$int is not in ranges [0x00, 0xfa] or [0xfc, 0xfe]");
     }
 
-    public static function decode_intByLen(string $str, int $len): int {
+    public static function decodeIntByLen(string $str, int $len): int {
         $int = 0;
         while ($len--) {
             $int = ($int << 8) + ord($str[$len]);
@@ -254,7 +271,7 @@ class DataTypes {
         return $int;
     }
 
-    public static function decode_int8(string $str): int {
+    public static function decodeInt8(string $str): int {
         $int = \ord($str);
         if ($int < (1 << 7)) {
             return $int;
@@ -263,11 +280,11 @@ class DataTypes {
         return $int << $shift >> $shift;
     }
 
-    public static function decode_unsigned8(string $str): int {
+    public static function decodeUnsigned8(string $str): int {
         return \ord($str);
     }
 
-    public static function decode_int16(string $str): int {
+    public static function decodeInt16(string $str): int {
         $int = unpack("v", $str)[1];
         if ($int < (1 << 15)) {
             return $int;
@@ -276,11 +293,11 @@ class DataTypes {
         return $int << $shift >> $shift;
     }
 
-    public static function decode_unsigned16(string $str): int {
+    public static function decodeUnsigned16(string $str): int {
         return unpack("v", $str)[1];
     }
 
-    public static function decode_int24(string $str): int {
+    public static function decodeInt24(string $str): int {
         $int = unpack("V", substr($str, 0, 3) . "\x00")[1];
         if ($int < (1 << 23)) {
             return $int;
@@ -289,11 +306,11 @@ class DataTypes {
         return $int << $shift >> $shift;
     }
 
-    public static function decode_unsigned24(string $str): int {
+    public static function decodeUnsigned24(string $str): int {
         return unpack("V", substr($str, 0, 3) . "\x00")[1];
     }
 
-    public static function decode_int32($str) {
+    public static function decodeInt32($str) {
         if (PHP_INT_SIZE > 4) {
             $int = unpack("V", $str)[1];
             if ($int < (1 << 31)) {
@@ -304,47 +321,52 @@ class DataTypes {
         return unpack("V", $str)[1];
     }
 
-    public static function decode_unsigned32(string $str): int {
+    public static function decodeUnsigned32(string $str): int {
         if (PHP_INT_SIZE > 4) {
             return unpack("V", $str)[1];
-        } else {
-            $int = unpack("v", $str)[1];
-            return $int[1] + ($int[2] * (1 << 16));
         }
+        $int = unpack("v", $str)[1];
+        return $int[1] + ($int[2] * (1 << 16));
     }
 
-    public static function decode_int64(string $str): int {
+    public static function decodeInt64(string $str): int {
         if (PHP_INT_SIZE > 4) {
             $int = unpack("V2", $str);
             return $int[1] + ($int[2] << 32);
-        } else {
-            $int = unpack("v2V", $str);
-            return $int[1] + ($int[2] * (1 << 16)) + $int[3] * (1 << 16) * (1 << 16);
         }
+
+        $int = unpack("v2V", $str);
+        return $int[1] + ($int[2] * (1 << 16)) + $int[3] * (1 << 16) * (1 << 16);
     }
 
-    public static function decode_unsigned64(string $str): int {
+    public static function decodeUnsigned64(string $str): int {
         if (PHP_INT_SIZE > 4) {
             $int = unpack("V2", $str);
             return $int[1] + $int[2] * (1 << 32);
-        } else {
-            $int = unpack("v4", $str);
-            return $int[1] + ($int[2] * (1 << 16)) + ($int[3] + ($int[4] * (1 << 16))) * (1 << 16) * (1 << 16);
         }
+
+        $int = unpack("v4", $str);
+        return $int[1] + ($int[2] * (1 << 16)) + ($int[3] + ($int[4] * (1 << 16))) * (1 << 16) * (1 << 16);
     }
 
     public static function encodeInt(int $int): string {
         if ($int < 0xfb) {
             return chr($int);
-        } elseif ($int < (1 << 16)) {
-            return "\xfc" . self::encode_int16($int);
-        } elseif ($int < (1 << 24)) {
-            return "\xfd" . self::encode_int24($int);
-        } elseif ($int < (1 << 62) * 4) {
-            return "\xfe" . self::encode_int64($int);
-        } else {
-            throw new FailureException("encodeInt doesn't allow integers bigger than 2^64 - 1 (current: $int)");
         }
+
+        if ($int < (1 << 16)) {
+            return "\xfc" . self::encode_int16($int);
+        }
+
+        if ($int < (1 << 24)) {
+            return "\xfd" . self::encode_int24($int);
+        }
+
+        if ($int < (1 << 62) * 4) {
+            return "\xfe" . self::encode_int64($int);
+        }
+
+        throw new FailureException("encodeInt doesn't allow integers bigger than 2^64 - 1 (current: $int)");
     }
 
     public static function encode_int16(int $int): string {

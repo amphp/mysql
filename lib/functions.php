@@ -14,7 +14,7 @@ use Amp\Socket\ClientTlsContext;
  * @throws \Amp\Mysql\FailureException If connecting fails.
  */
 function connect(string $connectionString, ClientTlsContext $sslOptions = null): Promise {
-    $config = Connection::parseConnectionString($connectionString, $sslOptions);
+    $config = ConnectionConfig::parseConnectionString($connectionString, $sslOptions);
     return Connection::connect($config);
 }
 
@@ -30,6 +30,6 @@ function pool(
     ClientTlsContext $sslOptions = null,
     int $maxConnections = ConnectionPool::DEFAULT_MAX_CONNECTIONS
 ): Pool {
-    $config = Connection::parseConnectionString($connectionString, $sslOptions);
+    $config = ConnectionConfig::parseConnectionString($connectionString, $sslOptions);
     return new ConnectionPool($config, $maxConnections);
 }

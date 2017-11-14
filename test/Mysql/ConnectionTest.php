@@ -7,11 +7,11 @@ use PHPUnit\Framework\TestCase;
 use function Amp\Mysql\connect;
 
 class ConnectionTest extends TestCase {
-    function testConnect() {
+    public function testConnect() {
         $complete = false;
-        \Amp\Loop::run(function() use (&$complete) {
+        \Amp\Loop::run(function () use (&$complete) {
             /** @var \Amp\Mysql\Connection $db */
-            $db = yield connect("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest");
+            $db = yield connect("host=".DB_HOST." user=".DB_USER." pass=".DB_PASS." db=connectiontest");
 
             /* use an alternative charset... Default is utf8mb4_general_ci */
             yield $db->setCharset("latin1_general_ci");
@@ -19,11 +19,11 @@ class ConnectionTest extends TestCase {
             $db->close();
             $complete = true;
         });
-        $this->assertEquals(true, $complete, "Database commands did not complete.");
+        $this->assertTrue($complete, "Database commands did not complete.");
     }
 
-    function testQuery() {
-        \Amp\Loop::run(function() {
+    public function testQuery() {
+        \Amp\Loop::run(function () {
             /** @var \Amp\Mysql\Connection $db */
             $db = yield connect("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest");
 
@@ -39,7 +39,7 @@ class ConnectionTest extends TestCase {
         });
     }
 
-    function testQueryFetchRow() {
+    public function testQueryFetchRow() {
         \Amp\Loop::run(function () {
             /** @var \Amp\Mysql\Connection $db */
             $db = yield connect("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest");
@@ -61,8 +61,8 @@ class ConnectionTest extends TestCase {
         });
     }
 
-    function testMultiStmt() {
-        \Amp\Loop::run(function() {
+    public function testMultiStmt() {
+        \Amp\Loop::run(function () {
             /** @var \Amp\Mysql\Connection $db */
             $db = yield connect("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest");
 
@@ -95,8 +95,8 @@ class ConnectionTest extends TestCase {
         });
     }
 
-    function testPrepared() {
-        \Amp\Loop::run(function() {
+    public function testPrepared() {
+        \Amp\Loop::run(function () {
             /** @var \Amp\Mysql\Connection $db */
             $db = yield connect("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest");
 
@@ -160,7 +160,7 @@ class ConnectionTest extends TestCase {
         });
     }
 
-    function testExecute() {
+    public function testExecute() {
         \Amp\Loop::run(function () {
             /** @var \Amp\Mysql\Connection $db */
             $db = yield connect("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest");
@@ -185,8 +185,8 @@ class ConnectionTest extends TestCase {
         });
     }
 
-    function testPreparedWithNegativeValue() {
-        \Amp\Loop::run(function() {
+    public function testPreparedWithNegativeValue() {
+        \Amp\Loop::run(function () {
             /** @var \Amp\Mysql\Connection $db */
             $db = yield connect("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest");
 

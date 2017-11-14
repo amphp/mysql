@@ -163,11 +163,10 @@ class Statement implements Operation {
             return new Success($this->result->columns);
         } elseif (isset($this->result->deferreds[Internal\ResultProxy::COLUMNS_FETCHED][0])) {
             return $this->result->deferreds[Internal\ResultProxy::COLUMNS_FETCHED][0][0]->promise();
-        } else {
-            $deferred = new Deferred;
-            $this->result->deferreds[Internal\ResultProxy::COLUMNS_FETCHED][0] = [$deferred, &$this->result->columns, null];
-            return $deferred->promise();
         }
+        $deferred = new Deferred;
+        $this->result->deferreds[Internal\ResultProxy::COLUMNS_FETCHED][0] = [$deferred, &$this->result->columns, null];
+        return $deferred->promise();
     }
 
     public function connInfo(): ConnectionState {

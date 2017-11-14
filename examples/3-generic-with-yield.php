@@ -2,7 +2,7 @@
 
 require 'support/bootstrap.php';
 
-Amp\Loop::run(function() {
+Amp\Loop::run(function () {
     $db = Amp\Mysql\pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME);
 
     /* Create table and insert a few rows */

@@ -4,7 +4,7 @@ require 'support/bootstrap.php';
 
 use Amp\Mysql\ResultSet;
 
-Amp\Loop::run(function() {
+Amp\Loop::run(function () {
     $db = Amp\Mysql\pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME);
 
     /** @var \Amp\Mysql\ResultSet $result */

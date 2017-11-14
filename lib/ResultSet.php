@@ -38,9 +38,9 @@ class ResultSet implements Iterator, Operation {
             try {
                 do {
                     $last = $result;
-                    $row = yield self::fetch($result);
+                    $row = yield self::fetchRow($result);
                     while ($row !== null) {
-                        $next = self::fetch($result); // Fetch next row while emitting last row.
+                        $next = self::fetchRow($result); // Fetch next row while emitting last row.
                         yield $emit($row);
                         $row = yield $next;
                     }
@@ -95,39 +95,45 @@ class ResultSet implements Iterator, Operation {
         switch ($this->type) {
             case self::FETCH_ASSOC:
                 return $this->currentRow = \array_combine(
-                    \array_column($this->result->columns, "name"), $this->producer->getCurrent()
+                    \array_column($this->result->columns, "name"),
+                    $this->producer->getCurrent()
                 );
+
             case self::FETCH_ARRAY:
                 return $this->currentRow = $this->producer->getCurrent();
+
             case self::FETCH_OBJECT:
                 return $this->currentRow = (object) \array_combine(
-                    \array_column($this->result->columns, "name"), $this->producer->getCurrent()
+                    \array_column($this->result->columns, "name"),
+                    $this->producer->getCurrent()
                 );
+
             default:
                 throw new \Error("Invalid result fetch type");
         }
     }
 
-    private static function fetch(Internal\ResultProxy $result): Promise {
+    private static function fetchRow(Internal\ResultProxy $result): Promise {
         if ($result->userFetched < $result->fetchedRows) {
-            $row = $result->rows[$result->userFetched++];
-            return new Success($row);
-        } elseif ($result->state == Internal\ResultProxy::ROWS_FETCHED) {
-            return new Success(null);
-        } else {
-            $deferred = new Deferred;
-
-            /* We need to increment the internal counter, else the next time fetch is called,
-             * it'll simply return the row we fetch here instead of fetching a new row
-             * since callback order on promises isn't defined, we can't do this via onResolve() */
-            $incRow = function ($row) use ($result) {
-                $result->userFetched++;
-                return $row;
-            };
-
-            $result->deferreds[Internal\ResultProxy::SINGLE_ROW_FETCH][] = [$deferred, null, $incRow];
-            return $deferred->promise();
+            return new Success($result->rows[$result->userFetched++]);
         }
+
+        if ($result->state === Internal\ResultProxy::ROWS_FETCHED) {
+            return new Success;
+        }
+
+        $deferred = new Deferred;
+
+        /* We need to increment the internal counter, else the next time fetch is called,
+         * it'll simply return the row we fetch here instead of fetching a new row
+         * since callback order on promises isn't defined, we can't do this via onResolve() */
+        $incRow = function ($row) use ($result) {
+            $result->userFetched++;
+            return $row;
+        };
+
+        $result->deferreds[Internal\ResultProxy::SINGLE_ROW_FETCH][] = [$deferred, null, $incRow];
+        return $deferred->promise();
     }
 
     /**
@@ -144,10 +150,10 @@ class ResultSet implements Iterator, Operation {
     public function getFields(): Promise {
         if ($this->result->state >= Internal\ResultProxy::COLUMNS_FETCHED) {
             return new Success($this->result->columns);
-        } else {
-            $deferred = new Deferred;
-            $this->result->deferreds[Internal\ResultProxy::COLUMNS_FETCHED][] = [$deferred, &$this->result->columns, null];
-            return $deferred->promise();
         }
+
+        $deferred = new Deferred;
+        $this->result->deferreds[Internal\ResultProxy::COLUMNS_FETCHED][] = [$deferred, &$this->result->columns, null];
+        return $deferred->promise();
     }
 }

@@ -8,8 +8,8 @@ class PoolTest extends TestCase {
      * @expectedException \Amp\Mysql\InitializationException
      * @expectedExceptionMessage Access denied for user
      */
-    function testWrongPassword() {
-        \Amp\Loop::run(function() {
+    public function testWrongPassword() {
+        \Amp\Loop::run(function () {
             $db = pool("host=".DB_HOST.";user=".DB_USER.";pass=the_wrong_password;db=connectiontest");
 
             /* Try a query */

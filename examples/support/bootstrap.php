@@ -21,7 +21,7 @@ if (!defined('DB_HOST') || !defined('DB_USER') || !defined('DB_PASS') || !define
     if ($answer === "no") {
         print "Can't run any examples without valid database credentials." . PHP_EOL;
         exit(1);
-    } else if ($answer === "yes") {
+    } elseif ($answer === "yes") {
         print "Database host: ";
         $host = var_export(trim(fgets(STDIN)), true);
 

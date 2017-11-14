@@ -53,7 +53,7 @@ proc_terminate($proc, 9);
 
 $proc = proc_open("mysqld --defaults-file=my.cnf --user=root", [2 => ["pipe", "w"]], $pipes, __DIR__);
 
-register_shutdown_function(function() use ($proc) {
+register_shutdown_function(function () use ($proc) {
     proc_terminate($proc, 9);
 });
 
