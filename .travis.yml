@@ -1,3 +1,5 @@
+sudo: false
+
 language: php
 
 services:
@@ -6,17 +8,31 @@ services:
 php:
   - 7.0
   - 7.1
+  - 7.2
   - nightly
 
+matrix:
+  allow_failures:
+    - php: nightly
+  fast_finish: true
+
 install:
-  - composer install
+  - composer self-update
+  # --ignore-platform-reqs, because https://github.com/FriendsOfPHP/PHP-CS-Fixer/pull/2722
+  - composer update -n --prefer-dist --ignore-platform-reqs
   - mysqld --version
 
 before_script:
   - echo '<?php $autoloader = require(__DIR__."/../vendor/autoload.php"); const DB_HOST = "localhost"; const DB_USER = "root"; const DB_PASS = "";' > test/bootstrap.php
-  - mysql -u root -e "CREATE DATABASE connectiontest; CREATE TABLE connectiontest.main SELECT 1 AS a, 2 AS b; INSERT INTO connectiontest.main VALUES (5, 6);"
+  - mysql -u root -e "CREATE DATABASE connectiontest; CREATE TABLE connectiontest.main (a INT(10), b INT(10)); INSERT INTO connectiontest.main VALUES (5, 6);"
  
-script: phpdbg -qrr vendor/bin/phpunit --coverage-text
+script:
+  - phpdbg -qrr vendor/bin/phpunit --coverage-text --coverage-clover build/logs/clover.xml
+  - PHP_CS_FIXER_IGNORE_ENV=1 php vendor/bin/php-cs-fixer --diff --dry-run -v fix
+
+after_script:
+  - composer require satooshi/php-coveralls dev-master
+  - vendor/bin/coveralls -v --exclude-no-stmt
 
 cache:
   directories:
