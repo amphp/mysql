@@ -2,13 +2,18 @@
 
 require 'support/bootstrap.php';
 
+use Amp\Mysql\ResultSet;
+
 Amp\Loop::run(function() {
     $db = Amp\Mysql\pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME);
 
-    $query = yield $db->query("SELECT 1");
-    list($one) = yield $query->fetchRow();
+    /** @var \Amp\Mysql\ResultSet $result */
+    $result = yield $db->query("SELECT 1 AS value");
 
-    var_dump($one); // should output string(1) "1"
+    while (yield $result->advance(ResultSet::FETCH_ARRAY)) {
+        $row = $result->getCurrent();
+        var_dump($row[0]);
+    }
 
     $db->close();
 });

@@ -7,10 +7,11 @@ Amp\Loop::run(function() {
 
     /* Create table and insert a few rows */
     /* we need to wait until table is finished, so that we can insert. */
-    yield $db->query("CREATE TABLE IF NOT EXISTS tmp SELECT 1 AS a, 2 AS b");
+    yield $db->query("CREATE TABLE IF NOT EXISTS tmp (a INT(10), b INT(10))");
 
     print "Table successfully created." . PHP_EOL;
 
+    /** @var \Amp\Mysql\Statement $statement */
     $statement = yield $db->prepare("INSERT INTO tmp (a, b) VALUES (?, ? * 2)");
 
     $promises = [];
@@ -22,6 +23,13 @@ Amp\Loop::run(function() {
     yield $promises;
 
     print "Insertion successful (if it wasn't, an exception would have been thrown by now)" . PHP_EOL;
+
+    /** @var \Amp\Mysql\ResultSet $result */
+    $result = yield $db->execute("SELECT a, b FROM tmp");
+
+    while (yield $result->advance()) {
+        var_dump($result->getCurrent());
+    }
 
     yield $db->query("DROP TABLE tmp");
 

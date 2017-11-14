@@ -11,16 +11,23 @@ Amp\Loop::run(function() {
 
     $promises = [];
 
-    /* yeah, we need a lot of yields and assigns here... */
     $promises[] = $db->query("SELECT a * b FROM tmp");
+    $promises[] = $db->execute("SELECT POW(a, ?) AS power FROM tmp", 2);
 
-    /* or, maybe, wait until they're all fetched (because you anyway only can continue after having full resultset */
-    $promises[] = $db->query("SELECT a * b FROM tmp");
+    /**
+     * @var \Amp\Mysql\ResultSet $result1
+     * @var \Amp\Mysql\ResultSet $result2
+     */
+    list($result1, $result2) = yield $promises; // Both queries execute simultaneously. Wait for both to finish here.
 
-    list($result1, $result2) = yield $promises;
-
+    print "Query 1 Results:" . PHP_EOL;
     while (yield $result1->advance()) {
         var_dump($result1->getCurrent());
+    }
+
+    print  PHP_EOL . "Query 2 Results:" . PHP_EOL;
+    while (yield $result2->advance()) {
+        var_dump($result2->getCurrent());
     }
 
     yield $db->query("DROP TABLE tmp");

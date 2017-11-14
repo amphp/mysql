@@ -17,8 +17,6 @@ require 'support/generic-table.php';
         var_dump($result->getCurrent());
     }
 
-    var_dump(yield $result->getFields());
-
     yield $db->query("DROP TABLE tmp");
 
     $db->close();
