@@ -14,7 +14,6 @@ use Amp\Mysql\QueryError;
 use Amp\Mysql\Statement;
 use Amp\Promise;
 use Amp\Socket\ClientTlsContext;
-use Amp\Success;
 
 /* @TODO
  * 14.2.3 Auth switch request??
@@ -151,7 +150,7 @@ class Processor {
     private function ready() {
         if (empty($this->deferreds)) {
             if (empty($this->onReady)) {
-                $this->write();
+                $this->resetIds();
             } else {
                 \array_shift($this->onReady)();
             }
@@ -195,7 +194,7 @@ class Processor {
         return $deferred->promise();
     }
 
-    public function read(): \Generator {
+    private function read(): \Generator {
         while (($bytes = yield $this->socket->read()) !== null) {
             \assert((function () use ($bytes) {
                 if (defined("MYSQL_DEBUG")) {
@@ -315,7 +314,7 @@ class Processor {
         $payload .= DataTypes::encode_int16($paramId);
         $payload .= $data;
         $this->appendTask(function () use ($payload) {
-            $this->write();
+            $this->resetIds();
             $this->sendPacket($payload);
             $this->ready();
         });
@@ -366,7 +365,7 @@ class Processor {
 
             $this->query = $query;
 
-            $this->write();
+            $this->resetIds();
             $this->addDeferred($deferred);
             $this->sendPacket($payload);
             // apparently LOAD DATA LOCAL INFILE requests are not supported via prepared statements
@@ -380,9 +379,9 @@ class Processor {
         $payload = "\x19" . DataTypes::encode_int32($stmtId);
         $this->appendTask(function () use ($payload) {
             if ($this->connectionState === self::READY) {
-                $this->write();
+                $this->resetIds();
                 $this->sendPacket($payload);
-                $this->write(); // does not expect a reply - must be reset immediately
+                $this->resetIds(); // does not expect a reply - must be reset immediately
             }
             $this->ready();
         });
@@ -393,7 +392,7 @@ class Processor {
         $payload = "\x1a" . DataTypes::encode_int32($stmtId);
         $deferred = new Deferred;
         $this->appendTask(function () use ($payload, $deferred) {
-            $this->write();
+            $this->resetIds();
             $this->addDeferred($deferred);
             $this->sendPacket($payload);
         });
@@ -405,7 +404,7 @@ class Processor {
         $payload = "\x1c" . DataTypes::encode_int32($stmtId) . DataTypes::encode_int32(1);
         $deferred = new Deferred;
         $this->appendTask(function () use ($payload, $deferred) {
-            $this->write();
+            $this->resetIds();
             $this->addDeferred($deferred);
             $this->sendPacket($payload);
         });
@@ -895,15 +894,10 @@ class Processor {
         }
     }
 
-    private function write(string $packet = null): Promise {
+    private function write(string $packet): Promise {
         return \Amp\call(function () use ($packet) {
             if ($this->pendingWrite) {
                 yield $this->pendingWrite;
-            }
-
-            if ($packet === null) {
-                $this->seqId = $this->compressionId = -1;
-                return new Success;
             }
 
             $packet = $this->compilePacket($packet);
@@ -935,6 +929,17 @@ class Processor {
 
             return $bytes;
         });
+    }
+
+    private function resetIds() {
+        if ($this->pendingWrite) {
+            $this->pendingWrite->onResolve(function () {
+                $this->seqId = $this->compressionId = -1;
+            });
+            return;
+        }
+
+        $this->seqId = $this->compressionId = -1;
     }
 
     private function compilePacket(string $pending): string {
@@ -975,6 +980,7 @@ class Processor {
     }
 
     private function goneAway() {
+        $this->close();
         foreach ($this->deferreds as $deferred) {
             if ($this->query === "") {
                 $deferred->fail(new InitializationException("Connection went away"));
@@ -982,7 +988,6 @@ class Processor {
                 $deferred->fail(new ConnectionException("Connection went away... unable to fulfil this deferred ... It's unknown whether the query was executed...", $this->query));
             }
         }
-        $this->close();
     }
 
     /** @see 14.4 Compression */
