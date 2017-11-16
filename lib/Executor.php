@@ -29,7 +29,7 @@ interface Executor {
 
     /**
      * @param string $sql SQL query to prepare and execute.
-     * @param mixed ...$data Query parameters.
+     * @param mixed[] $params Query parameters.
      *
      * @return \Amp\Promise<\Amp\Mysql\CommandResult|\Amp\Mysql\ResultSet>
      *
@@ -37,7 +37,7 @@ interface Executor {
      * @throws \Amp\Mysql\ConnectionException If the connection to the database is lost.
      * @throws \Amp\Mysql\QueryError If the operation fails due to an error in the query (such as a syntax error).
      */
-    public function execute(string $sql, ...$data): Promise;
+    public function execute(string $sql, array $params = []): Promise;
 
     /**
      * Closes the executor. No further queries may be performed.

@@ -297,11 +297,11 @@ REGEX;
     /**
      * {@inheritdoc}
      */
-    public function execute(string $sql, ...$data): Promise {
-        return \Amp\call(function () use ($sql, $data) {
+    public function execute(string $sql, array $params = []): Promise {
+        return \Amp\call(function () use ($sql, $params) {
             /** @var \Amp\Mysql\Statement $statment */
             $statment = yield $this->prepare($sql);
-            return yield $statment->execute(...$data);
+            return yield $statment->execute($params);
         });
     }
 

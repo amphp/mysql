@@ -12,7 +12,7 @@ Amp\Loop::run(function () {
     $promises = [];
 
     $promises[] = $db->query("SELECT a * b FROM tmp");
-    $promises[] = $db->execute("SELECT POW(a, ?) AS power FROM tmp", 2);
+    $promises[] = $db->execute("SELECT POW(a, ?) AS power FROM tmp", [2]);
 
     /**
      * @var \Amp\Mysql\ResultSet $result1

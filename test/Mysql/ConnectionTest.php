@@ -121,7 +121,7 @@ class ConnectionTest extends TestCase {
             ];
             $this->assertEquals(yield $stmt->getFields(), [$base + ["name" => "a", "original_name" => "a"], $base + ["name" => "b", "original_name" => "b"]]);
             $stmt->bind("num", 9);
-            $result = yield $stmt->execute(5);
+            $result = yield $stmt->execute([5]);
             $this->assertInstanceOf(ResultSet::class, $result);
             $got = [];
             while (yield $result->advance(ResultSet::FETCH_ARRAY)) {
@@ -131,7 +131,7 @@ class ConnectionTest extends TestCase {
 
             /** @var \Amp\Mysql\Statement $stmt */
             $stmt = yield $db->prepare("SELECT * FROM tmp WHERE a = ? OR b = ?");
-            $result = yield $stmt->execute(5, 8);
+            $result = yield $stmt->execute([5, 8]);
             $this->assertInstanceOf(ResultSet::class, $result);
             $got = [];
             while (yield $result->advance(ResultSet::FETCH_ARRAY)) {
@@ -141,8 +141,7 @@ class ConnectionTest extends TestCase {
 
             /** @var \Amp\Mysql\Statement $stmt */
             $stmt = yield $db->prepare("SELECT * FROM tmp WHERE a = :a OR b = ?");
-            $stmt->bind("a", 5);
-            $result = yield $stmt->execute(9);
+            $result = yield $stmt->execute(["a" => 5, 9]);
             $this->assertInstanceOf(ResultSet::class, $result);
             $got = [];
             while (yield $result->advance(ResultSet::FETCH_ARRAY)) {
@@ -169,7 +168,7 @@ class ConnectionTest extends TestCase {
             $db->query("INSERT INTO tmp VALUES (5, 6), (8, 9), (10, 11), (12, 13)");
 
             /** @var \Amp\Mysql\ResultSet $result */
-            $result = yield $db->execute("SELECT * FROM tmp WHERE a = ? OR b = ?", 5, 9);
+            $result = yield $db->execute("SELECT * FROM tmp WHERE a = ? OR b = ?", [5, 9]);
             $this->assertInstanceOf(ResultSet::class, $result);
             $got = [];
             while (yield $result->advance(ResultSet::FETCH_ARRAY)) {
@@ -179,7 +178,7 @@ class ConnectionTest extends TestCase {
             $this->assertSame([[5, 6], [8, 9]], $got);
 
             /** @var \Amp\Mysql\CommandResult $result */
-            $result = yield $db->execute("INSERT INTO tmp VALUES (?, ?)", 14, 15);
+            $result = yield $db->execute("INSERT INTO tmp VALUES (?, ?)", [14, 15]);
             $this->assertInstanceOf(CommandResult::class, $result);
             $this->assertSame(1, $result->affectedRows());
         });
@@ -193,7 +192,7 @@ class ConnectionTest extends TestCase {
             /** @var \Amp\Mysql\Statement $stmt */
             $db->query("DROP TABLE tmp"); // just in case it would exist...
             $stmt = yield $db->prepare("CREATE TABLE tmp SELECT ? AS a");
-            yield $stmt->execute(-1);
+            yield $stmt->execute([-1]);
 
             /** @var \Amp\Mysql\ResultSet $result */
             $stmt = yield $db->prepare("SELECT a FROM tmp");

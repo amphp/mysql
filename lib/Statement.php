@@ -102,23 +102,35 @@ class Statement implements Operation {
     }
 
     /**
-     * @param mixed ...$data Data to bind to parameters.
+     * @param mixed[] $params Data to bind to parameters.
      *
      * @return \Amp\Promise
      *
      * @throws \Error If a named parameter was not bound or a parameter is missing.
      */
-    public function execute(...$data): Promise {
+    public function execute(array $params = []): Promise {
         $prebound = $args = [];
         for ($unnamed = $i = 0; $i < $this->paramCount; $i++) {
             if (isset($this->named[$i])) {
                 $name = $this->named[$i];
-                if (!isset($this->prebound[$name])) {
-                    throw new \Error("Named parameters must be bound using Statement::bind(); '$name' unbound");
+                if (array_key_exists($name, $params) && $params[$name] !== []) {
+                    if (\is_array($params[$name])) {
+                        $args[$i] = reset($params[$name]);
+                        unset($params[$name][key($params[$name])]);
+                    } else {
+                        $args[$i] = $params[$name];
+                        unset($params[$name]);
+                    }
+                } elseif (!isset($this->prebound[$name])) {
+                    if ($params[$name] === []) {
+                        throw new \Exception("Named parameter $name is not providing enough elements");
+                    }
+                    throw new \Exception("Named parameter $name missing for executing prepared statement");
+                } else {
+                    $prebound[$i] = $this->prebound[$name];
                 }
-                $prebound[$i] = $this->prebound[$name];
-            } elseif (array_key_exists($unnamed, $data)) {
-                $args[$i] = $data[$unnamed];
+            } elseif (array_key_exists($unnamed, $params)) {
+                $args[$i] = $params[$unnamed];
                 $unnamed++;
             } elseif (!isset($this->prebound[$unnamed])) {
                 throw new \Error("Parameter $unnamed for prepared statement missing");

@@ -10,7 +10,7 @@ function createGenericTable(\Amp\Mysql\Link $db): Generator {
 
     $promises = [];
     foreach (range(1, 5) as $num) {
-        $promises[] = $statement->execute($num, $num);
+        $promises[] = $statement->execute([$num, $num]);
     }
 
     return yield $promises;

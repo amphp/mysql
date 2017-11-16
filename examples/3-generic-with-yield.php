@@ -16,7 +16,7 @@ Amp\Loop::run(function () {
 
     $promises = [];
     foreach (range(1, 5) as $num) {
-        $promises[] = $statement->execute($num, $num);
+        $promises[] = $statement->execute([$num, $num]);
     }
 
     /* wait until everything is inserted */
@@ -25,7 +25,7 @@ Amp\Loop::run(function () {
     print "Insertion successful (if it wasn't, an exception would have been thrown by now)" . PHP_EOL;
 
     /** @var \Amp\Mysql\ResultSet $result */
-    $result = yield $db->execute("SELECT a, b FROM tmp");
+    $result = yield $db->query("SELECT a, b FROM tmp");
 
     while (yield $result->advance()) {
         var_dump($result->getCurrent());

@@ -96,12 +96,12 @@ class Transaction implements Executor, Operation {
      *
      * @throws \Amp\Mysql\TransactionError If the transaction has been committed or rolled back.
      */
-    public function execute(string $sql, ...$data): Promise {
+    public function execute(string $sql, array $params = []): Promise {
         if ($this->connection === null) {
             throw new TransactionError("The transaction has been committed or rolled back");
         }
 
-        return $this->connection->execute($sql, ...$data);
+        return $this->connection->execute($sql, $params);
     }
 
     /**
