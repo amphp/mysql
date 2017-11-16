@@ -80,8 +80,28 @@ class ConnectionTest extends TestCase {
             while (yield $resultset->advance(ResultSet::FETCH_ARRAY)) {
                 $got[] = $resultset->getCurrent();
             }
+            $this->assertEquals([], $got);
+            $this->assertTrue(yield $resultset->nextResultSet());
 
-            $this->assertEquals($got, [[1], [5], [8], [6], [2, 2], [6, 6]]);
+            $got = [];
+            while (yield $resultset->advance(ResultSet::FETCH_ARRAY)) {
+                $got[] = $resultset->getCurrent();
+            }
+            $this->assertEquals([[1], [5], [8]], $got);
+            $this->assertTrue(yield $resultset->nextResultSet());
+
+            $got = [];
+            while (yield $resultset->advance(ResultSet::FETCH_ARRAY)) {
+                $got[] = $resultset->getCurrent();
+            }
+            $this->assertEquals([[6]], $got);
+            $this->assertTrue(yield $resultset->nextResultSet());
+
+            $got = [];
+            while (yield $resultset->advance(ResultSet::FETCH_ASSOC)) {
+                $got[] = $resultset->getCurrent();
+            }
+            $this->assertEquals([["c" => 2, "d" => 2], ["c" => 6, "d" => 6]], $got);
 
             $fields = yield $resultset->getFields();
             $this->assertEquals(count($fields), 2);
@@ -90,6 +110,8 @@ class ConnectionTest extends TestCase {
             $this->assertEquals($fields[0]["type"], DataTypes::MYSQL_TYPE_LONG);
             $this->assertEquals($fields[1]["name"], "c");
             $this->assertEquals($fields[1]["type"], DataTypes::MYSQL_TYPE_LONGLONG);
+
+            $this->assertFalse(yield $resultset->nextResultSet());
 
             yield $db->query("DROP DATABASE alt");
         });

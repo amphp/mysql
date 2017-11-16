@@ -31,22 +31,17 @@ class ResultSet implements Iterator, Operation {
 
     public function __construct(Internal\ResultProxy $result) {
         $this->result = $result;
-        $queue = $this->queue = new Internal\CompletionQueue;
+        $this->queue = new Internal\CompletionQueue;
+        $this->producer = self::makeIterator($result);
+    }
 
-        $last = &$this->result;
-        $this->producer = new Producer(static function (callable $emit) use (&$last, $result, $queue) {
-            try {
-                do {
-                    $last = $result;
-                    $row = yield self::fetchRow($result);
-                    while ($row !== null) {
-                        $next = self::fetchRow($result); // Fetch next row while emitting last row.
-                        yield $emit($row);
-                        $row = yield $next;
-                    }
-                } while ($result = yield self::getNextResultSet($result));
-            } finally {
-                $queue->complete();
+    private static function makeIterator(Internal\ResultProxy $result): Iterator {
+        return new Producer(static function (callable $emit) use ($result) {
+            $row = yield self::fetchRow($result);
+            while ($row !== null) {
+                $next = self::fetchRow($result); // Fetch next row while emitting last row.
+                yield $emit($row);
+                $row = yield $next;
             }
         });
     }
@@ -59,7 +54,9 @@ class ResultSet implements Iterator, Operation {
 
     private function dispose(): \Generator {
         try {
-            while (yield $this->producer->advance()); // Discard unused result rows.
+            do {
+                while (yield $this->advance()) ; // Discard unused result rows.
+            } while (yield $this->nextResultSet());
         } catch (\Throwable $exception) {
             // Ignore failure while discarding results.
         }
@@ -137,17 +134,36 @@ class ResultSet implements Iterator, Operation {
     }
 
     /**
-     * @return \Amp\Promise<\Amp\Mysql\Internal\ResultProxy|null>
+     * @return \Amp\Promise<bool> Resolves with true if another result set exists, false if all result sets have
+     *     been consumed.
      */
-    private static function getNextResultSet(Internal\ResultProxy $result): Promise {
-        $deferred = $result->next ?: $result->next = new Deferred;
-        return $deferred->promise();
+    public function nextResultSet(): Promise {
+        return \Amp\call(function () {
+            while (yield $this->advance()); // Consume any values left in the current result.
+
+            $deferred = $this->result->next ?: $this->result->next = new Deferred;
+            $this->result = yield $deferred->promise();
+
+            if ($this->result) {
+                $this->producer = self::makeIterator($this->result);
+                return true;
+            }
+
+            $this->queue->complete();
+            return false;
+        });
     }
 
     /**
      * @return \Amp\Promise<mixed[][]>
+     *
+     * @throws \Error If nextResultSet() has been invoked and no further result sets were available.
      */
     public function getFields(): Promise {
+        if ($this->result === null) {
+            throw new \Error("The current result set is empty; call this method before invoking getNextResultSet()");
+        }
+
         if ($this->result->state >= Internal\ResultProxy::COLUMNS_FETCHED) {
             return new Success($this->result->columns);
         }
