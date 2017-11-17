@@ -20,7 +20,7 @@ class ResultSet implements Iterator, Operation {
     /** @var \Amp\Producer */
     private $producer;
 
-    /** @var \Amp\Mysql\Internal\CompletionQueue */
+    /** @var \Amp\Mysql\Internal\ReferenceQueue */
     private $queue;
 
     /** @var array|object Last emitted row. */
@@ -31,7 +31,7 @@ class ResultSet implements Iterator, Operation {
 
     public function __construct(Internal\ResultProxy $result) {
         $this->result = $result;
-        $this->queue = new Internal\CompletionQueue;
+        $this->queue = new Internal\ReferenceQueue;
         $this->producer = self::makeIterator($result);
     }
 
@@ -47,7 +47,7 @@ class ResultSet implements Iterator, Operation {
     }
 
     public function __destruct() {
-        if (!$this->queue->isComplete()) { // Producer above did not complete, so consume remaining results.
+        if (!$this->queue->isReferenced()) { // Producer above did not complete, so consume remaining results.
             Promise\rethrow(new Coroutine($this->dispose()));
         }
     }
@@ -65,8 +65,8 @@ class ResultSet implements Iterator, Operation {
     /**
      * {@inheritdoc}
      */
-    public function onComplete(callable $onComplete) {
-        $this->queue->onComplete($onComplete);
+    public function onDestruct(callable $onDestruct) {
+        $this->queue->onDestruct($onDestruct);
     }
 
     /**
@@ -149,7 +149,7 @@ class ResultSet implements Iterator, Operation {
                 return true;
             }
 
-            $this->queue->complete();
+            $this->queue->unreference();
             return false;
         });
     }

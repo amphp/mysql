@@ -15,7 +15,7 @@ class Statement implements Operation {
     private $stmtId;
     private $prebound = [];
 
-    /** @var \Amp\Mysql\Internal\CompletionQueue */
+    /** @var \Amp\Mysql\Internal\ReferenceQueue */
     private $queue;
 
     /** @var \Amp\Mysql\Internal\Processor */
@@ -32,9 +32,9 @@ class Statement implements Operation {
         $this->numParamCount = $this->paramCount = $this->result->columnsToFetch;
         $this->byNamed = $named;
 
-        $this->queue = new Internal\CompletionQueue;
+        $this->queue = new Internal\ReferenceQueue;
 
-        $this->queue->onComplete([$this->processor, 'delRef']);
+        $this->queue->onDestruct([$this->processor, 'delRef']);
 
         foreach ($named as $name => $ids) {
             foreach ($ids as $id) {
@@ -52,8 +52,8 @@ class Statement implements Operation {
         return $this->processor;
     }
 
-    public function onComplete(callable $onComplete) {
-        $this->queue->onComplete($onComplete);
+    public function onDestruct(callable $onDestruct) {
+        $this->queue->onDestruct($onDestruct);
     }
 
     /**
@@ -141,11 +141,14 @@ class Statement implements Operation {
 
         $promise = $this->getProcessor()->execute($this->stmtId, $this->query, $this->result->params, $prebound, $args);
 
-        return \Amp\call(static function () use ($promise) {
+        return \Amp\call(function () use ($promise) {
             $result = yield $promise;
 
             if ($result instanceof Internal\ResultProxy) {
-                return new ResultSet($result);
+                $result = new ResultSet($result);
+                $this->queue->reference();
+                $result->onDestruct([$this->queue, "unreference"]);
+                return $result;
             }
 
             if ($result instanceof ConnectionState) {
@@ -158,7 +161,7 @@ class Statement implements Operation {
 
     public function close() {
         $this->processor->closeStmt($this->stmtId);
-        $this->queue->complete();
+        $this->queue->unreference();
     }
 
     public function reset() {

@@ -3,6 +3,7 @@
 namespace Amp\Mysql;
 
 use Amp\Promise;
+use function Amp\call;
 
 class Transaction implements Executor, Operation {
     const UNCOMMITTED  = 0;
@@ -13,7 +14,7 @@ class Transaction implements Executor, Operation {
     /** @var \Amp\Mysql\Connection */
     private $connection;
 
-    /** @var \Amp\Mysql\Internal\CompletionQueue */
+    /** @var \Amp\Mysql\Internal\ReferenceQueue */
     private $queue;
 
     /**
@@ -24,12 +25,12 @@ class Transaction implements Executor, Operation {
      */
     public function __construct(Connection $connection) {
         $this->connection = $connection;
-        $this->queue = new Internal\CompletionQueue;
+        $this->queue = new Internal\ReferenceQueue;
     }
 
     public function __destruct() {
         if ($this->connection) {
-            $this->rollback(); // Invokes $this->queue->complete().
+            $this->rollback(); // Invokes $this->queue->unreference().
         }
     }
 
@@ -40,15 +41,15 @@ class Transaction implements Executor, Operation {
      */
     public function close() {
         if ($this->connection) {
-            $this->commit(); // Invokes $this->queue->complete().
+            $this->commit(); // Invokes $this->queue->unreference().
         }
     }
 
     /**
      * {@inheritdoc}
      */
-    public function onComplete(callable $onComplete) {
-        $this->queue->onComplete($onComplete);
+    public function onDestruct(callable $onDestruct) {
+        $this->queue->onDestruct($onDestruct);
     }
 
     /**
@@ -75,7 +76,16 @@ class Transaction implements Executor, Operation {
             throw new TransactionError("The transaction has been committed or rolled back");
         }
 
-        return $this->connection->query($sql);
+        return call(function () use ($sql) {
+            $result = yield $this->connection->query($sql);
+
+            if ($result instanceof Operation) {
+                $this->queue->reference();
+                $result->onDestruct([$this->queue, "unreference"]);
+            }
+
+            return $result;
+        });
     }
 
     /**
@@ -88,7 +98,13 @@ class Transaction implements Executor, Operation {
             throw new TransactionError("The transaction has been committed or rolled back");
         }
 
-        return $this->connection->prepare($sql);
+        return call(function () use ($sql) {
+            /** @var \Amp\Mysql\Statement $statement */
+            $statement = yield $this->connection->prepare($sql);
+            $this->queue->reference();
+            $statement->onDestruct([$this->queue, "unreference"]);
+            return $statement;
+        });
     }
 
     /**
@@ -101,7 +117,16 @@ class Transaction implements Executor, Operation {
             throw new TransactionError("The transaction has been committed or rolled back");
         }
 
-        return $this->connection->execute($sql, $params);
+        return call(function () use ($sql, $params) {
+            $result = yield $this->connection->execute($sql, $params);
+
+            if ($result instanceof Operation) {
+                $this->queue->reference();
+                $result->onDestruct([$this->queue, "unreference"]);
+            }
+
+            return $result;
+        });
     }
 
     /**
@@ -118,7 +143,7 @@ class Transaction implements Executor, Operation {
 
         $promise = $this->connection->query("COMMIT");
         $this->connection = null;
-        $promise->onResolve([$this->queue, "complete"]);
+        $promise->onResolve([$this->queue, "unreference"]);
 
         return $promise;
     }
@@ -137,7 +162,7 @@ class Transaction implements Executor, Operation {
 
         $promise = $this->connection->query("ROLLBACK");
         $this->connection = null;
-        $promise->onResolve([$this->queue, "complete"]);
+        $promise->onResolve([$this->queue, "unreference"]);
 
         return $promise;
     }

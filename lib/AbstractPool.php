@@ -146,7 +146,7 @@ abstract class AbstractPool implements Pool {
         }
 
         if ($result instanceof Operation) {
-            $result->onComplete(function () use ($connection) {
+            $result->onDestruct(function () use ($connection) {
                 $this->push($connection);
             });
         } else {
@@ -175,7 +175,7 @@ abstract class AbstractPool implements Pool {
             throw $exception;
         }
 
-        $statement->onComplete(function () use ($connection) {
+        $statement->onDestruct(function () use ($connection) {
             $this->push($connection);
         });
 
@@ -201,7 +201,7 @@ abstract class AbstractPool implements Pool {
         }
 
         if ($result instanceof Operation) {
-            $result->onComplete(function () use ($connection) {
+            $result->onDestruct(function () use ($connection) {
                 $this->push($connection);
             });
         } else {
@@ -230,7 +230,7 @@ abstract class AbstractPool implements Pool {
             throw $exception;
         }
 
-        $transaction->onComplete(function () use ($connection) {
+        $transaction->onDestruct(function () use ($connection) {
             $this->push($connection);
         });
 
