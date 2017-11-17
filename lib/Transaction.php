@@ -168,7 +168,7 @@ class Transaction implements Executor, Operation {
     }
 
     /**
-     * Creates a savepoint with the given identifier. WARNING: Identifier is not sanitized, do not pass untrusted data.
+     * Creates a savepoint with the given identifier.
      *
      * @param string $identifier Savepoint identifier.
      *
@@ -177,7 +177,7 @@ class Transaction implements Executor, Operation {
      * @throws \Amp\Mysql\TransactionError If the transaction has been committed or rolled back.
      */
     public function savepoint(string $identifier): Promise {
-        return $this->query("SAVEPOINT " . $identifier);
+        return $this->query(\sprintf("SAVEPOINT `%s%s`", self::SAVEPOINT_PREFIX, \sha1($identifier)));
     }
 
     /**
@@ -190,12 +190,11 @@ class Transaction implements Executor, Operation {
      * @throws \Amp\Mysql\TransactionError If the transaction has been committed or rolled back.
      */
     public function rollbackTo(string $identifier): Promise {
-        return $this->query("ROLLBACK TO " . $identifier);
+        return $this->query("ROLLBACK TO " . \sprintf("SAVEPOINT `%s%s`", self::SAVEPOINT_PREFIX, \sha1($identifier)));
     }
 
     /**
-     * Releases the savepoint with the given identifier. WARNING: Identifier is not sanitized, do not pass untrusted
-     * data.
+     * Releases the savepoint with the given identifier.
      *
      * @param string $identifier Savepoint identifier.
      *
@@ -204,6 +203,6 @@ class Transaction implements Executor, Operation {
      * @throws \Amp\Mysql\TransactionError If the transaction has been committed or rolled back.
      */
     public function release(string $identifier): Promise {
-        return $this->query("RELEASE SAVEPOINT " . $identifier);
+        return $this->query("RELEASE SAVEPOINT " . \sprintf("SAVEPOINT `%s%s`", self::SAVEPOINT_PREFIX, \sha1($identifier)));
     }
 }
