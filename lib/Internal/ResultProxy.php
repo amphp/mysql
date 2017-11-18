@@ -2,7 +2,11 @@
 
 namespace Amp\Mysql\Internal;
 
+use Amp\Struct;
+
 class ResultProxy {
+    use Struct;
+
     public $columnCount;
     public $columns = [];
     public $params = [];

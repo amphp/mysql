@@ -19,7 +19,7 @@ class Statement implements Operation {
     private $queue;
 
     /** @var \Amp\Mysql\Internal\Processor */
-    private $processor; // when doing something on $processor, it must be checked if still same connection, else throw Exception! @TODO {or redo query, fetch???}
+    private $processor;
 
     /** @var \Amp\Mysql\Internal\ResultProxy */
     private $result;
@@ -45,6 +45,10 @@ class Statement implements Operation {
     }
 
     private function getProcessor(): Internal\Processor {
+        if ($this->processor === null) {
+            throw new \Error("The statement has been closed");
+        }
+
         if (!$this->processor->isAlive()) {
             throw new ConnectionException("Connection went away");
         }
@@ -160,7 +164,12 @@ class Statement implements Operation {
     }
 
     public function close() {
+        if ($this->processor === null) {
+            return;
+        }
+
         $this->processor->closeStmt($this->stmtId);
+        $this->processor = null;
         $this->queue->unreference();
     }
 

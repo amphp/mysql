@@ -212,6 +212,7 @@ class Processor {
             })());
 
             $this->processData($bytes);
+            $bytes = null; // Free last data read.
 
             if (empty($this->deferreds)) {
                 $this->waiting = new Deferred;
@@ -238,7 +239,6 @@ class Processor {
         }
     }
 
-    /** @return Deferred */
     private function getDeferred(): Deferred {
         return \array_shift($this->deferreds);
     }
@@ -255,7 +255,7 @@ class Processor {
         return clone $this->connInfo;
     }
 
-    public function startCommand(callable $callback): Promise {
+    protected function startCommand(callable $callback): Promise {
         $deferred = new Deferred;
         $this->appendTask(function () use ($callback, $deferred) {
             $this->seqId = $this->compressionId = -1;
@@ -265,53 +265,105 @@ class Processor {
         return $deferred->promise();
     }
 
-    public function setQuery(string $query) {
-        $this->query = $query;
-        $this->parseCallback = [$this, "handleQuery"];
+    public function setCharset(string $charset, string $collate = ""): Promise {
+        return \Amp\call(function () use ($charset, $collate) {
+            if ($collate === "" && false !== $off = strpos($charset, "_")) {
+                $collate = $charset;
+                $charset = substr($collate, 0, $off);
+            }
+
+            $query = "SET NAMES '$charset'".($collate == "" ? "" : " COLLATE '$collate'");
+            $result = yield $this->query($query);
+
+            $this->config->charset = $charset;
+            $this->config->collate = $collate;
+
+            return $result;
+        });
     }
 
-    public function setPrepare(string $query) {
-        $this->query = $query;
-        $this->parseCallback = [$this, "handlePrepare"];
+
+    /** @see 14.6.3 COM_INIT_DB */
+    public function useDb(string $db): Promise {
+        return $this->startCommand(function () use ($db) {
+            $this->config->db = $db;
+            $this->sendPacket("\x02$db");
+        });
     }
 
-    public function setFieldListing() {
-        $this->parseCallback = [$this, "handleFieldlist"];
+    /** @see 14.6.4 COM_QUERY */
+    public function query(string $query): Promise {
+        return $this->startCommand(function () use ($query) {
+            $this->query = $query;
+            $this->parseCallback = [$this, "handleQuery"];
+            $this->sendPacket("\x03$query");
+        });
     }
 
-    public function setStatisticsReading() {
-        $this->parseCallback = [$this, "readStatistics"];
+    /** @see 14.7.4 COM_STMT_PREPARE */
+    public function prepare(string $query): Promise {
+        return $this->startCommand(function () use ($query) {
+            $this->query = $query;
+            $this->parseCallback = [$this, "handlePrepare"];
+            $regex = <<<'REGEX'
+    (["'`])(?:\\(?:\\|\1)|(?!\1).)*+\1(*SKIP)(*F)|(\?)|:([a-zA-Z_]+)
+REGEX;
+
+            $index = 0;
+            $query = preg_replace_callback("~$regex~ms", function ($m) use (&$index) {
+                if ($m[2] !== "?") {
+                    $this->named[$m[3]][] = $index;
+                }
+                $index++;
+                return "?";
+            }, $query);
+            $this->sendPacket("\x16$query");
+        });
     }
 
     /** @see 14.6.18 COM_CHANGE_USER */
     /* @TODO broken, my test server doesn't support that command, can't test now
     public function changeUser($user, $pass, $db = null) {
-    return $this->startCommand(function() use ($user, $pass, $db) {
-    $this->config->user = $user;
-    $this->config->pass = $pass;
-    $this->config->db = $db;
-    $payload = "\x11";
+        return $this->startCommand(function() use ($user, $pass, $db) {
+            $this->config->user = $user;
+            $this->config->pass = $pass;
+            $this->config->db = $db;
+            $payload = "\x11";
 
-    $payload .= "$user\0";
-    $auth = $this->secureAuth($this->config->pass, $this->authPluginData);
-    if ($this->capabilities & self::CLIENT_SECURE_CONNECTION) {
-    $payload .= ord($auth) . $auth;
-    } else {
-    $payload .= "$auth\0";
-    }
-    $payload .= "$db\0";
+            $payload .= "$user\0";
+            $auth = $this->secureAuth($this->config->pass, $this->authPluginData);
+            if ($this->capabilities & self::CLIENT_SECURE_CONNECTION) {
+                $payload .= ord($auth) . $auth;
+            } else {
+                $payload .= "$auth\0";
+            }
+            $payload .= "$db\0";
 
-    $this->sendPacket($payload);
-    $this->parseCallback = [$this, "authSwitchRequest"];
-    });
+            $this->sendPacket($payload);
+            $this->parseCallback = [$this, "authSwitchRequest"];
+        });
     }
     */
+
+    /** @see 14.6.15 COM_PING */
+    public function ping(): Promise {
+        return $this->startCommand(static function () use ($processor) {
+            $this->sendPacket("\x0e");
+        });
+    }
+
+    /** @see 14.6.19 COM_RESET_CONNECTION */
+    public function resetConnection(): Promise {
+        return $this->startCommand(static function () use ($processor) {
+            $this->sendPacket("\x1f");
+        });
+    }
 
     /** @see 14.7.5 COM_STMT_SEND_LONG_DATA */
     public function bindParam(int $stmtId, int $paramId, string $data) {
         $payload = "\x18";
-        $payload .= DataTypes::encode_int32($stmtId);
-        $payload .= DataTypes::encode_int16($paramId);
+        $payload .= DataTypes::encodeInt32($stmtId);
+        $payload .= DataTypes::encodeInt16($paramId);
         $payload .= $data;
         $this->appendTask(function () use ($payload) {
             $this->resetIds();
@@ -327,9 +379,9 @@ class Processor {
         $deferred = new Deferred;
         $this->appendTask(function () use ($stmtId, $query, &$params, $prebound, $data, $deferred) {
             $payload = "\x17";
-            $payload .= DataTypes::encode_int32($stmtId);
+            $payload .= DataTypes::encodeInt32($stmtId);
             $payload .= chr(0); // cursor flag // @TODO cursor types?!
-            $payload .= DataTypes::encode_int32(1);
+            $payload .= DataTypes::encodeInt32(1);
             $paramCount = count($params);
             $bound = !empty($data) || !empty($prebound);
             $types = "";
@@ -376,7 +428,7 @@ class Processor {
 
     /** @see 14.7.7 COM_STMT_CLOSE */
     public function closeStmt(int $stmtId) {
-        $payload = "\x19" . DataTypes::encode_int32($stmtId);
+        $payload = "\x19" . DataTypes::encodeInt32($stmtId);
         $this->appendTask(function () use ($payload) {
             if ($this->connectionState === self::READY) {
                 $this->resetIds();
@@ -387,9 +439,99 @@ class Processor {
         });
     }
 
+    /** @see 14.6.5 COM_FIELD_LIST */
+    public function listFields(string $table, string $like = "%"): Promise {
+        return $this->startCommand(static function () use ($table, $like) {
+            $this->sendPacket("\x04$table\0$like");
+            $this->parseCallback = [$this, "handleFieldlist"];
+        });
+    }
+
+    public function listAllFields(string $table, string $like = "%"): Promise {
+        $deferred = new Deferred;
+
+        $columns = [];
+        $onResolve = function ($error, $array) use (&$columns, &$onResolve, $deferred) {
+            if ($error) {
+                $deferred->fail($error);
+                return;
+            }
+            if ($array === null) {
+                $deferred->resolve($columns);
+                return;
+            }
+            list($columns[], $promise) = $array;
+            $promise->onResolve($onResolve);
+        };
+        $this->listFields($table, $like)->onResolve($onResolve);
+
+        return $deferred->promise();
+    }
+
+    /** @see 14.6.6 COM_CREATE_DB */
+    public function createDatabase($db) {
+        return $this->startCommand(function () use ($db) {
+            $this->sendPacket("\x05$db");
+        });
+    }
+
+    /** @see 14.6.7 COM_DROP_DB */
+    public function dropDatabase(string $db): Promise {
+        return $this->startCommand(function () use ($db) {
+            $this->sendPacket("\x06$db");
+        });
+    }
+
+    /**
+     * @param $subcommand int one of the self::REFRESH_* constants
+     * @see 14.6.8 COM_REFRESH
+     */
+    public function refresh(int $subcommand): Promise {
+        return $this->startCommand(function () use ($subcommand) {
+            $this->sendPacket("\x07" . chr($subcommand));
+        });
+    }
+
+    /** @see 14.6.9 COM_SHUTDOWN */
+    public function shutdown(): Promise {
+        return $this->startCommand(function () {
+            $this->sendPacket("\x08\x00"); /* SHUTDOWN_DEFAULT / SHUTDOWN_WAIT_ALL_BUFFERS, only one in use */
+        });
+    }
+
+    /** @see 14.6.10 COM_STATISTICS */
+    public function statistics(): Promise {
+        return $this->startCommand(function () {
+            $this->sendPacket("\x09");
+            $this->parseCallback = [$this, "readStatistics"];
+        });
+    }
+
+    /** @see 14.6.11 COM_PROCESS_INFO */
+    public function processInfo(): Promise {
+        return $this->startCommand(function () {
+            $this->sendPacket("\x0a");
+            $this->query("SHOW PROCESSLIST");
+        });
+    }
+
+    /** @see 14.6.13 COM_PROCESS_KILL */
+    public function killProcess($process): Promise {
+        return $this->startCommand(function () use ($process) {
+            $this->sendPacket("\x0c" . DataTypes::encodeInt32($process));
+        });
+    }
+
+    /** @see 14.6.14 COM_DEBUG */
+    public function debugStdout(): Promise {
+        return $this->startCommand(function () {
+            $this->sendPacket("\x0d");
+        });
+    }
+
     /** @see 14.7.8 COM_STMT_RESET */
     public function resetStmt(int $stmtId): Promise {
-        $payload = "\x1a" . DataTypes::encode_int32($stmtId);
+        $payload = "\x1a" . DataTypes::encodeInt32($stmtId);
         $deferred = new Deferred;
         $this->appendTask(function () use ($payload, $deferred) {
             $this->resetIds();
@@ -401,7 +543,7 @@ class Processor {
 
     /** @see 14.8.4 COM_STMT_FETCH */
     public function fetchStmt(int $stmtId): Promise {
-        $payload = "\x1c" . DataTypes::encode_int32($stmtId) . DataTypes::encode_int32(1);
+        $payload = "\x1c" . DataTypes::encodeInt32($stmtId) . DataTypes::encodeInt32(1);
         $deferred = new Deferred;
         $this->appendTask(function () use ($payload, $deferred) {
             $this->resetIds();
@@ -883,8 +1025,12 @@ class Processor {
         $this->parseCallback = null;
     }
 
-    public function initClosing() {
-        $this->connectionState = self::CLOSING;
+    /** @see 14.6.2 COM_QUIT */
+    public function sendClose(): Promise {
+        return $this->startCommand(function () {
+            $this->sendPacket("\x01");
+            $this->connectionState = self::CLOSING;
+        });
     }
 
     public function close() {
@@ -1252,7 +1398,7 @@ class Processor {
     }
 
     /** @see 14.1.2 MySQL Packet */
-    public function sendPacket(string $payload): Promise {
+    protected function sendPacket(string $payload): Promise {
         if ($this->connectionState !== self::READY) {
             throw new \Error("Connection not ready, cannot send any packets");
         }

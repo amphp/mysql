@@ -11,11 +11,16 @@ class Transaction implements Executor, Operation {
     const REPEATABLE   = 2;
     const SERIALIZABLE = 4;
 
+    const SAVEPOINT_PREFIX = "amp_";
+
     /** @var \Amp\Mysql\Connection */
     private $connection;
 
     /** @var \Amp\Mysql\Internal\ReferenceQueue */
     private $queue;
+
+    /** @var int */
+    private $isolation;
 
     /**
      * @param \Amp\Mysql\Connection $connection
@@ -23,8 +28,9 @@ class Transaction implements Executor, Operation {
      *
      * @throws \Error If the isolation level is invalid.
      */
-    public function __construct(Connection $connection) {
+    public function __construct(Connection $connection, int $isolation) {
         $this->connection = $connection;
+        $this->isolation = $isolation;
         $this->queue = new Internal\ReferenceQueue;
     }
 
@@ -43,6 +49,13 @@ class Transaction implements Executor, Operation {
         if ($this->connection) {
             $this->commit(); // Invokes $this->queue->unreference().
         }
+    }
+
+    /**
+     * @return int
+     */
+    public function getIsolationLevel(): int {
+        return $this->isolation;
     }
 
     /**

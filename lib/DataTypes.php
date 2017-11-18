@@ -59,10 +59,10 @@ class DataTypes {
                     $unsigned = 1;
                 }
                 if ($param >= 0 && $param < (1 << 15)) {
-                    $value = self::encode_int16($param);
+                    $value = self::encodeInt16($param);
                     $type = self::MYSQL_TYPE_SHORT;
                 } else {
-                    $value = self::encode_int64($param);
+                    $value = self::encodeInt64($param);
                     $type = self::MYSQL_TYPE_LONGLONG;
                 }
                 break;
@@ -355,33 +355,33 @@ class DataTypes {
         }
 
         if ($int < (1 << 16)) {
-            return "\xfc" . self::encode_int16($int);
+            return "\xfc" . self::encodeInt16($int);
         }
 
         if ($int < (1 << 24)) {
-            return "\xfd" . self::encode_int24($int);
+            return "\xfd" . self::encodeInt24($int);
         }
 
         if ($int < (1 << 62) * 4) {
-            return "\xfe" . self::encode_int64($int);
+            return "\xfe" . self::encodeInt64($int);
         }
 
         throw new FailureException("encodeInt doesn't allow integers bigger than 2^64 - 1 (current: $int)");
     }
 
-    public static function encode_int16(int $int): string {
+    public static function encodeInt16(int $int): string {
         return pack("v", $int);
     }
 
-    public static function encode_int24(int $int): string {
+    public static function encodeInt24(int $int): string {
         return substr(pack("V", $int), 0, 3);
     }
 
-    public static function encode_int32(int $int): string {
+    public static function encodeInt32(int $int): string {
         return pack("V", $int);
     }
 
-    public static function encode_int64(int $int): string {
+    public static function encodeInt64(int $int): string {
         return pack("VV", $int & 0xffffffff, $int >> 32);
     }
 }

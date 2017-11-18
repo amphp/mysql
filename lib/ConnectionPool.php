@@ -14,6 +14,8 @@ class ConnectionPool extends AbstractPool {
     private $maxConnections;
 
     /**
+     * @internal Use \Amp\Mysql\pool() instead.
+     *
      * @param \Amp\Mysql\ConnectionConfig $config
      * @param int $maxConnections
      *
