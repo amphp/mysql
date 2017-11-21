@@ -10,9 +10,6 @@ abstract class AbstractPool implements Pool {
     /** @var \SplQueue */
     private $idle;
 
-    /** @var \SplQueue */
-    private $busy;
-
     /** @var \SplObjectStorage */
     private $connections;
 
@@ -32,7 +29,6 @@ abstract class AbstractPool implements Pool {
     public function __construct() {
         $this->connections = new \SplObjectStorage;
         $this->idle = new \SplQueue;
-        $this->busy = new \SplQueue;
     }
 
     public function close() {
@@ -72,6 +68,17 @@ abstract class AbstractPool implements Pool {
     }
 
     /**
+     * {@inheritdoc}
+     */
+    public function extractConnection(): Promise {
+        return \Amp\call(function () {
+            $connection = yield from $this->pop();
+            $this->connections->detach($connection);
+            return $connection;
+        });
+    }
+
+    /**
      * @coroutine
      *
      * @return \Generator
@@ -79,9 +86,9 @@ abstract class AbstractPool implements Pool {
      * @resolve \Amp\Postgres\Connection
      */
     private function pop(): \Generator {
-        while ($this->promise !== null) {
+        while ($this->promise !== null && $this->connections->count() >= $this->getMaxConnections() - 1) {
             try {
-                yield $this->promise; // Prevent simultaneous connection creation.
+                yield $this->promise; // Prevent simultaneous connection creation when connection count is at maximum - 1.
             } catch (\Throwable $exception) {
                 // Ignore failure or cancellation of other operations.
             }
