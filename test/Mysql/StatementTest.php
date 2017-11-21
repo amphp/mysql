@@ -1,7 +1,7 @@
 <?php
 
+use Amp\Mysql\ConnectionStatement;
 use Amp\Mysql\Internal\ResultProxy;
-use Amp\Mysql\Statement;
 use PHPUnit\Framework\TestCase;
 
 class StatementTest extends TestCase {
@@ -30,7 +30,7 @@ class StatementTest extends TestCase {
         $this->processor->delRef()->shouldBeCalled();
         $this->processor->closeStmt(\Prophecy\Argument::any())->shouldBeCalled();
         $this->resultProxy->columnsToFetch = 1;
-        $stmt = new Statement($this->processor->reveal(), $query, $stmtId, $named, $this->resultProxy);
+        $stmt = new ConnectionStatement($this->processor->reveal(), $query, $stmtId, $named, $this->resultProxy);
 
         // assert
         if ($expectedException) {
@@ -41,6 +41,8 @@ class StatementTest extends TestCase {
             $this->processor->bindParam($stmtId, \Prophecy\Argument::any(), $data)->shouldBeCalled();
         }
 
+        $this->assertSame($query, $stmt->getQuery());
+
         // act
         $stmt->bind($paramId, $data);
     }
@@ -49,7 +51,7 @@ class StatementTest extends TestCase {
         return [
             'test scalar' => [
                 'data' => 1,
-                'expectedException' => false,
+                'expectedException' => null,
             ],
             'test object' => [
                 'data' => (object) [],
@@ -65,7 +67,7 @@ class StatementTest extends TestCase {
                         return '';
                     }
                 },
-                'expectedException' => false,
+                'expectedException' => null,
             ],
         ];
     }

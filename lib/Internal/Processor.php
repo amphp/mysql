@@ -7,11 +7,11 @@ use Amp\Deferred;
 use Amp\Mysql\ConnectionConfig;
 use Amp\Mysql\ConnectionException;
 use Amp\Mysql\ConnectionState;
+use Amp\Mysql\ConnectionStatement;
 use Amp\Mysql\DataTypes;
 use Amp\Mysql\FailureException;
 use Amp\Mysql\InitializationException;
 use Amp\Mysql\QueryError;
-use Amp\Mysql\Statement;
 use Amp\Promise;
 use Amp\Socket\ClientTlsContext;
 
@@ -1010,7 +1010,7 @@ REGEX;
         $this->result->columnsToFetch = $params;
         $this->result->columnCount = $columns;
         $this->refcount++;
-        $this->getDeferred()->resolve(new Statement($this, $this->query, $stmtId, $this->named, $this->result));
+        $this->getDeferred()->resolve(new ConnectionStatement($this, $this->query, $stmtId, $this->named, $this->result));
         $this->named = [];
         if ($params) {
             $this->parseCallback = [$this, "prepareParams"];
