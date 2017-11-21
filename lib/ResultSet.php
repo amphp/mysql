@@ -14,7 +14,7 @@ class ResultSet implements Iterator, Operation {
     const FETCH_ASSOC = 1;
     const FETCH_OBJECT = 2;
 
-    /** @var \Amp\Mysql\Internal\ResultProxy */
+    /** @var \Amp\Mysql\Internal\ResultProxy|null */
     private $result;
 
     /** @var \Amp\Producer */
@@ -28,6 +28,9 @@ class ResultSet implements Iterator, Operation {
 
     /** @var int Fetch type of next row. */
     private $type;
+
+    /** @var string[]|null */
+    private $columnNames;
 
     public function __construct(Internal\ResultProxy $result) {
         $this->result = $result;
@@ -47,7 +50,7 @@ class ResultSet implements Iterator, Operation {
     }
 
     public function __destruct() {
-        if (!$this->queue->isReferenced()) { // Producer above did not complete, so consume remaining results.
+        if ($this->result) { // All results were not necessarily consumed.
             Promise\rethrow(new Coroutine($this->dispose()));
         }
     }
@@ -90,21 +93,21 @@ class ResultSet implements Iterator, Operation {
             return $this->currentRow;
         }
 
+        $row = $this->producer->getCurrent();
+
+        if (!$this->columnNames) {
+            $this->columnNames = \array_column($this->result->columns, "name");
+        }
+
         switch ($this->type) {
             case self::FETCH_ASSOC:
-                return $this->currentRow = \array_combine(
-                    \array_column($this->result->columns, "name"),
-                    $this->producer->getCurrent()
-                );
+                return $this->currentRow = \array_combine($this->columnNames, $row);
 
             case self::FETCH_ARRAY:
-                return $this->currentRow = $this->producer->getCurrent();
+                return $this->currentRow = $row;
 
             case self::FETCH_OBJECT:
-                return $this->currentRow = (object) \array_combine(
-                    \array_column($this->result->columns, "name"),
-                    $this->producer->getCurrent()
-                );
+                return $this->currentRow = (object) \array_combine($this->columnNames, $row);
 
             default:
                 throw new \Error("Invalid result fetch type");
@@ -139,8 +142,14 @@ class ResultSet implements Iterator, Operation {
      *     been consumed.
      */
     public function nextResultSet(): Promise {
+        if (!$this->result) {
+            return new Success(false);
+        }
+
         return \Amp\call(function () {
             while (yield $this->advance()); // Consume any values left in the current result.
+
+            $this->columnNames = null;
 
             $deferred = $this->result->next ?: $this->result->next = new Deferred;
             $this->result = yield $deferred->promise();
