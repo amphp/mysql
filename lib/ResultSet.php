@@ -55,10 +55,11 @@ class ResultSet implements Iterator, Operation {
     private function dispose(): \Generator {
         try {
             do {
-                while (yield $this->advance()) ; // Discard unused result rows.
+                while (yield $this->advance()); // Discard unused result rows.
             } while (yield $this->nextResultSet());
         } catch (\Throwable $exception) {
             // Ignore failure while discarding results.
+            $this->queue->unreference();
         }
     }
 
@@ -161,7 +162,7 @@ class ResultSet implements Iterator, Operation {
      */
     public function getFields(): Promise {
         if ($this->result === null) {
-            throw new \Error("The current result set is empty; call this method before invoking getNextResultSet()");
+            throw new \Error("The current result set is empty; call this method before invoking ResultSet::nextResultSet()");
         }
 
         if ($this->result->state >= Internal\ResultProxy::COLUMNS_FETCHED) {

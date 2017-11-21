@@ -347,14 +347,14 @@ REGEX;
 
     /** @see 14.6.15 COM_PING */
     public function ping(): Promise {
-        return $this->startCommand(static function () use ($processor) {
+        return $this->startCommand(function () {
             $this->sendPacket("\x0e");
         });
     }
 
     /** @see 14.6.19 COM_RESET_CONNECTION */
     public function resetConnection(): Promise {
-        return $this->startCommand(static function () use ($processor) {
+        return $this->startCommand(function () {
             $this->sendPacket("\x1f");
         });
     }
