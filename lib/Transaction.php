@@ -68,7 +68,7 @@ class Transaction implements Executor, Operation {
     /**
      * {@inheritdoc}
      */
-    public function alive(): bool {
+    public function isAlive(): bool {
         return $this->connection !== null && $this->connection->isAlive();
     }
 
@@ -203,7 +203,7 @@ class Transaction implements Executor, Operation {
      * @throws \Amp\Mysql\TransactionError If the transaction has been committed or rolled back.
      */
     public function rollbackTo(string $identifier): Promise {
-        return $this->query("ROLLBACK TO " . \sprintf("SAVEPOINT `%s%s`", self::SAVEPOINT_PREFIX, \sha1($identifier)));
+        return $this->query(\sprintf("ROLLBACK TO `%s%s`", self::SAVEPOINT_PREFIX, \sha1($identifier)));
     }
 
     /**
@@ -216,6 +216,6 @@ class Transaction implements Executor, Operation {
      * @throws \Amp\Mysql\TransactionError If the transaction has been committed or rolled back.
      */
     public function release(string $identifier): Promise {
-        return $this->query("RELEASE SAVEPOINT " . \sprintf("SAVEPOINT `%s%s`", self::SAVEPOINT_PREFIX, \sha1($identifier)));
+        return $this->query(\sprintf("RELEASE SAVEPOINT `%s%s`", self::SAVEPOINT_PREFIX, \sha1($identifier)));
     }
 }
