@@ -36,15 +36,6 @@ class DataTypes {
     const MYSQL_TYPE_STRING = 0xfe;
     const MYSQL_TYPE_GEOMETRY = 0xff;
 
-    private static function isLittleEndian(): bool {
-        static $result = null;
-        if ($result === null) {
-            return $result = unpack('S', "\x01\x00")[1] === 1;
-        }
-        return $result;
-    }
-
-
     /** @see 14.7.3 Binary Value */
     public static function encodeBinary($param): array {
         $unsigned = 0;
@@ -67,10 +58,7 @@ class DataTypes {
                 }
                 break;
             case "double":
-                $value = pack("d", $param);
-                if (self::isLittleEndian()) {
-                    $value = strrev($value);
-                }
+                $value = pack("E", $param);
                 $type = self::MYSQL_TYPE_DOUBLE;
                 break;
             case "string":
@@ -134,11 +122,11 @@ class DataTypes {
 
             case self::MYSQL_TYPE_DOUBLE:
                 $len = 8;
-                return unpack("d", $str)[1];
+                return unpack("E", $str)[1];
 
             case self::MYSQL_TYPE_FLOAT:
                 $len = 4;
-                return unpack("f", $str)[1];
+                return unpack("G", $str)[1];
 
             case self::MYSQL_TYPE_DATE:
             case self::MYSQL_TYPE_DATETIME:
