@@ -5,9 +5,6 @@ namespace Amp\Mysql\Internal;
 use Amp\Loop;
 
 class ReferenceQueue {
-    /** @var bool */
-    private $done = false;
-
     /** @var callable[] */
     private $onDestruct = [];
 
@@ -15,8 +12,14 @@ class ReferenceQueue {
     private $refCount = 1;
 
     public function onDestruct(callable $onDestruct) {
-        if ($this->done) {
-            $onDestruct();
+        if (!$this->refCount) {
+            try {
+                $onDestruct();
+            } catch (\Throwable $exception) {
+                Loop::defer(function () use ($exception) {
+                    throw $exception; // Rethrow to event loop error handler.
+                });
+            }
             return;
         }
 
@@ -24,19 +27,17 @@ class ReferenceQueue {
     }
 
     public function reference() {
+        \assert($this->refCount, "The reference queue has already been fully unreferenced and destroyed");
         ++$this->refCount;
     }
 
     public function unreference() {
-        if ($this->done) {
-            return;
-        }
+        \assert($this->refCount, "The reference queue has already been fully unreferenced and destroyed");
 
         if (--$this->refCount) {
             return;
         }
 
-        $this->done = true;
         foreach ($this->onDestruct as $callback) {
             try {
                 $callback();
@@ -50,6 +51,6 @@ class ReferenceQueue {
     }
 
     public function isReferenced(): bool {
-        return $this->done;
+        return (bool) $this->refCount;
     }
 }
