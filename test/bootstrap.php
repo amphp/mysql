@@ -68,7 +68,7 @@ do {
 
 
 $db = new mysqli(DB_HOST, DB_USER, DB_PASS);
-$db->query("CREATE DATABASE connectiontest");
-$db->query("CREATE TABLE connectiontest.main SELECT 1 AS a, 2 AS b");
-$db->query("INSERT INTO connectiontest.main VALUES (5, 6)");
+$db->query("CREATE DATABASE test");
+$db->query("CREATE TABLE test.main (a int, b int)");
+$db->query("INSERT INTO test.main VALUES (1, 2), (2, 3), (3, 4), (4, 5), (5, 6)");
 $db->close();

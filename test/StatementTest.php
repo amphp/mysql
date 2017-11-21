@@ -1,5 +1,7 @@
 <?php
 
+namespace Amp\Mysql\Test;
+
 use Amp\Mysql\ConnectionStatement;
 use Amp\Mysql\Internal\ResultProxy;
 use PHPUnit\Framework\TestCase;
