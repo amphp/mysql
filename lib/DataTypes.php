@@ -58,7 +58,7 @@ class DataTypes {
                 }
                 break;
             case "double":
-                $value = pack("E", $param);
+                $value = pack("e", $param);
                 $type = self::MYSQL_TYPE_DOUBLE;
                 break;
             case "string":
@@ -122,11 +122,11 @@ class DataTypes {
 
             case self::MYSQL_TYPE_DOUBLE:
                 $len = 8;
-                return unpack("E", $str)[1];
+                return unpack("e", $str)[1];
 
             case self::MYSQL_TYPE_FLOAT:
                 $len = 4;
-                return unpack("G", $str)[1];
+                return unpack("g", $str)[1];
 
             case self::MYSQL_TYPE_DATE:
             case self::MYSQL_TYPE_DATETIME:

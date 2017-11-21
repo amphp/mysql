@@ -28,11 +28,11 @@ class ConnectionTest extends TestCase {
             $db = yield connect("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=connectiontest");
 
             /** @var \Amp\Mysql\ResultSet $resultset */
-            $resultset = yield $db->query("SELECT 1 AS a");
+            $resultset = yield $db->execute("SELECT ? AS a", [M_PI]);
             $this->assertInstanceOf(ResultSet::class, $resultset);
 
             for ($i = 0; yield $resultset->advance(); ++$i) {
-                $this->assertEquals(["a" => 1], $resultset->getCurrent());
+                $this->assertEquals(["a" => M_PI], $resultset->getCurrent());
             }
 
             $this->assertSame(1, $i);
