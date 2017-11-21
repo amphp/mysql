@@ -16,6 +16,9 @@ abstract class AbstractPool implements Pool {
     /** @var \Amp\Promise|null */
     private $promise;
 
+    /** @var int Number of pending connections. */
+    private $pending = 0;
+
     /** @var \Amp\Deferred|null */
     private $deferred;
 
@@ -86,7 +89,7 @@ abstract class AbstractPool implements Pool {
      * @resolve \Amp\Postgres\Connection
      */
     private function pop(): \Generator {
-        while ($this->promise !== null && $this->connections->count() >= $this->getMaxConnections() - 1) {
+        while ($this->promise !== null && $this->connections->count() + $this->pending >= $this->getMaxConnections()) {
             try {
                 yield $this->promise; // Prevent simultaneous connection creation when connection count is at maximum - 1.
             } catch (\Throwable $exception) {
@@ -95,19 +98,28 @@ abstract class AbstractPool implements Pool {
         }
 
         while ($this->idle->isEmpty()) { // While loop to ensure an idle connection is available after promises below are resolved.
-            try {
-                if ($this->connections->count() >= $this->getMaxConnections()) {
-                    // All possible connections busy, so wait until one becomes available.
+            if ($this->connections->count() + $this->pending >= $this->getMaxConnections()) {
+                // All possible connections busy, so wait until one becomes available.
+                try {
                     $this->deferred = new Deferred;
                     yield $this->promise = $this->deferred->promise(); // May be resolved with defunct connection.
-                } else {
-                    // Max connection count has not been reached, so open another connection.
+                } finally {
+                    $this->deferred = null;
+                    if ($this->pending === 0) {
+                        $this->promise = null;
+                    }
+                }
+            } else {
+                // Max connection count has not been reached, so open another connection.
+                ++$this->pending;
+                try {
                     $this->promise = $this->createConnection();
                     $this->addConnection(yield $this->promise);
+                } finally {
+                    if (--$this->pending === 0) {
+                        $this->promise = null;
+                    }
                 }
-            } finally {
-                $this->deferred = null;
-                $this->promise = null;
             }
         }
 
