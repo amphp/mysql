@@ -196,6 +196,7 @@ class Processor {
 
     private function read(): \Generator {
         while (($bytes = yield $this->socket->read()) !== null) {
+            // @codeCoverageIgnoreStart
             \assert((function () use ($bytes) {
                 if (defined("MYSQL_DEBUG")) {
                     fwrite(STDERR, "in: ");
@@ -210,6 +211,7 @@ class Processor {
 
                 return true;
             })());
+            // @codeCoverageIgnoreEnd
 
             $this->processData($bytes);
             $bytes = null; // Free last data read.
@@ -612,7 +614,7 @@ REGEX;
         if ($this->capabilities & self::CLIENT_SESSION_TRACK) {
             // Even though it seems required according to 14.1.3.1, there is no length encoded string, i.e. no trailing NULL byte ....???
             if (\strlen($packet) > $off) {
-                $this->connInfo->statusInfo = DataTypes::decodeStringOff($packet, $off);
+                $this->connInfo->statusInfo = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
 
                 if ($this->connInfo->statusFlags & StatusFlags::SERVER_SESSION_STATE_CHANGED) {
                     $sessionState = DataTypes::decodeString(substr($packet, $off), $intlen, $sessionStateLen);
@@ -848,12 +850,12 @@ REGEX;
         $column = [];
 
         if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
-            $column["catalog"] = DataTypes::decodeStringOff($packet, $off);
-            $column["schema"] = DataTypes::decodeStringOff($packet, $off);
-            $column["table"] = DataTypes::decodeStringOff($packet, $off);
-            $column["original_table"] = DataTypes::decodeStringOff($packet, $off);
-            $column["name"] = DataTypes::decodeStringOff($packet, $off);
-            $column["original_name"] = DataTypes::decodeStringOff($packet, $off);
+            $column["catalog"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
+            $column["schema"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
+            $column["table"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
+            $column["original_table"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
+            $column["name"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
+            $column["original_name"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
             $fixlen = DataTypes::decodeUnsignedOff($packet, $off);
 
             $len = 0;
@@ -870,8 +872,8 @@ REGEX;
 
             $off += $fixlen;
         } else {
-            $column["table"] = DataTypes::decodeStringOff($packet, $off);
-            $column["name"] = DataTypes::decodeStringOff($packet, $off);
+            $column["table"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
+            $column["name"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
 
             $collen = DataTypes::decodeUnsignedOff($packet, $off);
             $column["columnlen"] = DataTypes::decodeIntByLen(substr($packet, $off), $collen);
@@ -935,14 +937,15 @@ REGEX;
         }
 
         $off = 0;
+        $columns = $this->result->columns;
 
         $fields = [];
-        while ($off < \strlen($packet)) {
+        for ($i = 0; $off < \strlen($packet); ++$i) {
             if (ord($packet[$off]) == 0xfb) {
                 $fields[] = null;
                 $off += 1;
             } else {
-                $fields[] = DataTypes::decodeStringOff($packet, $off);
+                $fields[] = DataTypes::decodeStringOff($columns[$i]["type"], $packet, $off);
             }
         }
         $this->result->rowFetched($fields);
@@ -1055,6 +1058,7 @@ REGEX;
             try {
                 $bytes = yield $this->pendingWrite = $this->socket->write($packet);
 
+                // @codeCoverageIgnoreStart
                 \assert((function () use ($packet) {
                     if (defined("MYSQL_DEBUG")) {
                         fwrite(STDERR, "out: ");
@@ -1069,6 +1073,7 @@ REGEX;
 
                     return true;
                 })());
+                // @codeCoverageIgnoreEnd
             } finally {
                 $this->pendingWrite = null;
             }

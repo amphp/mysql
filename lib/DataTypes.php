@@ -188,10 +188,31 @@ class DataTypes {
         return substr($str, 0, $len = strpos($str, "\0"));
     }
 
-    public static function decodeStringOff(string $str, int &$off): string {
+    public static function decodeStringOff(int $type, string $str, int &$off) {
         $len = self::decodeUnsignedOff($str, $off);
         $off += $len;
-        return substr($str, $off - $len, $len);
+        $data = substr($str, $off - $len, $len);
+
+        switch ($type) {
+            case self::MYSQL_TYPE_LONGLONG:
+            case self::MYSQL_TYPE_LONGLONG | 0x80:
+            case self::MYSQL_TYPE_LONG:
+            case self::MYSQL_TYPE_LONG | 0x80:
+            case self::MYSQL_TYPE_INT24:
+            case self::MYSQL_TYPE_INT24 | 0x80:
+            case self::MYSQL_TYPE_SHORT:
+            case self::MYSQL_TYPE_SHORT | 0x80:
+            case self::MYSQL_TYPE_TINY:
+            case self::MYSQL_TYPE_TINY | 0x80:
+                return (int) $data;
+
+            case self::MYSQL_TYPE_DOUBLE:
+            case self::MYSQL_TYPE_FLOAT:
+                return (float) $data;
+
+            default:
+                return $data;
+        }
     }
 
     public static function decodeUnsignedOff(string $str, int &$off): int {
