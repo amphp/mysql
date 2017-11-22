@@ -38,7 +38,10 @@ matrix:
          mariadb: 10.3
       php: 'nightly'
   allow_failures:
-    - php: nightly
+    - php: 'nightly'
+    - addons:
+         mariadb: 10.3
+      php: 'nightly'
   fast_finish: true
 
 install:
