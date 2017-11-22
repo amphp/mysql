@@ -12,8 +12,36 @@ php:
   - nightly
 
 matrix:
+  include:
+    - addons:
+         mariadb: 10.0
+      php: '7.0'
+    - addons:
+         mariadb: 10.1
+      php: '7.0'
+    - addons:
+         mariadb: 10.2
+      php: '7.0'
+    - addons:
+         mariadb: 10.0
+      php: '7.1'
+    - addons:
+         mariadb: 10.1
+      php: '7.1'
+    - addons:
+         mariadb: 10.2
+      php: '7.1'
+    - addons:
+         mariadb: 10.3
+      php: '7.1'
+    - addons:
+         mariadb: 10.3
+      php: 'nightly'
   allow_failures:
-    - php: nightly
+    - php: 'nightly'
+    - addons:
+         mariadb: 10.3
+      php: 'nightly'
   fast_finish: true
 
 install:
@@ -24,7 +52,7 @@ install:
 
 before_script:
   - echo '<?php $autoloader = require(__DIR__."/../vendor/autoload.php"); const DB_HOST = "localhost"; const DB_USER = "root"; const DB_PASS = "";' > test/bootstrap.php
-  - mysql -u root -e "CREATE DATABASE test; CREATE TABLE test.main (a INT(11), b INT(11)); INSERT INTO test.main VALUES (1, 2), (2, 3), (3, 4), (4, 5), (5, 6);"
+  - mysql -u root -e "SELECT VERSION(); CREATE DATABASE test; CREATE TABLE test.main (a INT(11), b INT(11)); INSERT INTO test.main VALUES (1, 2), (2, 3), (3, 4), (4, 5), (5, 6);"
  
 script:
   - phpdbg -qrr vendor/bin/phpunit --coverage-text --coverage-clover build/logs/clover.xml
