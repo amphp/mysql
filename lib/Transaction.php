@@ -90,12 +90,20 @@ class Transaction implements Executor, Operation {
         }
 
         return call(function () use ($sql) {
-            $result = yield $this->processor->query($sql);
+            $this->queue->reference();
+
+            try {
+                $result = yield $this->processor->query($sql);
+            } catch (\Throwable $exception) {
+                $this->queue->unreference();
+                throw $exception;
+            }
 
             if ($result instanceof Internal\ResultProxy) {
                 $result = new ResultSet($result);
-                $this->queue->reference();
                 $result->onDestruct([$this->queue, "unreference"]);
+            } else {
+                $this->queue->unreference();
             }
 
             return $result;
@@ -112,13 +120,20 @@ class Transaction implements Executor, Operation {
             throw new TransactionError("The transaction has been committed or rolled back");
         }
 
-        return call(function () use ($sql) {
-            /** @var \Amp\Mysql\Statement $statement */
-            $statement = yield $this->processor->prepare($sql);
-            $this->queue->reference();
-            $statement->onDestruct([$this->queue, "unreference"]);
-            return $statement;
+        $this->queue->reference();
+
+        $promise = $this->processor->prepare($sql);
+
+        $promise->onResolve(function ($exception, $statement) {
+            if ($statement instanceof Statement) {
+                $statement->onDestruct([$this->queue, "unreference"]);
+                return;
+            }
+
+            $this->queue->unreference();
         });
+
+        return $promise;
     }
 
     /**
@@ -132,14 +147,22 @@ class Transaction implements Executor, Operation {
         }
 
         return call(function () use ($sql, $params) {
-            /** @var \Amp\Mysql\Statement $statement */
-            $statement = yield $this->processor->prepare($sql);
-            $result = yield $statement->execute($params);
+            $this->queue->reference();
+
+            try {
+                /** @var \Amp\Mysql\Statement $statement */
+                $statement = yield $this->processor->prepare($sql);
+                $result = yield $statement->execute($params);
+            } catch (\Throwable $exception) {
+                $this->queue->unreference();
+                throw $exception;
+            }
 
             if ($result instanceof Internal\ResultProxy) {
                 $result = new ResultSet($result);
-                $this->queue->reference();
                 $result->onDestruct([$this->queue, "unreference"]);
+            } else {
+                $this->queue->unreference();
             }
 
             return $result;
