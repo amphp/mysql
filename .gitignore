@@ -1,4 +1,7 @@
+.php_cs.cache
+build
 composer.lock
+phpunit.xml
 vendor
 mysql-config.php
 *.pid

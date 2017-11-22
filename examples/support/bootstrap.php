@@ -2,6 +2,8 @@
 
 require __DIR__ . '/../../vendor/autoload.php';
 
+//define('MYSQL_DEBUG', true);
+
 /*
  * This file is not in VCS - create it if you want to set
  * the DB credentials without having them commited to VCS.
@@ -19,7 +21,7 @@ if (!defined('DB_HOST') || !defined('DB_USER') || !defined('DB_PASS') || !define
     if ($answer === "no") {
         print "Can't run any examples without valid database credentials." . PHP_EOL;
         exit(1);
-    } else if ($answer === "yes") {
+    } elseif ($answer === "yes") {
         print "Database host: ";
         $host = var_export(trim(fgets(STDIN)), true);
 

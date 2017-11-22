@@ -1,12 +1,19 @@
 <?php
 
-namespace Amp\Mysql;
+namespace Amp\Mysql\Internal;
 
 use Amp\Coroutine;
 use Amp\Deferred;
+use Amp\Mysql\ConnectionConfig;
+use Amp\Mysql\ConnectionException;
+use Amp\Mysql\ConnectionState;
+use Amp\Mysql\ConnectionStatement;
+use Amp\Mysql\DataTypes;
+use Amp\Mysql\FailureException;
+use Amp\Mysql\InitializationException;
+use Amp\Mysql\QueryError;
 use Amp\Promise;
 use Amp\Socket\ClientTlsContext;
-use Amp\Success;
 
 /* @TODO
  * 14.2.3 Auth switch request??
@@ -42,7 +49,9 @@ class Processor {
     /** @var \Generator[] */
     private $processors = [];
 
+    /** @var int */
     private $protocol;
+
     private $seqId = -1;
     private $compressionId = -1;
 
@@ -52,24 +61,17 @@ class Processor {
     private $authPluginDataLen;
     private $query;
     public $named = [];
+
     /** @var callable|null */
     private $parseCallback = null;
     /** @var callable|null */
     private $packetCallback = null;
 
+    /** @var \Amp\Promise|null */
     private $pendingWrite;
 
     /** @var \Amp\Mysql\ConnectionConfig */
     public $config;
-
-    /** @var callable */
-    public $ready;
-
-    /** @var callable */
-    public $busy;
-
-    /** @var callable */
-    public $restore;
 
     /** @var \Amp\Deferred[] */
     private $deferreds = [];
@@ -77,7 +79,10 @@ class Processor {
     /** @var callable[] */
     private $onReady = [];
 
-    /** @var \Amp\Mysql\ResultProxy|null */
+    /** @var \Amp\Deferred|null */
+    private $waiting;
+
+    /** @var \Amp\Mysql\Internal\ResultProxy|null */
     private $result;
 
     public $connectionId;
@@ -121,14 +126,12 @@ class Processor {
     const CLOSING = 3;
     const CLOSED = 4;
 
-    public function __construct(callable $ready, callable $busy, callable $restore) {
-        $this->ready = $ready;
-        $this->busy = $busy;
-        $this->restore = $restore;
+    public function __construct(ConnectionConfig $config) {
         $this->connInfo = new ConnectionState;
+        $this->config = $config;
     }
 
-    public function alive(): bool {
+    public function isAlive(): bool {
         return $this->connectionState <= self::READY;
     }
 
@@ -138,31 +141,35 @@ class Processor {
 
     public function delRef() {
         if (!--$this->refcount) {
-            $this->appendTask(function() {
-                $this->closeSocket();
+            $this->appendTask(function () {
+                $this->close();
             });
         }
-    }
-
-    public function forceClose() {
-        $this->closeSocket();
     }
 
     private function ready() {
         if (empty($this->deferreds)) {
             if (empty($this->onReady)) {
-                $this->write();
-                ($this->ready)();
+                $this->resetIds();
             } else {
                 \array_shift($this->onReady)();
             }
         }
     }
 
+    private function addDeferred(Deferred $deferred) {
+        $this->deferreds[] = $deferred;
+        if ($this->waiting) {
+            $deferred = $this->waiting;
+            $this->waiting = null;
+            $deferred->resolve();
+        }
+    }
+
     public function connect(): Promise {
         \assert(!$this->deferreds && !$this->socket, self::class."::connect() must not be called twice");
 
-        $this->deferreds[] = $deferred = new Deferred; // Will be resolved below or in sendHandshake().
+        $this->addDeferred($deferred = new Deferred); // Will be resolved below or in sendHandshake().
         \Amp\Socket\connect($this->config->resolvedHost)->onResolve(function ($error, $socket) use ($deferred) {
             if ($this->connectionState === self::CLOSED) {
                 $deferred->resolve();
@@ -187,8 +194,9 @@ class Processor {
         return $deferred->promise();
     }
 
-    public function read(): \Generator {
+    private function read(): \Generator {
         while (($bytes = yield $this->socket->read()) !== null) {
+            // @codeCoverageIgnoreStart
             \assert((function () use ($bytes) {
                 if (defined("MYSQL_DEBUG")) {
                     fwrite(STDERR, "in: ");
@@ -203,8 +211,15 @@ class Processor {
 
                 return true;
             })());
+            // @codeCoverageIgnoreEnd
 
             $this->processData($bytes);
+            $bytes = null; // Free last data read.
+
+            if (empty($this->deferreds)) {
+                $this->waiting = new Deferred;
+                yield $this->waiting->promise();
+            }
         }
 
         if ($this->connectionState <= self::READY) { // Connection closed unexpectedly.
@@ -226,7 +241,6 @@ class Processor {
         }
     }
 
-    /** @return Deferred */
     private function getDeferred(): Deferred {
         return \array_shift($this->deferreds);
     }
@@ -235,7 +249,6 @@ class Processor {
         if ($this->packetCallback || $this->parseCallback || !empty($this->onReady) || !empty($this->deferreds) || $this->connectionState != self::READY) {
             $this->onReady[] = $callback;
         } else {
-            ($this->busy)();
             $callback();
         }
     }
@@ -244,66 +257,118 @@ class Processor {
         return clone $this->connInfo;
     }
 
-    public function startCommand(callable $callback): Promise {
+    protected function startCommand(callable $callback): Promise {
         $deferred = new Deferred;
-        $this->appendTask(function() use ($callback, $deferred) {
+        $this->appendTask(function () use ($callback, $deferred) {
             $this->seqId = $this->compressionId = -1;
-            $this->deferreds[] = $deferred;
+            $this->addDeferred($deferred);
             $callback();
         });
         return $deferred->promise();
     }
 
-    public function setQuery(string $query) {
-        $this->query = $query;
-        $this->parseCallback = [$this, "handleQuery"];
+    public function setCharset(string $charset, string $collate = ""): Promise {
+        return \Amp\call(function () use ($charset, $collate) {
+            if ($collate === "" && false !== $off = strpos($charset, "_")) {
+                $collate = $charset;
+                $charset = substr($collate, 0, $off);
+            }
+
+            $query = "SET NAMES '$charset'".($collate == "" ? "" : " COLLATE '$collate'");
+            $result = yield $this->query($query);
+
+            $this->config->charset = $charset;
+            $this->config->collate = $collate;
+
+            return $result;
+        });
     }
 
-    public function setPrepare(string $query) {
-        $this->query = $query;
-        $this->parseCallback = [$this, "handlePrepare"];
+
+    /** @see 14.6.3 COM_INIT_DB */
+    public function useDb(string $db): Promise {
+        return $this->startCommand(function () use ($db) {
+            $this->config->db = $db;
+            $this->sendPacket("\x02$db");
+        });
     }
 
-    public function setFieldListing() {
-        $this->parseCallback = [$this, "handleFieldlist"];
+    /** @see 14.6.4 COM_QUERY */
+    public function query(string $query): Promise {
+        return $this->startCommand(function () use ($query) {
+            $this->query = $query;
+            $this->parseCallback = [$this, "handleQuery"];
+            $this->sendPacket("\x03$query");
+        });
     }
 
-    public function setStatisticsReading() {
-        $this->parseCallback = [$this, "readStatistics"];
+    /** @see 14.7.4 COM_STMT_PREPARE */
+    public function prepare(string $query): Promise {
+        return $this->startCommand(function () use ($query) {
+            $this->query = $query;
+            $this->parseCallback = [$this, "handlePrepare"];
+            $regex = <<<'REGEX'
+    (["'`])(?:\\(?:\\|\1)|(?!\1).)*+\1(*SKIP)(*F)|(\?)|:([a-zA-Z_]+)
+REGEX;
+
+            $index = 0;
+            $query = preg_replace_callback("~$regex~ms", function ($m) use (&$index) {
+                if ($m[2] !== "?") {
+                    $this->named[$m[3]][] = $index;
+                }
+                $index++;
+                return "?";
+            }, $query);
+            $this->sendPacket("\x16$query");
+        });
     }
 
     /** @see 14.6.18 COM_CHANGE_USER */
     /* @TODO broken, my test server doesn't support that command, can't test now
     public function changeUser($user, $pass, $db = null) {
-    return $this->startCommand(function() use ($user, $pass, $db) {
-    $this->config->user = $user;
-    $this->config->pass = $pass;
-    $this->config->db = $db;
-    $payload = "\x11";
+        return $this->startCommand(function() use ($user, $pass, $db) {
+            $this->config->user = $user;
+            $this->config->pass = $pass;
+            $this->config->db = $db;
+            $payload = "\x11";
 
-    $payload .= "$user\0";
-    $auth = $this->secureAuth($this->config->pass, $this->authPluginData);
-    if ($this->capabilities & self::CLIENT_SECURE_CONNECTION) {
-    $payload .= ord($auth) . $auth;
-    } else {
-    $payload .= "$auth\0";
-    }
-    $payload .= "$db\0";
+            $payload .= "$user\0";
+            $auth = $this->secureAuth($this->config->pass, $this->authPluginData);
+            if ($this->capabilities & self::CLIENT_SECURE_CONNECTION) {
+                $payload .= ord($auth) . $auth;
+            } else {
+                $payload .= "$auth\0";
+            }
+            $payload .= "$db\0";
 
-    $this->sendPacket($payload);
-    $this->parseCallback = [$this, "authSwitchRequest"];
-    });
+            $this->sendPacket($payload);
+            $this->parseCallback = [$this, "authSwitchRequest"];
+        });
     }
     */
+
+    /** @see 14.6.15 COM_PING */
+    public function ping(): Promise {
+        return $this->startCommand(function () {
+            $this->sendPacket("\x0e");
+        });
+    }
+
+    /** @see 14.6.19 COM_RESET_CONNECTION */
+    public function resetConnection(): Promise {
+        return $this->startCommand(function () {
+            $this->sendPacket("\x1f");
+        });
+    }
 
     /** @see 14.7.5 COM_STMT_SEND_LONG_DATA */
     public function bindParam(int $stmtId, int $paramId, string $data) {
         $payload = "\x18";
-        $payload .= DataTypes::encode_int32($stmtId);
-        $payload .= DataTypes::encode_int16($paramId);
+        $payload .= DataTypes::encodeInt32($stmtId);
+        $payload .= DataTypes::encodeInt16($paramId);
         $payload .= $data;
         $this->appendTask(function () use ($payload) {
-            $this->write();
+            $this->resetIds();
             $this->sendPacket($payload);
             $this->ready();
         });
@@ -316,9 +381,9 @@ class Processor {
         $deferred = new Deferred;
         $this->appendTask(function () use ($stmtId, $query, &$params, $prebound, $data, $deferred) {
             $payload = "\x17";
-            $payload .= DataTypes::encode_int32($stmtId);
+            $payload .= DataTypes::encodeInt32($stmtId);
             $payload .= chr(0); // cursor flag // @TODO cursor types?!
-            $payload .= DataTypes::encode_int32(1);
+            $payload .= DataTypes::encodeInt32(1);
             $paramCount = count($params);
             $bound = !empty($data) || !empty($prebound);
             $types = "";
@@ -354,8 +419,8 @@ class Processor {
 
             $this->query = $query;
 
-            $this->write();
-            $this->deferreds[] = $deferred;
+            $this->resetIds();
+            $this->addDeferred($deferred);
             $this->sendPacket($payload);
             // apparently LOAD DATA LOCAL INFILE requests are not supported via prepared statements
             $this->packetCallback = [$this, "handleExecute"];
@@ -365,24 +430,114 @@ class Processor {
 
     /** @see 14.7.7 COM_STMT_CLOSE */
     public function closeStmt(int $stmtId) {
-        $payload = "\x19" . DataTypes::encode_int32($stmtId);
+        $payload = "\x19" . DataTypes::encodeInt32($stmtId);
         $this->appendTask(function () use ($payload) {
             if ($this->connectionState === self::READY) {
-                $this->write();
+                $this->resetIds();
                 $this->sendPacket($payload);
-                $this->write(); // does not expect a reply - must be reset immediately
+                $this->resetIds(); // does not expect a reply - must be reset immediately
             }
             $this->ready();
         });
     }
 
+    /** @see 14.6.5 COM_FIELD_LIST */
+    public function listFields(string $table, string $like = "%"): Promise {
+        return $this->startCommand(static function () use ($table, $like) {
+            $this->sendPacket("\x04$table\0$like");
+            $this->parseCallback = [$this, "handleFieldlist"];
+        });
+    }
+
+    public function listAllFields(string $table, string $like = "%"): Promise {
+        $deferred = new Deferred;
+
+        $columns = [];
+        $onResolve = function ($error, $array) use (&$columns, &$onResolve, $deferred) {
+            if ($error) {
+                $deferred->fail($error);
+                return;
+            }
+            if ($array === null) {
+                $deferred->resolve($columns);
+                return;
+            }
+            list($columns[], $promise) = $array;
+            $promise->onResolve($onResolve);
+        };
+        $this->listFields($table, $like)->onResolve($onResolve);
+
+        return $deferred->promise();
+    }
+
+    /** @see 14.6.6 COM_CREATE_DB */
+    public function createDatabase($db) {
+        return $this->startCommand(function () use ($db) {
+            $this->sendPacket("\x05$db");
+        });
+    }
+
+    /** @see 14.6.7 COM_DROP_DB */
+    public function dropDatabase(string $db): Promise {
+        return $this->startCommand(function () use ($db) {
+            $this->sendPacket("\x06$db");
+        });
+    }
+
+    /**
+     * @param $subcommand int one of the self::REFRESH_* constants
+     * @see 14.6.8 COM_REFRESH
+     */
+    public function refresh(int $subcommand): Promise {
+        return $this->startCommand(function () use ($subcommand) {
+            $this->sendPacket("\x07" . chr($subcommand));
+        });
+    }
+
+    /** @see 14.6.9 COM_SHUTDOWN */
+    public function shutdown(): Promise {
+        return $this->startCommand(function () {
+            $this->sendPacket("\x08\x00"); /* SHUTDOWN_DEFAULT / SHUTDOWN_WAIT_ALL_BUFFERS, only one in use */
+        });
+    }
+
+    /** @see 14.6.10 COM_STATISTICS */
+    public function statistics(): Promise {
+        return $this->startCommand(function () {
+            $this->sendPacket("\x09");
+            $this->parseCallback = [$this, "readStatistics"];
+        });
+    }
+
+    /** @see 14.6.11 COM_PROCESS_INFO */
+    public function processInfo(): Promise {
+        return $this->startCommand(function () {
+            $this->sendPacket("\x0a");
+            $this->query("SHOW PROCESSLIST");
+        });
+    }
+
+    /** @see 14.6.13 COM_PROCESS_KILL */
+    public function killProcess($process): Promise {
+        return $this->startCommand(function () use ($process) {
+            $this->sendPacket("\x0c" . DataTypes::encodeInt32($process));
+        });
+    }
+
+    /** @see 14.6.14 COM_DEBUG */
+    public function debugStdout(): Promise {
+        return $this->startCommand(function () {
+            $this->sendPacket("\x0d");
+        });
+    }
+
     /** @see 14.7.8 COM_STMT_RESET */
     public function resetStmt(int $stmtId): Promise {
-        $payload = "\x1a" . DataTypes::encode_int32($stmtId);
+        $payload = "\x1a" . DataTypes::encodeInt32($stmtId);
         $deferred = new Deferred;
         $this->appendTask(function () use ($payload, $deferred) {
-            $this->write();
-            $this->deferreds[] = $deferred;
+            $this->resetIds();
+            $this->addDeferred($deferred);
             $this->sendPacket($payload);
         });
         return $deferred->promise();
@@ -390,11 +545,11 @@ class Processor {
 
     /** @see 14.8.4 COM_STMT_FETCH */
     public function fetchStmt(int $stmtId): Promise {
-        $payload = "\x1c" . DataTypes::encode_int32($stmtId) . DataTypes::encode_int32(1);
+        $payload = "\x1c" . DataTypes::encodeInt32($stmtId) . DataTypes::encodeInt32(1);
         $deferred = new Deferred;
         $this->appendTask(function () use ($payload, $deferred) {
-            $this->write();
-            $this->deferreds[] = $deferred;
+            $this->resetIds();
+            $this->addDeferred($deferred);
             $this->sendPacket($payload);
         });
         return $deferred->promise();
@@ -413,7 +568,7 @@ class Processor {
     private function handleError($packet) {
         $off = 1;
 
-        $this->connInfo->errorCode = DataTypes::decode_unsigned16(substr($packet, $off, 2));
+        $this->connInfo->errorCode = DataTypes::decodeUnsigned16(substr($packet, $off, 2));
         $off += 2;
 
         if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
@@ -427,17 +582,13 @@ class Processor {
         if ($this->connectionState == self::READY) {
             // normal error
             if ($deferred = $this->getDeferred()) {
-                if ($this->config->exceptions) {
-                    $deferred->fail(new QueryException("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}", $this->query));
-                } else {
-                    $deferred->resolve(false);
-                }
+                $deferred->fail(new QueryError("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}", $this->query));
             }
             $this->query = null;
             $this->ready();
         } elseif ($this->connectionState < self::READY) {
             // connection failure
-            $this->closeSocket();
+            $this->close();
             $this->getDeferred()->fail(new InitializationException("Could not connect to {$this->config->resolvedHost}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
         }
     }
@@ -453,17 +604,17 @@ class Processor {
         $off += $intlen;
 
         if ($this->capabilities & (self::CLIENT_PROTOCOL_41 | self::CLIENT_TRANSACTIONS)) {
-            $this->connInfo->statusFlags = DataTypes::decode_unsigned16(substr($packet, $off));
+            $this->connInfo->statusFlags = DataTypes::decodeUnsigned16(substr($packet, $off));
             $off += 2;
 
-            $this->connInfo->warnings = DataTypes::decode_unsigned16(substr($packet, $off));
+            $this->connInfo->warnings = DataTypes::decodeUnsigned16(substr($packet, $off));
             $off += 2;
         }
 
         if ($this->capabilities & self::CLIENT_SESSION_TRACK) {
             // Even though it seems required according to 14.1.3.1, there is no length encoded string, i.e. no trailing NULL byte ....???
             if (\strlen($packet) > $off) {
-                $this->connInfo->statusInfo = DataTypes::decodeStringOff($packet, $off);
+                $this->connInfo->statusInfo = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
 
                 if ($this->connInfo->statusFlags & StatusFlags::SERVER_SESSION_STATE_CHANGED) {
                     $sessionState = DataTypes::decodeString(substr($packet, $off), $intlen, $sessionStateLen);
@@ -471,7 +622,7 @@ class Processor {
                     while ($len < $sessionStateLen) {
                         $data = DataTypes::decodeString(substr($sessionState, $len + 1), $datalen, $intlen);
 
-                        switch ($type = DataTypes::decode_unsigned8(substr($sessionState, $len))) {
+                        switch ($type = DataTypes::decodeUnsigned8(substr($sessionState, $len))) {
                             case SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES:
                                 $var = DataTypes::decodeString($data, $varintlen, $strlen);
                                 $this->connInfo->sessionState[SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES][$var] = DataTypes::decodeString(substr($data, $varintlen + $strlen));
@@ -483,7 +634,7 @@ class Processor {
                                 $this->connInfo->sessionState[SessionStateTypes::SESSION_TRACK_STATE_CHANGE] = DataTypes::decodeString($data);
                                 break;
                             default:
-                                throw new \UnexpectedValueException("$type is not a valid mysql session state type");
+                                throw new \Error("$type is not a valid mysql session state type");
                         }
 
                         $len += 1 + $intlen + $datalen;
@@ -506,15 +657,16 @@ class Processor {
     /** @see 14.1.3.3 EOF-Packet */
     private function parseEof($packet) {
         if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
-            $this->connInfo->warnings = DataTypes::decode_unsigned16(substr($packet, 1));
+            $this->connInfo->warnings = DataTypes::decodeUnsigned16(substr($packet, 1));
 
-            $this->connInfo->statusFlags = DataTypes::decode_unsigned16(substr($packet, 3));
+            $this->connInfo->statusFlags = DataTypes::decodeUnsigned16(substr($packet, 3));
         }
     }
 
     private function handleEof($packet) {
         $this->parseEof($packet);
-        $this->getDeferred()->resolve($this->getConnInfo());
+        $exception = new FailureException($this->connInfo->errorMsg, $this->connInfo->errorCode);
+        $this->getDeferred()->fail($exception);
         $this->ready();
     }
 
@@ -524,13 +676,13 @@ class Processor {
 
         $this->protocol = ord($packet);
         if ($this->protocol !== 0x0a) {
-            throw new \UnexpectedValueException("Unsupported protocol version ".ord($packet)." (Expected: 10)");
+            throw new ConnectionException("Unsupported protocol version ".ord($packet)." (Expected: 10)");
         }
 
         $this->connInfo->serverVersion = DataTypes::decodeNullString(substr($packet, $off), $len);
         $off += $len + 1;
 
-        $this->connectionId = DataTypes::decode_unsigned32(substr($packet, $off));
+        $this->connectionId = DataTypes::decodeUnsigned32(substr($packet, $off));
         $off += 4;
 
         $this->authPluginData = substr($packet, $off, 8);
@@ -538,17 +690,17 @@ class Processor {
 
         $off += 1; // filler byte
 
-        $this->serverCapabilities = DataTypes::decode_unsigned16(substr($packet, $off));
+        $this->serverCapabilities = DataTypes::decodeUnsigned16(substr($packet, $off));
         $off += 2;
 
         if (\strlen($packet) > $off) {
             $this->connInfo->charset = ord(substr($packet, $off));
             $off += 1;
 
-            $this->connInfo->statusFlags = DataTypes::decode_unsigned16(substr($packet, $off));
+            $this->connInfo->statusFlags = DataTypes::decodeUnsigned16(substr($packet, $off));
             $off += 2;
 
-            $this->serverCapabilities += DataTypes::decode_unsigned16(substr($packet, $off)) << 16;
+            $this->serverCapabilities += DataTypes::decodeUnsigned16(substr($packet, $off)) << 16;
             $off += 2;
 
             $this->authPluginDataLen = $this->serverCapabilities & self::CLIENT_PLUGIN_AUTH ? ord(substr($packet, $off)) : 0;
@@ -586,7 +738,7 @@ class Processor {
             case self::OK_PACKET:
                 $this->parseOk($packet);
                 if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
-                    $this->getDeferred()->resolve(new ResultSet($this->connInfo, $result = new ResultProxy));
+                    $this->getDeferred()->resolve($result = new ResultProxy);
                     $this->result = $result;
                     $result->updateState(ResultProxy::COLUMNS_FETCHED);
                     $this->successfulResultsetFetch();
@@ -605,7 +757,7 @@ class Processor {
         }
 
         $this->parseCallback = [$this, "handleTextColumnDefinition"];
-        $this->getDeferred()->resolve(new ResultSet($this->connInfo, $result = new ResultProxy));
+        $this->getDeferred()->resolve($result = new ResultProxy);
         /* we need to resolve before assigning vars, so that a onResolve() handler won't have a partial result available */
         $this->result = $result;
         $result->setColumns(DataTypes::decodeUnsigned($packet));
@@ -614,7 +766,7 @@ class Processor {
     /** @see 14.7.1 Binary Protocol Resultset */
     private function handleExecute($packet) {
         $this->parseCallback = [$this, "handleBinaryColumnDefinition"];
-        $this->getDeferred()->resolve(new ResultSet($this->connInfo, $result = new ResultProxy));
+        $this->getDeferred()->resolve($result = new ResultProxy);
         /* we need to resolve before assigning vars, so that a onResolve() handler won't have a partial result available */
         $this->result = $result;
         $result->setColumns(ord($packet));
@@ -630,7 +782,8 @@ class Processor {
             $this->getDeferred()->resolve(null);
             $this->ready();
         } else {
-            $this->getDeferred()->resolve([$this->parseColumnDefinition($packet), $this->deferreds[] = new Deferred]);
+            $this->addDeferred($deferred = new Deferred);
+            $this->getDeferred()->resolve([$this->parseColumnDefinition($packet), $deferred]);
         }
     }
 
@@ -697,37 +850,37 @@ class Processor {
         $column = [];
 
         if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
-            $column["catalog"] = DataTypes::decodeStringOff($packet, $off);
-            $column["schema"] = DataTypes::decodeStringOff($packet, $off);
-            $column["table"] = DataTypes::decodeStringOff($packet, $off);
-            $column["original_table"] = DataTypes::decodeStringOff($packet, $off);
-            $column["name"] = DataTypes::decodeStringOff($packet, $off);
-            $column["original_name"] = DataTypes::decodeStringOff($packet, $off);
+            $column["catalog"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
+            $column["schema"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
+            $column["table"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
+            $column["original_table"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
+            $column["name"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
+            $column["original_name"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
             $fixlen = DataTypes::decodeUnsignedOff($packet, $off);
 
             $len = 0;
-            $column["charset"] = DataTypes::decode_unsigned16(substr($packet, $off + $len));
+            $column["charset"] = DataTypes::decodeUnsigned16(substr($packet, $off + $len));
             $len += 2;
-            $column["columnlen"] = DataTypes::decode_unsigned32(substr($packet, $off + $len));
+            $column["columnlen"] = DataTypes::decodeUnsigned32(substr($packet, $off + $len));
             $len += 4;
             $column["type"] = ord($packet[$off + $len]);
             $len += 1;
-            $column["flags"] = DataTypes::decode_unsigned16(substr($packet, $off + $len));
+            $column["flags"] = DataTypes::decodeUnsigned16(substr($packet, $off + $len));
             $len += 2;
             $column["decimals"] = ord($packet[$off + $len]);
             //$len += 1;
 
             $off += $fixlen;
         } else {
-            $column["table"] = DataTypes::decodeStringOff($packet, $off);
-            $column["name"] = DataTypes::decodeStringOff($packet, $off);
+            $column["table"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
+            $column["name"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
 
             $collen = DataTypes::decodeUnsignedOff($packet, $off);
-            $column["columnlen"] = DataTypes::decode_intByLen(substr($packet, $off), $collen);
+            $column["columnlen"] = DataTypes::decodeIntByLen(substr($packet, $off), $collen);
             $off += $collen;
 
             $typelen = DataTypes::decodeUnsignedOff($packet, $off);
-            $column["type"] = DataTypes::decode_intByLen(substr($packet, $off), $typelen);
+            $column["type"] = DataTypes::decodeIntByLen(substr($packet, $off), $typelen);
             $off += $typelen;
 
             $len = 1;
@@ -736,7 +889,7 @@ class Processor {
 
             if ($flaglen > 2) {
                 $len = 2;
-                $column["flags"] = DataTypes::decode_unsigned16(substr($packet, $off, 4));
+                $column["flags"] = DataTypes::decodeUnsigned16(substr($packet, $off, 4));
             } else {
                 $len = 1;
                 $column["flags"] = ord($packet[$off]);
@@ -756,7 +909,7 @@ class Processor {
         $deferred = &$this->result->next;
         if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
             $this->parseCallback = [$this, "handleQuery"];
-            $this->deferreds[] = $deferred ?: $deferred = new Deferred;
+            $this->addDeferred($deferred ?: $deferred = new Deferred);
         } else {
             if (!$deferred) {
                 $deferred = new Deferred;
@@ -774,7 +927,7 @@ class Processor {
         switch ($type = ord($packet)) {
             case self::OK_PACKET:
                 $this->parseOk($packet);
-            /* intentional fallthrough */
+                // no break
             case self::EOF_PACKET:
                 if ($type == self::EOF_PACKET) {
                     $this->parseEof($packet);
@@ -784,14 +937,15 @@ class Processor {
         }
 
         $off = 0;
+        $columns = $this->result->columns;
 
         $fields = [];
-        while ($off < \strlen($packet)) {
+        for ($i = 0; $off < \strlen($packet); ++$i) {
             if (ord($packet[$off]) == 0xfb) {
                 $fields[] = null;
                 $off += 1;
             } else {
-                $fields[] = DataTypes::decodeStringOff($packet, $off);
+                $fields[] = DataTypes::decodeStringOff($columns[$i]["type"], $packet, $off);
             }
         }
         $this->result->rowFetched($fields);
@@ -819,7 +973,9 @@ class Processor {
         $off += ($columnCount + 9) >> 3;
 
         for ($i = 0; $off < \strlen($packet); $i++) {
-            while (array_key_exists($i, $fields)) $i++;
+            while (array_key_exists($i, $fields)) {
+                $i++;
+            }
             $fields[$i] = DataTypes::decodeBinary($columns[$i]["type"], substr($packet, $off), $len);
             $off += $len;
         }
@@ -836,28 +992,28 @@ class Processor {
                 $this->handleError($packet);
                 return;
             default:
-                throw new \UnexpectedValueException("Unexpected value for first byte of COM_STMT_PREPARE Response");
+                throw new ConnectionException("Unexpected value for first byte of COM_STMT_PREPARE Response");
         }
         $off = 1;
 
-        $stmtId = DataTypes::decode_unsigned32(substr($packet, $off));
+        $stmtId = DataTypes::decodeUnsigned32(substr($packet, $off));
         $off += 4;
 
-        $columns = DataTypes::decode_unsigned16(substr($packet, $off));
+        $columns = DataTypes::decodeUnsigned16(substr($packet, $off));
         $off += 2;
 
-        $params = DataTypes::decode_unsigned16(substr($packet, $off));
+        $params = DataTypes::decodeUnsigned16(substr($packet, $off));
         $off += 2;
 
         $off += 1; // filler
 
-        $this->connInfo->warnings = DataTypes::decode_unsigned16(substr($packet, $off));
+        $this->connInfo->warnings = DataTypes::decodeUnsigned16(substr($packet, $off));
 
         $this->result = new ResultProxy;
         $this->result->columnsToFetch = $params;
         $this->result->columnCount = $columns;
         $this->refcount++;
-        $this->getDeferred()->resolve(new Stmt($this, $this->query, $stmtId, $this->named, $this->result));
+        $this->getDeferred()->resolve(new ConnectionStatement($this, $this->query, $stmtId, $this->named, $this->result));
         $this->named = [];
         if ($params) {
             $this->parseCallback = [$this, "prepareParams"];
@@ -872,26 +1028,25 @@ class Processor {
         $this->parseCallback = null;
     }
 
-    public function initClosing() {
-        $this->connectionState = self::CLOSING;
+    /** @see 14.6.2 COM_QUIT */
+    public function sendClose(): Promise {
+        return $this->startCommand(function () {
+            $this->sendPacket("\x01");
+            $this->connectionState = self::CLOSING;
+        });
     }
 
-    public function closeSocket() {
+    public function close() {
         $this->connectionState = self::CLOSED;
         if ($this->socket) {
             $this->socket->close();
         }
     }
 
-    private function write(string $packet = null): Promise {
+    private function write(string $packet): Promise {
         return \Amp\call(function () use ($packet) {
             if ($this->pendingWrite) {
                 yield $this->pendingWrite;
-            }
-
-            if ($packet === null) {
-                $this->seqId = $this->compressionId = -1;
-                return new Success;
             }
 
             $packet = $this->compilePacket($packet);
@@ -903,6 +1058,7 @@ class Processor {
             try {
                 $bytes = yield $this->pendingWrite = $this->socket->write($packet);
 
+                // @codeCoverageIgnoreStart
                 \assert((function () use ($packet) {
                     if (defined("MYSQL_DEBUG")) {
                         fwrite(STDERR, "out: ");
@@ -917,12 +1073,24 @@ class Processor {
 
                     return true;
                 })());
+                // @codeCoverageIgnoreEnd
             } finally {
                 $this->pendingWrite = null;
             }
 
             return $bytes;
         });
+    }
+
+    private function resetIds() {
+        if ($this->pendingWrite) {
+            $this->pendingWrite->onResolve(function () {
+                $this->seqId = $this->compressionId = -1;
+            });
+            return;
+        }
+
+        $this->seqId = $this->compressionId = -1;
     }
 
     private function compilePacket(string $pending): string {
@@ -963,26 +1131,18 @@ class Processor {
     }
 
     private function goneAway() {
+        $this->close();
         foreach ($this->deferreds as $deferred) {
-            if ($this->config->exceptions || $this->connectionState < self::READY) {
-                if ($this->query === "") {
-                    $deferred->fail(new InitializationException("Connection went away"));
-                } else {
-                    $deferred->fail(new QueryException("Connection went away... unable to fulfil this deferred ... It's unknown whether the query was executed...", $this->query));
-                }
+            if ($this->query === "") {
+                $deferred->fail(new InitializationException("Connection went away"));
             } else {
-                $deferred->resolve(false);
+                $deferred->fail(new ConnectionException("Connection went away... unable to fulfil this deferred ... It's unknown whether the query was executed...", $this->query));
             }
-        }
-        $this->closeSocket();
-        if ($this->restore) {
-            ($this->restore)($this->connectionState < self::READY);
-            /* @TODO if packet not completely sent, resend? */
         }
     }
 
     /** @see 14.4 Compression */
-    private function parseCompression() {
+    private function parseCompression(): \Generator {
         $inflated = "";
         $buf = "";
 
@@ -992,9 +1152,9 @@ class Processor {
                 $inflated = "";
             }
 
-            $size = DataTypes::decode_unsigned24($buf);
+            $size = DataTypes::decodeUnsigned24($buf);
             $this->compressionId = ord($buf[3]);
-            $uncompressed = DataTypes::decode_unsigned24(substr($buf, 4, 3));
+            $uncompressed = DataTypes::decodeUnsigned24(substr($buf, 4, 3));
 
             $buf = substr($buf, 7);
 
@@ -1032,7 +1192,7 @@ class Processor {
                     $parsed = [];
                 }
 
-                $len = DataTypes::decode_unsigned24($buf);
+                $len = DataTypes::decodeUnsigned24($buf);
                 $this->seqId = ord($buf[3]);
                 $buf = substr($buf, 4);
 
@@ -1084,7 +1244,7 @@ class Processor {
                             $this->sendHandshake();
                             break;
                         default:
-                            throw new \UnexpectedValueException("Unexpected EXTRA_AUTH_PACKET in authentication phase for method {$this->authPluginName}");
+                            throw new ConnectionException("Unexpected EXTRA_AUTH_PACKET in authentication phase for method {$this->authPluginName}");
                     }
                     break;
             }
@@ -1108,12 +1268,12 @@ class Processor {
                         $this->handleEof($packet);
                         break;
                     }
-                /* intentionally missing break */
+                    // no break
                 default:
                     if ($cb) {
                         $cb($packet);
                     } else {
-                        throw new \UnexpectedValueException("Unexpected packet type: " . ord($packet));
+                        throw new ConnectionException("Unexpected packet type: " . ord($packet));
                     }
             }
         }
@@ -1145,7 +1305,7 @@ class Processor {
                 $this->handleError($packet);
                 return;
             default:
-                throw new \UnexpectedValueException("AuthSwitchRequest: Expecting 0xfe (or ERR_Packet), got 0x".dechex(ord($packet)));
+                throw new ConnectionException("AuthSwitchRequest: Expecting 0xfe (or ERR_Packet), got 0x".dechex(ord($packet)));
         }
     }
 
@@ -1171,21 +1331,20 @@ class Processor {
         $payload .= str_repeat("\0", 23); // reserved
 
         if (!$inSSL && ($this->capabilities & self::CLIENT_SSL)) {
-            \Amp\call(function () use ($payload) {
-                yield $this->write($payload);
+            \Amp\asyncCall(function () use ($payload) {
+                try {
+                    yield $this->write($payload);
 
-                $context = $this->config->ssl ?: new ClientTlsContext;
-                $context = $context->withPeerName($this->config->host);
+                    $context = $this->config->ssl ?: new ClientTlsContext;
+                    $context = $context->withPeerName($this->config->host);
 
-                return yield $this->socket->enableCrypto($context);
-            })->onResolve(function ($error) {
-                if ($error) {
-                    $this->closeSocket();
-                    $this->getDeferred()->fail($error);
-                    return;
+                    yield $this->socket->enableCrypto($context);
+
+                    $this->sendHandshake(true);
+                } catch (\Throwable $e) {
+                    $this->close();
+                    $this->getDeferred()->fail($e);
                 }
-
-                $this->sendHandshake(true);
             });
 
             return;
@@ -1214,9 +1373,9 @@ class Processor {
                     }
                     break;
                 case "mysql_old_password":
-                    throw new \UnexpectedValueException("mysql_old_password is outdated and insecure. Intentionally not implemented!");
+                    throw new ConnectionException("mysql_old_password is outdated and insecure. Intentionally not implemented!");
                 default:
-                    throw new \UnexpectedValueException("Invalid (or unimplemented?) auth method requested by server: {$this->authPluginName}");
+                    throw new ConnectionException("Invalid (or unimplemented?) auth method requested by server: {$this->authPluginName}");
             }
         } else {
             $auth = $this->secureAuth($this->config->pass, $this->authPluginData);
@@ -1244,9 +1403,9 @@ class Processor {
     }
 
     /** @see 14.1.2 MySQL Packet */
-    public function sendPacket(string $payload): Promise {
+    protected function sendPacket(string $payload): Promise {
         if ($this->connectionState !== self::READY) {
-            throw new \Exception("Connection not ready, cannot send any packets");
+            throw new \Error("Connection not ready, cannot send any packets");
         }
 
         return $this->write($payload);

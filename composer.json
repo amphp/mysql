@@ -1,7 +1,6 @@
 {
     "name": "amphp/mysql",
     "description": "Asynchronous parallel Mysql client built on the Amp concurrency framework",
-    "minimum-stability": "dev",
     "require": {
         "amphp/amp": "^2",
         "amphp/socket": "^0.10"
@@ -11,16 +10,24 @@
         {
             "name": "Bob Weinand",
             "email": "bobwei9@hotmail.com"
+        },
+        {
+            "name": "Aaron Piotrowski",
+            "email": "aaron@trowski.com"
         }
     ],
     "require-dev": {
         "phpunit/phpunit": "^6",
-        "amphp/phpunit-util": "^1"
+        "amphp/phpunit-util": "^1",
+        "friendsofphp/php-cs-fixer": "^2.3"
     },
     "autoload": {
         "psr-4": {
             "Amp\\Mysql\\": "lib/"
-        }
+        },
+        "files": [
+            "lib/functions.php"
+        ]
     },
     "autoload-dev": {
         "psr-4": {

@@ -2,7 +2,11 @@
 
 namespace Amp\Mysql;
 
+use Amp\Struct;
+
 class ConnectionState {
+    use Struct;
+
     public $affectedRows;
     public $insertId;
     public $statusFlags;
