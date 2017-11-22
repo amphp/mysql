@@ -35,6 +35,18 @@ matrix:
          mariadb: 10.3
       php: '7.1'
     - addons:
+         mariadb: 10.0
+      php: '7.2'
+    - addons:
+         mariadb: 10.1
+      php: '7.2'
+    - addons:
+         mariadb: 10.2
+      php: '7.2'
+    - addons:
+         mariadb: 10.3
+      php: '7.2'
+    - addons:
          mariadb: 10.3
       php: 'nightly'
   allow_failures:
