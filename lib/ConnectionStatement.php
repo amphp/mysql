@@ -143,8 +143,8 @@ class ConnectionStatement implements Statement {
                 return $result;
             }
 
-            if ($result instanceof ConnectionState) {
-                return new CommandResult($result->affectedRows, $result->insertId);
+            if ($result instanceof CommandResult) {
+                return $result;
             }
 
             throw new FailureException("Unrecognized result type");

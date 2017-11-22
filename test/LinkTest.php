@@ -261,4 +261,36 @@ abstract class LinkTest extends TestCase {
             $this->assertEquals($result->getCurrent(), [-1]);
         });
     }
+
+    public function testTransaction() {
+        Loop::run(function () {
+            /** @var \Amp\Mysql\Link $db */
+            $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
+
+            /** @var \Amp\Mysql\Transaction $transaction */
+            $transaction = yield $db->transaction();
+
+            $result = yield $transaction->execute("INSERT INTO main VALUES (?, ?)", [6, 7]);
+            $this->assertInstanceOf(CommandResult::class, $result);
+
+            /** @var \Amp\Mysql\ResultSet $result */
+            $result = yield $transaction->execute("SELECT * FROM main WHERE a = ?", [6]);
+
+            $got = [];
+            while (yield $result->advance(ResultSet::FETCH_ARRAY)) {
+                $got[] = $result->getCurrent();
+            }
+            $this->assertCount(1, $got);
+
+            yield $transaction->rollback();
+
+            $result = yield $db->execute("SELECT * FROM main WHERE a = ?", [6]);
+
+            $got = [];
+            while (yield $result->advance(ResultSet::FETCH_ARRAY)) {
+                $got[] = $result->getCurrent();
+            }
+            $this->assertCount(0, $got);
+        });
+    }
 }

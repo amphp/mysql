@@ -99,8 +99,8 @@ class Connection implements Link {
                 return new ResultSet($result);
             }
 
-            if ($result instanceof ConnectionState) {
-                return new CommandResult($result->affectedRows, $result->insertId);
+            if ($result instanceof CommandResult) {
+                return $result;
             }
 
             throw new FailureException("Unrecognized result type");
@@ -134,7 +134,7 @@ class Connection implements Link {
 
             $this->busy = new Deferred;
 
-            $transaction = new Transaction($this, $isolation);
+            $transaction = new Transaction($this->processor, $isolation);
             $transaction->onDestruct(function () {
                 \assert($this->busy !== null);
 

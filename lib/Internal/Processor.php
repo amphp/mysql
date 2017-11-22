@@ -4,6 +4,7 @@ namespace Amp\Mysql\Internal;
 
 use Amp\Coroutine;
 use Amp\Deferred;
+use Amp\Mysql\CommandResult;
 use Amp\Mysql\ConnectionConfig;
 use Amp\Mysql\ConnectionException;
 use Amp\Mysql\ConnectionState;
@@ -650,7 +651,7 @@ REGEX;
 
     private function handleOk($packet) {
         $this->parseOk($packet);
-        $this->getDeferred()->resolve($this->getConnInfo());
+        $this->getDeferred()->resolve(new CommandResult($this->connInfo->affectedRows, $this->connInfo->insertId));
         $this->ready();
     }
 
@@ -744,7 +745,7 @@ REGEX;
                     $this->successfulResultsetFetch();
                 } else {
                     $this->parseCallback = null;
-                    $this->getDeferred()->resolve($this->getConnInfo());
+                    $this->getDeferred()->resolve(new CommandResult($this->connInfo->affectedRows, $this->connInfo->insertId));
                     $this->ready();
                 }
                 return;

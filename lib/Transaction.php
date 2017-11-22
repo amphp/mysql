@@ -13,8 +13,8 @@ class Transaction implements Executor, Operation {
 
     const SAVEPOINT_PREFIX = "amp_";
 
-    /** @var \Amp\Mysql\Connection */
-    private $connection;
+    /** @var \Amp\Mysql\Internal\Processor */
+    private $processor;
 
     /** @var \Amp\Mysql\Internal\ReferenceQueue */
     private $queue;
@@ -23,19 +23,19 @@ class Transaction implements Executor, Operation {
     private $isolation;
 
     /**
-     * @param \Amp\Mysql\Connection $connection
+     * @param \Amp\Mysql\Internal\Processor $processor
      * @param int $isolation
      *
      * @throws \Error If the isolation level is invalid.
      */
-    public function __construct(Connection $connection, int $isolation) {
-        $this->connection = $connection;
+    public function __construct(Internal\Processor $processor, int $isolation) {
+        $this->processor = $processor;
         $this->isolation = $isolation;
         $this->queue = new Internal\ReferenceQueue;
     }
 
     public function __destruct() {
-        if ($this->connection) {
+        if ($this->processor) {
             $this->rollback(); // Invokes $this->queue->unreference().
         }
     }
@@ -46,7 +46,7 @@ class Transaction implements Executor, Operation {
      * Closes and commits all changes in the transaction.
      */
     public function close() {
-        if ($this->connection) {
+        if ($this->processor) {
             $this->commit(); // Invokes $this->queue->unreference().
         }
     }
@@ -69,14 +69,14 @@ class Transaction implements Executor, Operation {
      * {@inheritdoc}
      */
     public function isAlive(): bool {
-        return $this->connection !== null && $this->connection->isAlive();
+        return $this->processor !== null && $this->processor->isAlive();
     }
 
     /**
      * @return bool True if the transaction is active, false if it has been committed or rolled back.
      */
     public function isActive(): bool {
-        return $this->connection !== null;
+        return $this->processor !== null;
     }
 
     /**
@@ -85,14 +85,15 @@ class Transaction implements Executor, Operation {
      * @throws \Amp\Mysql\TransactionError If the transaction has been committed or rolled back.
      */
     public function query(string $sql): Promise {
-        if ($this->connection === null) {
+        if ($this->processor === null) {
             throw new TransactionError("The transaction has been committed or rolled back");
         }
 
         return call(function () use ($sql) {
-            $result = yield $this->connection->query($sql);
+            $result = yield $this->processor->query($sql);
 
-            if ($result instanceof Operation) {
+            if ($result instanceof Internal\ResultProxy) {
+                $result = new ResultSet($result);
                 $this->queue->reference();
                 $result->onDestruct([$this->queue, "unreference"]);
             }
@@ -107,13 +108,13 @@ class Transaction implements Executor, Operation {
      * @throws \Amp\Mysql\TransactionError If the transaction has been committed or rolled back.
      */
     public function prepare(string $sql): Promise {
-        if ($this->connection === null) {
+        if ($this->processor === null) {
             throw new TransactionError("The transaction has been committed or rolled back");
         }
 
         return call(function () use ($sql) {
             /** @var \Amp\Mysql\Statement $statement */
-            $statement = yield $this->connection->prepare($sql);
+            $statement = yield $this->processor->prepare($sql);
             $this->queue->reference();
             $statement->onDestruct([$this->queue, "unreference"]);
             return $statement;
@@ -126,14 +127,17 @@ class Transaction implements Executor, Operation {
      * @throws \Amp\Mysql\TransactionError If the transaction has been committed or rolled back.
      */
     public function execute(string $sql, array $params = []): Promise {
-        if ($this->connection === null) {
+        if ($this->processor === null) {
             throw new TransactionError("The transaction has been committed or rolled back");
         }
 
         return call(function () use ($sql, $params) {
-            $result = yield $this->connection->execute($sql, $params);
+            /** @var \Amp\Mysql\Statement $statement */
+            $statement = yield $this->processor->prepare($sql);
+            $result = yield $statement->execute($params);
 
-            if ($result instanceof Operation) {
+            if ($result instanceof Internal\ResultProxy) {
+                $result = new ResultSet($result);
                 $this->queue->reference();
                 $result->onDestruct([$this->queue, "unreference"]);
             }
@@ -150,12 +154,12 @@ class Transaction implements Executor, Operation {
      * @throws \Amp\Mysql\TransactionError If the transaction has been committed or rolled back.
      */
     public function commit(): Promise {
-        if ($this->connection === null) {
+        if ($this->processor === null) {
             throw new TransactionError("The transaction has been committed or rolled back");
         }
 
-        $promise = $this->connection->query("COMMIT");
-        $this->connection = null;
+        $promise = $this->processor->query("COMMIT");
+        $this->processor = null;
         $promise->onResolve([$this->queue, "unreference"]);
 
         return $promise;
@@ -169,12 +173,12 @@ class Transaction implements Executor, Operation {
      * @throws \Amp\Mysql\TransactionError If the transaction has been committed or rolled back.
      */
     public function rollback(): Promise {
-        if ($this->connection === null) {
+        if ($this->processor === null) {
             throw new TransactionError("The transaction has been committed or rolled back");
         }
 
-        $promise = $this->connection->query("ROLLBACK");
-        $this->connection = null;
+        $promise = $this->processor->query("ROLLBACK");
+        $this->processor = null;
         $promise->onResolve([$this->queue, "unreference"]);
 
         return $promise;
