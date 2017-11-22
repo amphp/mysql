@@ -194,10 +194,17 @@ class DataTypes {
         $data = substr($str, $off - $len, $len);
 
         switch ($type) {
-            case self::MYSQL_TYPE_LONGLONG:
             case self::MYSQL_TYPE_LONGLONG | 0x80:
-            case self::MYSQL_TYPE_LONG:
+                return $type; // Return UNSIGNED BIGINT as a string.
+
+            case self::MYSQL_TYPE_LONGLONG:
             case self::MYSQL_TYPE_LONG | 0x80:
+                if (PHP_INT_SIZE < 8) {
+                    return $type; // Return BIGINT and UNSIGNED INT as string on 32-bit.
+                }
+                // no break
+
+            case self::MYSQL_TYPE_LONG:
             case self::MYSQL_TYPE_INT24:
             case self::MYSQL_TYPE_INT24 | 0x80:
             case self::MYSQL_TYPE_SHORT:
@@ -246,7 +253,7 @@ class DataTypes {
         return substr($str, $intlen, $len);
     }
 
-    public static function decodeUnsigned(string $str, /* ?int */ &$len = 0): int {
+    public static function decodeUnsigned(string $str, /* ?int */ &$len = 0) {
         $int = \ord($str);
         if ($int < 0xfb) {
             $len = 1;
@@ -280,7 +287,7 @@ class DataTypes {
         return $int;
     }
 
-    public static function decodeInt8(string $str): int {
+    public static function decodeInt8(string $str) {
         $int = \ord($str);
         if ($int < (1 << 7)) {
             return $int;
@@ -289,11 +296,11 @@ class DataTypes {
         return $int << $shift >> $shift;
     }
 
-    public static function decodeUnsigned8(string $str): int {
+    public static function decodeUnsigned8(string $str) {
         return \ord($str);
     }
 
-    public static function decodeInt16(string $str): int {
+    public static function decodeInt16(string $str) {
         $int = unpack("v", $str)[1];
         if ($int < (1 << 15)) {
             return $int;
@@ -302,11 +309,11 @@ class DataTypes {
         return $int << $shift >> $shift;
     }
 
-    public static function decodeUnsigned16(string $str): int {
+    public static function decodeUnsigned16(string $str) {
         return unpack("v", $str)[1];
     }
 
-    public static function decodeInt24(string $str): int {
+    public static function decodeInt24(string $str) {
         $int = unpack("V", substr($str, 0, 3) . "\x00")[1];
         if ($int < (1 << 23)) {
             return $int;
@@ -315,7 +322,7 @@ class DataTypes {
         return $int << $shift >> $shift;
     }
 
-    public static function decodeUnsigned24(string $str): int {
+    public static function decodeUnsigned24(string $str) {
         return unpack("V", substr($str, 0, 3) . "\x00")[1];
     }
 
@@ -327,35 +334,31 @@ class DataTypes {
             }
             return $int << 32 >> 32;
         }
+
         return unpack("V", $str)[1];
     }
 
-    public static function decodeUnsigned32(string $str): int {
+    public static function decodeUnsigned32(string $str) {
         if (PHP_INT_SIZE > 4) {
             return unpack("V", $str)[1];
         }
-        $int = unpack("v", $str)[1];
-        return $int[1] + ($int[2] * (1 << 16));
+
+        \assert(\extension_loaded("gmp"), "The GMP extension is required for UNSIGNED INT fields on 32-bit systems");
+        return \gmp_strval(\gmp_import(substr($str, 0, 4), 1, \GMP_LSW_FIRST));
     }
 
-    public static function decodeInt64(string $str): int {
+    public static function decodeInt64(string $str) {
         if (PHP_INT_SIZE > 4) {
-            $int = unpack("V2", $str);
-            return $int[1] + ($int[2] << 32);
+            return unpack("P", $str)[1];
         }
 
-        $int = unpack("v2V", $str);
-        return $int[1] + ($int[2] * (1 << 16)) + $int[3] * (1 << 16) * (1 << 16);
+        \assert(\extension_loaded("gmp"), "The GMP extension is required for BIGINT fields on 32-bit systems");
+        return \gmp_strval(\gmp_import(substr($str, 0, 8), 1, \GMP_LSW_FIRST));
     }
 
-    public static function decodeUnsigned64(string $str): int {
-        if (PHP_INT_SIZE > 4) {
-            $int = unpack("V2", $str);
-            return $int[1] + $int[2] * (1 << 32);
-        }
-
-        $int = unpack("v4", $str);
-        return $int[1] + ($int[2] * (1 << 16)) + ($int[3] + ($int[4] * (1 << 16))) * (1 << 16) * (1 << 16);
+    public static function decodeUnsigned64(string $str) {
+        \assert(\extension_loaded("gmp"), "The GMP extension is required for UNSIGNED BIGINT fields");
+        return \gmp_strval(\gmp_import(substr($str, 0, 8), 1, \GMP_LSW_FIRST));
     }
 
     public static function encodeInt(int $int): string {
