@@ -2,9 +2,9 @@
 
 namespace Amp\Mysql;
 
-use Amp\Coroutine;
 use Amp\Deferred;
 use Amp\Promise;
+use function Amp\call;
 
 abstract class AbstractPool implements Pool {
     /** @var \SplQueue */
@@ -74,7 +74,7 @@ abstract class AbstractPool implements Pool {
      * {@inheritdoc}
      */
     public function extractConnection(): Promise {
-        return \Amp\call(function () {
+        return call(function () {
             $connection = yield from $this->pop();
             $this->connections->detach($connection);
             return $connection;
@@ -150,109 +150,101 @@ abstract class AbstractPool implements Pool {
      * {@inheritdoc}
      */
     public function query(string $sql): Promise {
-        return new Coroutine($this->doQuery($sql));
-    }
+        return call(function () use ($sql) {
+            /** @var \Amp\Mysql\Connection $connection */
+            $connection = yield from $this->pop();
 
-    private function doQuery(string $sql): \Generator {
-        /** @var \Amp\Mysql\Connection $connection */
-        $connection = yield from $this->pop();
-
-        try {
-            $result = yield $connection->query($sql);
-        } catch (\Throwable $exception) {
-            $this->push($connection);
-            throw $exception;
-        }
-
-        if ($result instanceof Operation) {
-            $result->onDestruct(function () use ($connection) {
+            try {
+                $result = yield $connection->query($sql);
+            } catch (\Throwable $exception) {
                 $this->push($connection);
-            });
-        } else {
-            $this->push($connection);
-        }
+                throw $exception;
+            }
 
-        return $result;
+            if ($result instanceof Operation) {
+                $result->onDestruct(function () use ($connection) {
+                    $this->push($connection);
+                });
+            } else {
+                $this->push($connection);
+            }
+
+            return $result;
+        });
     }
 
     /**
      * {@inheritdoc}
      */
     public function prepare(string $sql): Promise {
-        return new Coroutine($this->doPrepare($sql));
-    }
+        return call(function () use ($sql) {
+            /** @var \Amp\Mysql\Connection $connection */
+            $connection = yield from $this->pop();
 
-    private function doPrepare(string $sql): \Generator {
-        /** @var \Amp\Mysql\Connection $connection */
-        $connection = yield from $this->pop();
+            try {
+                /** @var \Amp\Mysql\Statement $statement */
+                $statement = yield $connection->prepare($sql);
+            } catch (\Throwable $exception) {
+                $this->push($connection);
+                throw $exception;
+            }
 
-        try {
-            /** @var \Amp\Mysql\Statement $statement */
-            $statement = yield $connection->prepare($sql);
-        } catch (\Throwable $exception) {
-            $this->push($connection);
-            throw $exception;
-        }
+            $statement->onDestruct(function () use ($connection) {
+                $this->push($connection);
+            });
 
-        $statement->onDestruct(function () use ($connection) {
-            $this->push($connection);
+            return $statement;
         });
-
-        return $statement;
     }
 
     /**
      * {@inheritdoc}
      */
     public function execute(string $sql, array $params = []): Promise {
-        return new Coroutine($this->doExecute($sql, $params));
-    }
+        return call(function () use ($sql, $params) {
+            /** @var \Amp\Mysql\Connection $connection */
+            $connection = yield from $this->pop();
 
-    private function doExecute(string $sql, array $params): \Generator {
-        /** @var \Amp\Mysql\Connection $connection */
-        $connection = yield from $this->pop();
-
-        try {
-            $result = yield $connection->execute($sql, $params);
-        } catch (\Throwable $exception) {
-            $this->push($connection);
-            throw $exception;
-        }
-
-        if ($result instanceof Operation) {
-            $result->onDestruct(function () use ($connection) {
+            try {
+                $result = yield $connection->execute($sql, $params);
+            } catch (\Throwable $exception) {
                 $this->push($connection);
-            });
-        } else {
-            $this->push($connection);
-        }
+                throw $exception;
+            }
 
-        return $result;
+            if ($result instanceof Operation) {
+                $result->onDestruct(function () use ($connection) {
+                    $this->push($connection);
+                });
+            } else {
+                $this->push($connection);
+            }
+
+            return $result;
+        });
     }
 
     /**
      * {@inheritdoc}
      */
     public function transaction(int $isolation = Transaction::COMMITTED): Promise {
-        return new Coroutine($this->doTransaction($isolation));
-    }
+        return call(function () use ($isolation) {
+            /** @var \Amp\Mysql\Connection $connection */
+            $connection = yield from $this->pop();
 
-    private function doTransaction(int $isolation = Transaction::COMMITTED): \Generator {
-        /** @var \Amp\Mysql\Connection $connection */
-        $connection = yield from $this->pop();
+            try {
+                /** @var \Amp\Mysql\Transaction $transaction */
+                $transaction = yield $connection->transaction($isolation);
+            } catch (\Throwable $exception) {
+                $this->push($connection);
+                throw $exception;
+            }
 
-        try {
-            /** @var \Amp\Mysql\Transaction $transaction */
-            $transaction = yield $connection->transaction($isolation);
-        } catch (\Throwable $exception) {
-            $this->push($connection);
-            throw $exception;
-        }
+            $transaction->onDestruct(function () use ($connection) {
+                $this->push($connection);
+            });
 
-        $transaction->onDestruct(function () use ($connection) {
-            $this->push($connection);
+            return $transaction;
         });
-
-        return $transaction;
     }
 }
