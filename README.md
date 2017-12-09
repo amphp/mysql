@@ -1,21 +1,33 @@
-Mysql [![Build Status](https://travis-ci.org/amphp/mysql.svg?branch=master)](https://travis-ci.org/amphp/mysql) [![Two Crowns](https://img.shields.io/badge/chat-Two%20Crowns-blue.svg)](https://dev.kelunik.com)
-=====
+<p align="center">
+<a href="https://amphp.org/mysql"><img src="https://raw.githubusercontent.com/amphp/logo/master/repos/mysql.png?v=12-07-2017" alt="mysql"/></a>
+</p>
 
-`amp/mysql` is an asynchronous MySQL client built on the [Amp concurrency framework][1]. The library exposes a Promise-based API to dynamically query multiple synchronous MySQL connections concurrently. The client transparently distributes these queries across a scalable pool of available connections and does so using 100% userland PHP; there are no external extension dependencies (e.g. `ext/mysqli`, `ext/pdo`, etc).
+<p align="center">
+<a href="https://travis-ci.org/amphp/mysql"><img src="https://img.shields.io/travis/amphp/mysql/master.svg?style=flat-square" alt="Build Status"/></a>
+<a href="https://coveralls.io/github/amphp/mysql?branch=master"><img src="https://img.shields.io/coveralls/amphp/mysql/master.svg?style=flat-square" alt="Code Coverage"/></a>
+<a href="https://github.com/amphp/mysql/releases"><img src="https://img.shields.io/github/release/amphp/mysql.svg?style=flat-square" alt="Release"/></a>
+<a href="https://github.com/amphp/mysql/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License"/></a>
+</p>
 
-##### Features
+<p align="center"><strong>Async MySQL client built with <a href="https://amphp.org/">Amp</a>.</strong></p>
 
- - Asynchronous API exposing full single-threaded concurrency;
- - Transparent connection pooling to overcome MySQL's fundamentally synchronous connection protocol;
- - MySQL transfer encoding support (gzip, TLS encryption);
- - Support for all MySQL commands<sup>†</sup>.
+<hr/>
 
-<small><sup>†</sup> As documented in [official Mysql Internals Manual][2]</small>
+`amp/mysql` is an asynchronous MySQL client built on the [Amp concurrency framework](https://amphp.org/). The library exposes a Promise-based API to dynamically query multiple MySQL connections concurrently. The client transparently distributes these queries across a scalable pool of available connections and does so using 100% userland PHP; there are *no external extension dependencies* (e.g. `ext/mysqli`, `ext/pdo`, etc).
 
-##### Project Goals
+#### Features
 
-* Expose a non-blocking API for issuing multiple MySQL queries in parallel;
-* Support the *full* MySQL protocol and *all* available commands asynchronously.
+ - Asynchronous API exposing full single-threaded concurrency
+ - Transparent connection pooling to overcome MySQL's fundamentally synchronous connection protocol
+ - MySQL transfer encoding support (gzip, TLS encryption)
+ - Support for all MySQL commands<sup>†</sup>
+
+<sup>† As documented in [official Mysql Internals Manual](https://dev.mysql.com/doc/internals/en/client-server-protocol.html)</sup>
+
+#### Project Goals
+
+* Expose a non-blocking API for issuing multiple MySQL queries in parallel
+* Support the *full* MySQL protocol and *all* available commands asynchronously
 
 ## Installation
 
@@ -34,111 +46,24 @@ composer require amphp/mysql
 
 More extensive code examples reside in the [`examples`](examples) directory.
 
-##### Simple `SELECT` query
-
-*Async Generator*
-
 ```php
 \Amp\Loop::run(function() {
-    $connection = new Amp\Mysql\Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS);
-    yield $connection->connect();
-    $resultSet = yield $connection->query("SELECT 10");
-    $rows = yield $resultSet->fetchAll();
-    var_dump($rows); // Array(1) { 0 => Array(1) { 0 => 10 } }
+    $pool = Amp\Mysql\pool("host=127.0.0.1 user=username password=password db=test);
+    $statement = yield $pool->execute("SELECT * FROM table_name" WHERE id=?");
+    $resultSet = yield $statement->execute([1337]);
+    while (yield $resultSet->advance()) {
+        $row = $resultSet->getCurrent(); // $row is an associative array of column values. e.g.: $row['column_name']
+    }
 });
 ```
+## Versioning
 
-*Synchronous Wait*
+`amphp/mysql` follows the [semver](http://semver.org/) semantic versioning specification like all other `amphp` packages.
 
-```php
-$connection = new Amp\Mysql\Connection("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS);
-\Amp\wait($connection->connect());
+## Security
 
-$promise = $connection->query("SELECT 10"); // returns Promise returning ResultSet
-$resultSet = \Amp\wait($promise);
-$rows = \Amp\wait($resultSet->fetchAll());
-var_dump($rows); // Array(1) { 0 => Array(1) { 0 => 10 } }
+If you discover any security related issues, please email [`contact@amphp.org`](mailto:contact@amphp.org) instead of using the issue tracker.
 
-$connection->close();
-```
+## License
 
-Using a `Connection` object directly (as shown above) is klunky in terms of initialization. Instead we can use a `Pool` to automatically handle establishing the connection ...
-
-##### Pooled connections
-
-```php
-$pool = new \Amp\Mysql\Pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS);
-
-// We can use the pool immediately -- the connection state is transparent
-$promise = $pool->query("...");
-```
-
-The `Pool` aggregates `Connection` instances as needed with configurable limits so we can get the most out of parallel queries.
-
-##### Fetch modes on ResultSet
-
-**Note**: Methods on ResultSet class generally return a Promise
-
- - Fetching all rows at once (in a big array)
-  - fetchRows
-  - fetchObjects
-  - fetchAll<sup>†</sup>
- - Fetching only the next row
-  - fetchRow
-  - fetchObject
-  - fetch<sup>†</sup>
-
-<small><sup>†</sup>`fetch()` and `fetchAll()` methods are combined fetchRow(s)/fetchObject(s), means, they contain the integer _and_ string keys</small>
-
-In case of a multi-ResultSet, use the `next()` method to get the next ResultSet.
-
-ResultSet also has `getFields` method which returns an array of arrays with column data and `rowCount()` to fetch the number of rows.
-
-##### prepare()'d statements
-
-Pool and Connection classes provides a `prepare()` command for prepared statement handling. Placeholders are `:NAME` or `?` (numeric index).<sup>†</sup>
-
-```php
-$stmt = yield $pool->prepare("SELECT * FROM table WHERE column = :value");
-$resultSet = yield $stmt->execute(["value" => "a value"]);
-$rows = yield $resultSet->fetchAll();
-```
-Or short, to immediately execute the prepared statement:
-```php
-$resultSet = yield $pool->prepare("SELECT * FROM table WHERE column = ?", ["a value"]);
-$rows = yield $resultSet->fetchAll();
-```
-
-**Note**: Stmt class also provides `getFields()` (returning Promise which will hold an array of arrays with column info), `bind($paramIdentifier, $value)` (binds a parameter, it's then not necessary to pass it in `execute()`) and `reset()` (to reset values bound via `bind()`) methods.
-
-<small><sup>†</sup> Yes, the MySQL protocol does not support `:NAME` placeholders; they are internally replaced by `?` characters</small>
-
-##### Other methods than query() and prepare()
-
-Pool and Connection classes also have several methods that directly mirror some text protocol functionality:
-
- - `close()`
- - `useDb($db)`<sup>†</sup>
- - `listAllFields($table, $like = "%")` (Promise which will hold an array of arrays with column info)
- - `listFields($table, $like = "%")` (Promise which will hold an array `[$column, $promise]` where `$column` is an array with column info and $promise will hold the next column info etc.)
- - `createDatabase($db)`
- - `refresh($subcommand)` (See `Connection::REFRESH_*` constants)
- - `shutdown()`
- - `processInfo()` (Promise which will hold a ResultSet)
- - `killProcess()`
- - `debugStdout()`
- - `ping()`
- - ~~`changeUser($user, $pass, $db = null)`~~<sup>†</sup> (currently not available)
- - `resetConnection()`<sup>†</sup>
-
-<small><sup>†</sup> All these methods are solely present in Connection class, but not in Pool, as they don't make sense there.</small>
-
-##### Use a separate Connection class
-
-Pool class also provides a `getConnection()` method which unmaps a Connection object from Pool and returns it, so that you can execute stateful operations on it. (E.g. SET commands which are specific for one connection and which should not be used in the general Pool). Only disadvantage here is that no two operations can be then executed at the same time as MySQL connections one allow sequential command processing.
-
-**Attention**: When using a separate Connection class, it is ***very* important** to close the Connection yourself via `$connection->close()`, because our Connection objects are still referenced by the Reactor.
-
-
-  [1]: https://github.com/amphp/amp
-  [2]: https://dev.mysql.com/doc/internals/en/client-server-protocol.html
+The MIT License (MIT). Please see [`LICENSE`](./LICENSE) for more information.
