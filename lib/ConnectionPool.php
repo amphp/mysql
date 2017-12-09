@@ -7,7 +7,7 @@ use Amp\Promise;
 class ConnectionPool extends AbstractPool {
     const DEFAULT_MAX_CONNECTIONS = 100;
 
-    /** @var \Amp\Mysql\ConnectionConfig */
+    /** @var \Amp\Mysql\Internal\ConnectionConfig */
     private $config;
 
     /** @var int */
@@ -16,12 +16,12 @@ class ConnectionPool extends AbstractPool {
     /**
      * @internal Use \Amp\Mysql\pool() instead.
      *
-     * @param \Amp\Mysql\ConnectionConfig $config
+     * @param \Amp\Mysql\Internal\ConnectionConfig $config
      * @param int $maxConnections
      *
      * @throws \Error If $maxConnections is less than 1.
      */
-    public function __construct(ConnectionConfig $config, int $maxConnections = self::DEFAULT_MAX_CONNECTIONS) {
+    public function __construct(Internal\ConnectionConfig $config, int $maxConnections = self::DEFAULT_MAX_CONNECTIONS) {
         parent::__construct();
 
         $this->config = $config;

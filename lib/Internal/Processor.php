@@ -5,7 +5,6 @@ namespace Amp\Mysql\Internal;
 use Amp\Coroutine;
 use Amp\Deferred;
 use Amp\Mysql\CommandResult;
-use Amp\Mysql\ConnectionConfig;
 use Amp\Mysql\ConnectionException;
 use Amp\Mysql\ConnectionState;
 use Amp\Mysql\ConnectionStatement;
@@ -71,7 +70,7 @@ class Processor {
     /** @var \Amp\Promise|null */
     private $pendingWrite;
 
-    /** @var \Amp\Mysql\ConnectionConfig */
+    /** @var \Amp\Mysql\Internal\ConnectionConfig */
     public $config;
 
     /** @var \Amp\Deferred[] */

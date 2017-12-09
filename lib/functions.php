@@ -12,9 +12,10 @@ use Amp\Socket\ClientTlsContext;
  * @return \Amp\Promise<\Amp\Mysql\Connection>
  *
  * @throws \Amp\Mysql\FailureException If connecting fails.
+ * @throws \Error If the connection string does not contain a host, user, and password.
  */
 function connect(string $connectionString, ClientTlsContext $sslOptions = null): Promise {
-    $config = ConnectionConfig::parseConnectionString($connectionString, $sslOptions);
+    $config = Internal\ConnectionConfig::parseConnectionString($connectionString, $sslOptions);
     return Connection::connect($config);
 }
 
@@ -24,12 +25,14 @@ function connect(string $connectionString, ClientTlsContext $sslOptions = null):
  * @param int $maxConnections
  *
  * @return \Amp\Mysql\Pool
+ *
+ * @throws \Error If the connection string does not contain a host, user, and password.
  */
 function pool(
     string $connectionString,
     ClientTlsContext $sslOptions = null,
     int $maxConnections = ConnectionPool::DEFAULT_MAX_CONNECTIONS
 ): Pool {
-    $config = ConnectionConfig::parseConnectionString($connectionString, $sslOptions);
+    $config = Internal\ConnectionConfig::parseConnectionString($connectionString, $sslOptions);
     return new ConnectionPool($config, $maxConnections);
 }

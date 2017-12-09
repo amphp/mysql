@@ -25,11 +25,11 @@ class Connection implements Link {
     /**
      * @internal Use \Amp\Mysql\connect() instead.
      *
-     * @param \Amp\Mysql\ConnectionConfig $config
+     * @param \Amp\Mysql\Internal\ConnectionConfig $config
      *
      * @return \Amp\Promise
      */
-    public static function connect(ConnectionConfig $config): Promise {
+    public static function connect(Internal\ConnectionConfig $config): Promise {
         $processor = new Internal\Processor($config);
 
         return \Amp\call(function () use ($processor) {
@@ -53,10 +53,6 @@ class Connection implements Link {
 
     public function isReady(): bool {
         return $this->processor->isReady();
-    }
-
-    public function getConfig(): ConnectionConfig {
-        return clone $this->processor->config;
     }
 
     public function getConnInfo(): ConnectionState {

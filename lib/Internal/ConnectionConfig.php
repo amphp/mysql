@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Mysql;
+namespace Amp\Mysql\Internal;
 
 use Amp\Socket\ClientTlsContext;
 use Amp\Struct;
@@ -31,6 +31,18 @@ class ConnectionConfig {
     /* private key to use for sha256_password auth method */
     public $key;
 
+    private function __construct() {
+        // Private to force usage of static constructor.
+    }
+
+    /**
+     * @param string $connStr
+     * @param \Amp\Socket\ClientTlsContext|null $sslOptions
+     *
+     * @return \Amp\Mysql\Internal\ConnectionConfig
+     *
+     * @throws \Error If a host, user, and password are not provided.
+     */
     public static function parseConnectionString(string $connStr, ClientTlsContext $sslOptions = null): self {
         $config = new self;
 
@@ -63,7 +75,7 @@ class ConnectionConfig {
         return $config;
     }
 
-    public function resolveHost() {
+    private function resolveHost() {
         $index = \strpos($this->host, ':');
 
         if ($index === false) {
