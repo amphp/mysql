@@ -48,11 +48,17 @@ More extensive code examples reside in the [`examples`](examples) directory.
 
 ```php
 \Amp\Loop::run(function() {
-    $pool = Amp\Mysql\pool("host=127.0.0.1 user=username password=password db=test);
-    $statement = yield $pool->execute("SELECT * FROM table_name" WHERE id=?");
-    $resultSet = yield $statement->execute([1337]);
-    while (yield $resultSet->advance()) {
-        $row = $resultSet->getCurrent(); // $row is an associative array of column values. e.g.: $row['column_name']
+    /** @var \Amp\Mysql\Pool $pool */
+    $pool = Amp\Mysql\pool("host=127.0.0.1 user=username password=password db=test");
+    
+    /** @var \Amp\Mysql\Statement $statement */
+    $statement = yield $pool->execute("SELECT * FROM table_name WHERE id=?");
+    
+    /** @var \Amp\Mysql\ResultSet $result */
+    $result = yield $statement->execute([1337]);
+    while (yield $result->advance()) {
+        $row = $result->getCurrent();
+        // $row is an associative array of column values. e.g.: $row['column_name']
     }
 });
 ```
