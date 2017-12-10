@@ -2,12 +2,14 @@
 
 namespace Amp\Mysql\Test;
 
+use Amp\Mysql\Connection;
+use Amp\Mysql\Internal\ConnectionConfig;
 use Amp\Promise;
 use function Amp\Mysql\connect;
 
 class ConnectionTest extends LinkTest {
     protected function getLink(string $connectionString): Promise {
-        return connect($connectionString);
+        return Connection::connect(ConnectionConfig::parseConnectionString($connectionString));
     }
 
     public function testConnect() {

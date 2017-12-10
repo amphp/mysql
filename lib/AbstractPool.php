@@ -22,6 +22,9 @@ abstract class AbstractPool implements Pool {
     /** @var \Amp\Deferred|null */
     private $deferred;
 
+    /** @var bool */
+    private $closed = false;
+
     /**
      * @return \Amp\Promise<\Amp\Mysql\Connection>
      *
@@ -35,9 +38,11 @@ abstract class AbstractPool implements Pool {
     }
 
     public function close() {
+        $this->closed = true;
         foreach ($this->connections as $connection) {
             $connection->close();
         }
+        $this->connections = new \SplObjectStorage;
     }
 
     /**
@@ -56,10 +61,20 @@ abstract class AbstractPool implements Pool {
 
     /**
      * @param \Amp\Mysql\Connection $connection
+     *
+     * @throws \Error If the pool has been closed, the connection exists in the pool, or the connection is dead.
      */
     protected function addConnection(Connection $connection) {
+        if ($this->closed) {
+            throw new \Error("The pool has been closed");
+        }
+
         if (isset($this->connections[$connection])) {
-            return;
+            throw new \Error("Connection is already a part of this pool");
+        }
+
+        if (!$connection->isAlive()) {
+            throw new \Error("The connection is dead");
         }
 
         $this->connections->attach($connection);
@@ -82,13 +97,18 @@ abstract class AbstractPool implements Pool {
     }
 
     /**
-     * @coroutine
-     *
      * @return \Generator
      *
      * @resolve \Amp\Postgres\Connection
+     *
+     * @throws \Amp\Mysql\FailureException If creating a connection fails.
+     * @throws \Error If the pool has been closed.
      */
     private function pop(): \Generator {
+        if ($this->closed) {
+            throw new \Error("The pool has been closed");
+        }
+
         while ($this->promise !== null && $this->connections->count() + $this->pending >= $this->getMaxConnections()) {
             try {
                 yield $this->promise; // Prevent simultaneous connection creation when connection count is at maximum - 1.
