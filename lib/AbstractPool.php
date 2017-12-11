@@ -153,6 +153,10 @@ abstract class AbstractPool implements Pool {
      * @throws \Error If the connection is not part of this pool.
      */
     private function push(Connection $connection) {
+        if ($this->closed) {
+            return;
+        }
+
         \assert(isset($this->connections[$connection]), 'Connection is not part of this pool');
 
         if ($connection->isAlive()) {
