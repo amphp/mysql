@@ -9,6 +9,7 @@ use Amp\Mysql\Pool;
 use Amp\Mysql\ResultSet;
 use Amp\Promise;
 use Amp\Success;
+use function Amp\Mysql\pool;
 
 class ConnectionPoolTest extends AbstractPoolTest {
     protected function getLink(string $connectionString): Promise {
@@ -61,7 +62,7 @@ class ConnectionPoolTest extends AbstractPoolTest {
      */
     public function testWrongPassword() {
         Loop::run(function () {
-            $db = new ConnectionPool(ConnectionConfig::parseConnectionString("host=".DB_HOST.";user=".DB_USER.";pass=the_wrong_password;db=test"));
+            $db = pool("host=".DB_HOST.";user=".DB_USER.";pass=the_wrong_password;db=test");
 
             /* Try a query */
             yield $db->query("CREATE TABLE tmp SELECT 1 AS a, 2 AS b");

@@ -58,7 +58,12 @@ class ResultProxy {
         }
     }
 
-    public function __debugInfo() {
+    /**
+     * @return array
+     *
+     * @codeCoverageIgnore
+     */
+    public function __debugInfo(): array {
         $tmp = clone $this;
         foreach ($tmp->deferreds as &$type) {
             foreach ($type as &$entry) {

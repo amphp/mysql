@@ -26,4 +26,12 @@ class ConnectionTest extends LinkTest {
         });
         $this->assertTrue($complete, "Database commands did not complete.");
     }
+
+    /**
+     * @expectedException \Error
+     * @expectedExceptionMessage Required parameters host, user and pass need to be passed in connection string
+     */
+    public function testInvalidConnectionString() {
+        $promise = connect("username=".DB_USER);
+    }
 }

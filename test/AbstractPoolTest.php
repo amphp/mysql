@@ -11,10 +11,10 @@ use Amp\Mysql\ResultSet;
 use Amp\Mysql\Statement;
 use Amp\Mysql\Transaction;
 use Amp\Promise;
-use PHPUnit\Framework\TestCase;
 use function Amp\call;
+use function Amp\Mysql\connect;
 
-abstract class AbstractPoolTest extends TestCase {
+abstract class AbstractPoolTest extends LinkTest {
     /**
      * @param array $connections
      *
@@ -23,7 +23,19 @@ abstract class AbstractPoolTest extends TestCase {
     abstract protected function createPool(array $connections): Pool;
 
     /**
-     * @return \PHPUnit_Framework_MockObject_MockObject|\Amp\Mysql\Connection
+     * @param string $connectionString
+     *
+     * @return \Amp\Promise<\Amp\Mysql\Connection>
+     */
+    protected function getLink(string $connectionString): Promise {
+        return call(function () use ($connectionString) {
+            $connection = yield connect($connectionString);
+            return $this->createPool([$connection]);
+        });
+    }
+
+    /**
+     * @return \PHPUnit\Framework\MockObject\MockObject|\Amp\Mysql\Connection
      */
     protected function createConnection(): Connection {
         $mock = $this->createMock(Connection::class);
@@ -34,7 +46,7 @@ abstract class AbstractPoolTest extends TestCase {
     /**
      * @param int $count
      *
-     * @return \Amp\Mysql\Connection[]|\PHPUnit_Framework_MockObject_MockObject[]
+     * @return \Amp\Mysql\Connection[]|\PHPUnit\Framework\MockObject\MockObject[]
      */
     private function makeConnectionSet(int $count) {
         $connections = [];
@@ -138,7 +150,7 @@ abstract class AbstractPoolTest extends TestCase {
      *
      * @param int $count
      */
-    public function testTransaction(int $count) {
+    public function testMutlipleTransactions(int $count) {
         $connections = $this->makeConnectionSet($count);
 
         $connection = $connections[0];

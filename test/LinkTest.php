@@ -180,6 +180,54 @@ abstract class LinkTest extends TestCase {
 
     /**
      * @expectedException \Error
+     * @expectedExceptionMessage Parameter id 1 is not defined for this prepared statement
+     */
+    public function testBindWithInvalidParamId() {
+        Loop::run(function () {
+            /** @var \Amp\Mysql\Link $db */
+            $db = yield $this->getLink("host=" . DB_HOST . ";user=" . DB_USER . ";pass=" . DB_PASS . ";db=test");
+
+            /** @var \Amp\Mysql\Statement $statement */
+            $statement = yield $db->prepare("SELECT * FROM main WHERE a = ?");
+
+            $statement->bind(1, 1);
+        });
+    }
+
+    /**
+     * @expectedException \Error
+     * @expectedExceptionMessage Parameter :b is not defined for this prepared statement
+     */
+    public function testBindWithInvalidParamName() {
+        Loop::run(function () {
+            /** @var \Amp\Mysql\Link $db */
+            $db = yield $this->getLink("host=" . DB_HOST . ";user=" . DB_USER . ";pass=" . DB_PASS . ";db=test");
+
+            /** @var \Amp\Mysql\Statement $statement */
+            $statement = yield $db->prepare("SELECT * FROM main WHERE a = :a");
+
+            $statement->bind("b", 1);
+        });
+    }
+
+    /**
+     * @expectedException \Error
+     * @expectedExceptionMessage Invalid parameter ID type
+     */
+    public function testBindWithInvalidParamType() {
+        Loop::run(function () {
+            /** @var \Amp\Mysql\Link $db */
+            $db = yield $this->getLink("host=" . DB_HOST . ";user=" . DB_USER . ";pass=" . DB_PASS . ";db=test");
+
+            /** @var \Amp\Mysql\Statement $statement */
+            $statement = yield $db->prepare("SELECT * FROM main WHERE a = :a");
+
+            $statement->bind(3.14, 1);
+        });
+    }
+
+    /**
+     * @expectedException \Error
      * @expectedExceptionMessage Parameter 1 for prepared statement missing
      */
     public function testStatementExecuteWithTooFewParams() {
@@ -252,6 +300,7 @@ abstract class LinkTest extends TestCase {
             /** @var \Amp\Mysql\Statement $stmt */
             $stmt = yield $db->prepare("CREATE TABLE tmp SELECT ? AS a");
             yield $stmt->execute([-1]);
+            $stmt->close();
 
             /** @var \Amp\Mysql\ResultSet $result */
             $stmt = yield $db->prepare("SELECT a FROM tmp");
@@ -270,8 +319,11 @@ abstract class LinkTest extends TestCase {
             /** @var \Amp\Mysql\Transaction $transaction */
             $transaction = yield $db->transaction();
 
-            $result = yield $transaction->execute("INSERT INTO main VALUES (?, ?)", [6, 7]);
+            /** @var \Amp\Mysql\Statement $statement */
+            $statement = yield $transaction->prepare("INSERT INTO main VALUES (?, ?)");
+            $result = yield $statement->execute([6, 7]);
             $this->assertInstanceOf(CommandResult::class, $result);
+            $statement->close();
 
             /** @var \Amp\Mysql\ResultSet $result */
             $result = yield $transaction->execute("SELECT * FROM main WHERE a = ?", [6]);
@@ -281,6 +333,7 @@ abstract class LinkTest extends TestCase {
                 $got[] = $result->getCurrent();
             }
             $this->assertCount(1, $got);
+            yield $result->nextResultSet();
 
             yield $transaction->rollback();
 

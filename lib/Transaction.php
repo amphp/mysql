@@ -158,8 +158,7 @@ class Transaction implements Executor, Operation {
                 throw $exception;
             }
 
-            if ($result instanceof Internal\ResultProxy) {
-                $result = new ResultSet($result);
+            if ($result instanceof ResultSet) {
                 $result->onDestruct([$this->queue, "unreference"]);
             } else {
                 $this->queue->unreference();
