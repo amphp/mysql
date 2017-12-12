@@ -52,7 +52,7 @@ More extensive code examples reside in the [`examples`](examples) directory.
     $pool = Amp\Mysql\pool("host=127.0.0.1 user=username password=password db=test");
     
     /** @var \Amp\Mysql\Statement $statement */
-    $statement = yield $pool->execute("SELECT * FROM table_name WHERE id=?");
+    $statement = yield $pool->prepare("SELECT * FROM table_name WHERE id=?");
     
     /** @var \Amp\Mysql\ResultSet $result */
     $result = yield $statement->execute([1337]);
