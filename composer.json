@@ -5,7 +5,7 @@
         "amphp/amp": "^2",
         "amphp/socket": "^0.10"
     },
-    "licence": "MIT",
+    "license": "MIT",
     "authors": [
         {
             "name": "Bob Weinand",
