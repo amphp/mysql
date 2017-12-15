@@ -134,12 +134,15 @@ abstract class AbstractPool implements Pool {
                 ++$this->pending;
                 try {
                     $this->promise = $this->createConnection();
-                    $this->addConnection(yield $this->promise);
+                    $connection = yield $this->promise;
                 } finally {
                     if (--$this->pending === 0) {
                         $this->promise = null;
                     }
                 }
+
+                $this->connections->attach($connection);
+                return $connection;
             }
         }
 
