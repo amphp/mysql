@@ -79,9 +79,6 @@ class Processor {
     /** @var callable[] */
     private $onReady = [];
 
-    /** @var \Amp\Deferred|null */
-    private $waiting;
-
     /** @var \Amp\Mysql\Internal\ResultProxy|null */
     private $result;
 
@@ -148,21 +145,24 @@ class Processor {
     }
 
     private function ready() {
-        if (empty($this->deferreds)) {
-            if (empty($this->onReady)) {
-                $this->resetIds();
-            } else {
-                \array_shift($this->onReady)();
+        if (!empty($this->deferreds)) {
+            return;
+        }
+
+        if (empty($this->onReady)) {
+            $this->resetIds();
+            if ($this->socket) {
+                $this->socket->unreference();
             }
+        } else {
+            \array_shift($this->onReady)();
         }
     }
 
     private function addDeferred(Deferred $deferred) {
         $this->deferreds[] = $deferred;
-        if ($this->waiting) {
-            $deferred = $this->waiting;
-            $this->waiting = null;
-            $deferred->resolve();
+        if ($this->socket) {
+            $this->socket->reference();
         }
     }
 
@@ -216,9 +216,8 @@ class Processor {
             $this->processData($bytes);
             $bytes = null; // Free last data read.
 
-            if (empty($this->deferreds)) {
-                $this->waiting = new Deferred;
-                yield $this->waiting->promise();
+            if (!$this->socket) { // Connection closed.
+                break;
             }
         }
 
@@ -1038,6 +1037,7 @@ REGEX;
         $this->connectionState = self::CLOSED;
         if ($this->socket) {
             $this->socket->close();
+            $this->socket = null;
         }
     }
 
