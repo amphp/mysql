@@ -1139,7 +1139,7 @@ REGEX;
             if ($this->query === "") {
                 $deferred->fail(new InitializationException("Connection went away"));
             } else {
-                $deferred->fail(new ConnectionException("Connection went away... unable to fulfil this deferred ... It's unknown whether the query was executed...", $this->query));
+                $deferred->fail(new ConnectionException("Connection went away... unable to fulfil this deferred ... It's unknown whether the query was executed..."));
             }
         }
     }
