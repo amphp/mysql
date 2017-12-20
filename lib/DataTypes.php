@@ -191,7 +191,7 @@ class DataTypes {
     public static function decodeStringOff(int $type, string $str, int &$off) {
         $len = self::decodeUnsignedOff($str, $off);
         $off += $len;
-        $data = substr($str, $off - $len, $len);
+        $data = (string) substr($str, $off - $len, $len);
 
         switch ($type) {
             case self::MYSQL_TYPE_LONGLONG | 0x80:

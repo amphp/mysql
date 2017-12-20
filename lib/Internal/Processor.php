@@ -924,16 +924,14 @@ REGEX;
 
     /** @see 14.6.4.1.1.3 Resultset Row */
     private function handleTextResultsetRow($packet) {
-        switch ($type = ord($packet)) {
-            case self::OK_PACKET:
+        if (ord($packet) == self::EOF_PACKET) {
+            if ($this->capabilities & self::CLIENT_DEPRECATE_EOF) {
                 $this->parseOk($packet);
-                // no break
-            case self::EOF_PACKET:
-                if ($type == self::EOF_PACKET) {
-                    $this->parseEof($packet);
-                }
-                $this->successfulResultsetFetch();
-                return;
+            } else {
+                $this->parseEof($packet);
+            }
+            $this->successfulResultsetFetch();
+            return;
         }
 
         $off = 0;
