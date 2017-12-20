@@ -925,9 +925,6 @@ REGEX;
     /** @see 14.6.4.1.1.3 Resultset Row */
     private function handleTextResultsetRow($packet) {
         switch ($type = ord($packet)) {
-            case self::OK_PACKET:
-                $this->parseOk($packet);
-                // no break
             case self::EOF_PACKET:
                 if ($type == self::EOF_PACKET) {
                     $this->parseEof($packet);
@@ -941,11 +938,17 @@ REGEX;
 
         $fields = [];
         for ($i = 0; $off < \strlen($packet); ++$i) {
-            if (ord($packet[$off]) == 0xfb) {
-                $fields[] = null;
-                $off += 1;
-            } else {
-                $fields[] = DataTypes::decodeStringOff($columns[$i]["type"], $packet, $off);
+            switch (ord($packet[$off])) {
+                case 0xfb:
+                    $fields[] = null;
+                    $off += 1;
+                    break;
+                case 0x00:
+                    $fields[] = "";
+                    $off += 1;
+                    break;
+                default:
+                    $fields[] = DataTypes::decodeStringOff($columns[$i]["type"], $packet, $off);
             }
         }
         $this->result->rowFetched($fields);
