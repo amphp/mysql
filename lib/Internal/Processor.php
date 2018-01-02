@@ -4,6 +4,7 @@ namespace Amp\Mysql\Internal;
 
 use Amp\Coroutine;
 use Amp\Deferred;
+use Amp\Loop;
 use Amp\Mysql\CommandResult;
 use Amp\Mysql\ConnectionException;
 use Amp\Mysql\ConnectionState;
@@ -149,27 +150,33 @@ class Processor {
             return;
         }
 
-        if (empty($this->onReady)) {
-            $this->resetIds();
-            if ($this->socket) {
-                $this->socket->unreference();
-            }
-        } else {
+        if (!empty($this->onReady)) {
             \array_shift($this->onReady)();
+            return;
+        }
+
+        $this->resetIds();
+
+        if ($this->socket) {
+            try {
+                $this->socket->unreference();
+            } catch (Loop\InvalidWatcherError $exception) {
+                // Undefined destruct order can cause unref of an invalid watcher if the loop is swapped.
+                // Generally this will only happen during tests.
+            }
         }
     }
 
     private function addDeferred(Deferred $deferred) {
+        \assert($this->socket, "The connection has been closed");
         $this->deferreds[] = $deferred;
-        if ($this->socket) {
-            $this->socket->reference();
-        }
+        $this->socket->reference();
     }
 
     public function connect(): Promise {
         \assert(!$this->deferreds && !$this->socket, self::class."::connect() must not be called twice");
 
-        $this->addDeferred($deferred = new Deferred); // Will be resolved below or in sendHandshake().
+        $this->deferreds[] = $deferred = new Deferred; // Will be resolved below or in sendHandshake().
         \Amp\Socket\connect($this->config->resolvedHost)->onResolve(function ($error, $socket) use ($deferred) {
             if ($this->connectionState === self::CLOSED) {
                 $deferred->resolve();
@@ -257,6 +264,10 @@ class Processor {
     }
 
     protected function startCommand(callable $callback): Promise {
+        if ($this->connectionState > self::READY) {
+            throw new \Error("The connection has been closed");
+        }
+
         $deferred = new Deferred;
         $this->appendTask(function () use ($callback, $deferred) {
             $this->seqId = $this->compressionId = -1;
