@@ -144,32 +144,6 @@ class Pool implements Link {
     }
 
     /**
-     * @param \Amp\Mysql\Connection $connection
-     *
-     * @throws \Error If the pool has been closed, the connection exists in the pool, or the connection is dead.
-     */
-    protected function addConnection(Connection $connection) {
-        if ($this->closed) {
-            throw new \Error("The pool has been closed");
-        }
-
-        if (isset($this->connections[$connection])) {
-            throw new \Error("Connection is already a part of this pool");
-        }
-
-        if (!$connection->isAlive()) {
-            throw new \Error("The connection is dead");
-        }
-
-        $this->connections->attach($connection);
-        $this->idle->push($connection);
-
-        if ($this->deferred instanceof Deferred) {
-            $this->deferred->resolve($connection);
-        }
-    }
-
-    /**
      * Extracts an idle connection from the pool. The connection is completely removed from the pool and cannot be
      * put back into the pool. Useful for operations where connection state must be changed.
      *
@@ -215,6 +189,13 @@ class Pool implements Link {
                 ++$this->pending;
                 try {
                     $connection = yield $this->createConnection();
+                    if (!$connection instanceof Connection) {
+                        throw new \Error(\sprintf(
+                            "%s::createConnection() must resolve to an instance of %s",
+                            static::class,
+                            Connection::class
+                        ));
+                    }
                 } finally {
                     --$this->pending;
                 }
