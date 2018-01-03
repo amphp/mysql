@@ -47,8 +47,18 @@ class Connection implements Link {
         $this->processor = $processor;
     }
 
+    /**
+     * @return bool False if the connection has been closed.
+     */
     public function isAlive(): bool {
         return $this->processor->isAlive();
+    }
+
+    /**
+     * @return int Timestamp of the last time this connection was used.
+     */
+    public function lastUsedAt(): int {
+        return $this->processor->lastDataAt();
     }
 
     public function isReady(): bool {

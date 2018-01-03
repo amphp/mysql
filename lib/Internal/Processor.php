@@ -83,15 +83,18 @@ class Processor {
     /** @var \Amp\Mysql\Internal\ResultProxy|null */
     private $result;
 
-    public $connectionId;
-    public $authPluginData;
-    public $capabilities = 0;
-    public $serverCapabilities = 0;
-    public $authPluginName;
-    public $connInfo;
-    protected $refcount = 1;
+    /** @var int */
+    private $lastDataAt;
 
-    protected $connectionState = self::UNCONNECTED;
+    private $connectionId;
+    private $authPluginData;
+    private $capabilities = 0;
+    private $serverCapabilities = 0;
+    private $authPluginName;
+    private $connInfo;
+    private $refcount = 1;
+
+    private $connectionState = self::UNCONNECTED;
 
     const MAX_PACKET_SIZE = 0xffffff;
     const MAX_UNCOMPRESSED_BUFLEN = 0xfffffb;
@@ -127,6 +130,7 @@ class Processor {
     public function __construct(ConnectionConfig $config) {
         $this->connInfo = new ConnectionState;
         $this->config = $config;
+        $this->lastDataAt = \time();
     }
 
     public function isAlive(): bool {
@@ -220,6 +224,8 @@ class Processor {
             })());
             // @codeCoverageIgnoreEnd
 
+            $this->lastDataAt = \time();
+
             $this->processData($bytes);
             $bytes = null; // Free last data read.
 
@@ -261,6 +267,14 @@ class Processor {
 
     public function getConnInfo(): ConnectionState {
         return clone $this->connInfo;
+    }
+
+    public function getConnectionId(): int {
+        return $this->connectionId;
+    }
+
+    public function lastDataAt(): int {
+        return $this->lastDataAt;
     }
 
     protected function startCommand(callable $callback): Promise {

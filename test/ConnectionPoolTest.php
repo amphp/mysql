@@ -2,8 +2,8 @@
 
 namespace Amp\Mysql\Test;
 
+use Amp\Delayed;
 use Amp\Loop;
-use Amp\Mysql\ConnectionPool;
 use Amp\Mysql\Internal\ConnectionConfig;
 use Amp\Mysql\Pool;
 use Amp\Mysql\ResultSet;
@@ -13,11 +13,11 @@ use function Amp\Mysql\pool;
 
 class ConnectionPoolTest extends AbstractPoolTest {
     protected function getLink(string $connectionString): Promise {
-        return new Success(new ConnectionPool(ConnectionConfig::parseConnectionString($connectionString)));
+        return new Success(new Pool(ConnectionConfig::parseConnectionString($connectionString)));
     }
 
     protected function createPool(array $connections): Pool {
-        $mock = $this->getMockBuilder(ConnectionPool::class)
+        $mock = $this->getMockBuilder(Pool::class)
             ->setConstructorArgs([$this->createMock(ConnectionConfig::class), \count($connections)])
             ->setMethods(['createConnection'])
             ->getMock();
@@ -31,9 +31,49 @@ class ConnectionPoolTest extends AbstractPoolTest {
         return $mock;
     }
 
+    public function testIdleConnectionsRemovedAfterTimeout() {
+        Loop::run(function () {
+            $pool = new Pool(
+                ConnectionConfig::parseConnectionString("host=".DB_HOST." user=".DB_USER." pass=".DB_PASS." db=test")
+            );
+            $pool->setIdleTimeout(2);
+            $count = 3;
+
+            $promises = [];
+            for ($i = 0; $i < $count; ++$i) {
+                $promises[] = $pool->query("SELECT $i");
+            }
+
+            $results = yield $promises;
+
+            /** @var \Amp\Mysql\ResultSet $result */
+            foreach ($results as $result) {
+                do { // Consume results to free connection
+                    while (yield $result->advance()) ;
+                } while (yield $result->nextResultSet());
+            }
+
+            $this->assertSame($count, $pool->getConnectionCount());
+
+            yield new Delayed(1000);
+
+            $this->assertSame($count, $pool->getConnectionCount());
+
+            $result = yield $pool->query("SELECT $i");
+            do { // Consume results to free connection
+                while (yield $result->advance()) ;
+            } while (yield $result->nextResultSet());
+
+            yield new Delayed(1000);
+
+            $this->assertSame(1, $pool->getConnectionCount());
+        });
+    }
+
+
     public function testSmallPool() {
         Loop::run(function () {
-            $db = new ConnectionPool(ConnectionConfig::parseConnectionString("host=".DB_HOST." user=".DB_USER." pass=".DB_PASS." db=test"), 2);
+            $db = new Pool(ConnectionConfig::parseConnectionString("host=".DB_HOST." user=".DB_USER." pass=".DB_PASS." db=test"), 2);
 
             $queries = [];
 

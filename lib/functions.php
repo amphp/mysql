@@ -31,8 +31,8 @@ function connect(string $connectionString, ClientTlsContext $sslOptions = null):
 function pool(
     string $connectionString,
     ClientTlsContext $sslOptions = null,
-    int $maxConnections = ConnectionPool::DEFAULT_MAX_CONNECTIONS
+    int $maxConnections = Pool::DEFAULT_MAX_CONNECTIONS
 ): Pool {
     $config = Internal\ConnectionConfig::parseConnectionString($connectionString, $sslOptions);
-    return new ConnectionPool($config, $maxConnections);
+    return new Pool($config, $maxConnections);
 }
