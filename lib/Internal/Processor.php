@@ -47,6 +47,10 @@ class SessionStateTypes {
 }
 
 class Processor {
+    const STATEMENT_PARAM_REGEX = <<<'REGEX'
+~(["'`])(?:\\(?:\\|\1)|(?!\1).)*+\1(*SKIP)(*F)|(\?)|:([a-zA-Z_]+)~ms
+REGEX;
+
     /** @var \Generator[] */
     private $processors = [];
 
@@ -234,8 +238,14 @@ class Processor {
             }
         }
 
-        if ($this->connectionState <= self::READY) { // Connection closed unexpectedly.
-            $this->goneAway();
+        $this->close();
+
+        foreach ($this->deferreds as $deferred) {
+            if ($this->query === "") {
+                $deferred->fail(new InitializationException("Connection went away"));
+            } else {
+                $deferred->fail(new ConnectionException("Connection went away... unable to fulfil this deferred ... It's unknown whether the query was executed..."));
+            }
         }
     }
 
@@ -258,7 +268,7 @@ class Processor {
     }
 
     private function appendTask(callable $callback) {
-        if ($this->packetCallback || $this->parseCallback || !empty($this->onReady) || !empty($this->deferreds) || $this->connectionState != self::READY) {
+        if ($this->packetCallback || $this->parseCallback || !empty($this->onReady) || !empty($this->deferreds) || $this->connectionState !== self::READY) {
             $this->onReady[] = $callback;
         } else {
             $callback();
@@ -331,12 +341,9 @@ class Processor {
         return $this->startCommand(function () use ($query) {
             $this->query = $query;
             $this->parseCallback = [$this, "handlePrepare"];
-            $regex = <<<'REGEX'
-    (["'`])(?:\\(?:\\|\1)|(?!\1).)*+\1(*SKIP)(*F)|(\?)|:([a-zA-Z_]+)
-REGEX;
 
-            $index = 0;
-            $query = preg_replace_callback("~$regex~ms", function ($m) use (&$index) {
+            $query = preg_replace_callback(self::STATEMENT_PARAM_REGEX, function ($m) {
+                static $index = 0;
                 if ($m[2] !== "?") {
                     $this->named[$m[3]][] = $index;
                 }
@@ -603,7 +610,7 @@ REGEX;
         $this->connInfo->errorMsg = substr($packet, $off);
 
         $this->parseCallback = null;
-        if ($this->connectionState == self::READY) {
+        if ($this->connectionState === self::READY) {
             // normal error
             if ($deferred = $this->getDeferred()) {
                 $deferred->fail(new QueryError("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}", $this->query));
@@ -750,7 +757,7 @@ REGEX;
     private function handleLocalInfileRequest($packet) {
         // @TODO async file fetch @rdlowrey
         $file = file_get_contents($packet);
-        if ($file != "") {
+        if ($file !== "") {
             $this->sendPacket($file);
         }
         $this->sendPacket("");
@@ -797,10 +804,10 @@ REGEX;
     }
 
     private function handleFieldList($packet) {
-        if (ord($packet) == self::ERR_PACKET) {
+        if (ord($packet) === self::ERR_PACKET) {
             $this->parseCallback = null;
             $this->handleError($packet);
-        } elseif (ord($packet) == self::EOF_PACKET) {
+        } elseif (ord($packet) === self::EOF_PACKET) {
             $this->parseCallback = null;
             $this->parseEof($packet);
             $this->getDeferred()->resolve(null);
@@ -822,7 +829,7 @@ REGEX;
     private function handleColumnDefinition($packet, $cbMethod) {
         if (!$this->result->columnsToFetch--) {
             $this->result->updateState(ResultProxy::COLUMNS_FETCHED);
-            if (ord($packet) == self::ERR_PACKET) {
+            if (ord($packet) === self::ERR_PACKET) {
                 $this->parseCallback = null;
                 $this->handleError($packet);
             } else {
@@ -948,7 +955,7 @@ REGEX;
 
     /** @see 14.6.4.1.1.3 Resultset Row */
     private function handleTextResultsetRow($packet) {
-        if (ord($packet) == self::EOF_PACKET) {
+        if (ord($packet) === self::EOF_PACKET) {
             if ($this->capabilities & self::CLIENT_DEPRECATE_EOF) {
                 $this->parseOk($packet);
             } else {
@@ -963,7 +970,7 @@ REGEX;
 
         $fields = [];
         for ($i = 0; $off < \strlen($packet); ++$i) {
-            if (ord($packet[$off]) == 0xfb) {
+            if (ord($packet[$off]) === 0xfb) {
                 $fields[] = null;
                 $off += 1;
             } else {
@@ -975,7 +982,7 @@ REGEX;
 
     /** @see 14.7.2 Binary Protocol Resultset Row */
     private function handleBinaryResultsetRow($packet) {
-        if (ord($packet) == self::EOF_PACKET) {
+        if (ord($packet) === self::EOF_PACKET) {
             $this->parseEof($packet);
             $this->successfulResultsetFetch();
             return;
@@ -1060,6 +1067,7 @@ REGEX;
 
     public function close() {
         $this->connectionState = self::CLOSED;
+
         if ($this->socket) {
             $this->socket->close();
             $this->socket = null;
@@ -1067,42 +1075,30 @@ REGEX;
     }
 
     private function write(string $packet): Promise {
-        return \Amp\call(function () use ($packet) {
-            if ($this->pendingWrite) {
-                yield $this->pendingWrite;
+        $packet = $this->compilePacket($packet);
+
+        // @codeCoverageIgnoreStart
+        \assert((function () use ($packet) {
+            if (defined("MYSQL_DEBUG")) {
+                fwrite(STDERR, "out: ");
+                for ($i = 0; $i < min(strlen($packet), 200); $i++) {
+                    fwrite(STDERR, dechex(ord($packet[$i])) . " ");
+                }
+                $r = range("\0", "\x1f");
+                unset($r[10], $r[9]);
+                fwrite(STDERR, "len: ".strlen($packet)."\n");
+                fwrite(STDERR, str_replace($r, ".", substr($packet, 0, 200))."\n");
             }
 
-            $packet = $this->compilePacket($packet);
+            return true;
+        })());
+        // @codeCoverageIgnoreEnd
 
-            if (($this->capabilities & self::CLIENT_COMPRESS) && $this->connectionState >= self::READY) {
-                $packet = $this->compressPacket($packet);
-            }
+        if (($this->capabilities & self::CLIENT_COMPRESS) && $this->connectionState >= self::READY) {
+            $packet = $this->compressPacket($packet);
+        }
 
-            try {
-                $bytes = yield $this->pendingWrite = $this->socket->write($packet);
-
-                // @codeCoverageIgnoreStart
-                \assert((function () use ($packet) {
-                    if (defined("MYSQL_DEBUG")) {
-                        fwrite(STDERR, "out: ");
-                        for ($i = 0; $i < min(strlen($packet), 200); $i++) {
-                            fwrite(STDERR, dechex(ord($packet[$i])) . " ");
-                        }
-                        $r = range("\0", "\x1f");
-                        unset($r[10], $r[9]);
-                        fwrite(STDERR, "len: ".strlen($packet)."\n");
-                        fwrite(STDERR, str_replace($r, ".", substr($packet, 0, 200))."\n");
-                    }
-
-                    return true;
-                })());
-                // @codeCoverageIgnoreEnd
-            } finally {
-                $this->pendingWrite = null;
-            }
-
-            return $bytes;
-        });
+        return $this->pendingWrite = $this->socket->write($packet);
     }
 
     private function resetIds() {
@@ -1117,7 +1113,7 @@ REGEX;
     }
 
     private function compilePacket(string $pending): string {
-        if ($pending == "") {
+        if ($pending === "") {
             return $pending;
         }
 
@@ -1133,13 +1129,13 @@ REGEX;
                 $pending = "";
             }
             $packet .= substr_replace(pack("V", $len), chr(++$this->seqId), 3, 1) . $out; // expects $len < (1 << 24) - 1
-        } while ($pending != "");
+        } while ($pending !== "");
 
         return $packet;
     }
 
     private function compressPacket(string $packet): string {
-        if ($packet == "") {
+        if ($packet === "") {
             return "";
         }
 
@@ -1151,17 +1147,6 @@ REGEX;
         }
 
         return substr_replace(pack("V", strlen($deflated)), chr(++$this->compressionId), 3, 1) . substr(pack("V", $len), 0, 3) . $deflated;
-    }
-
-    private function goneAway() {
-        $this->close();
-        foreach ($this->deferreds as $deferred) {
-            if ($this->query === "") {
-                $deferred->fail(new InitializationException("Connection went away"));
-            } else {
-                $deferred->fail(new ConnectionException("Connection went away... unable to fulfil this deferred ... It's unknown whether the query was executed..."));
-            }
-        }
     }
 
     /** @see 14.4 Compression */
@@ -1187,7 +1172,7 @@ REGEX;
                     $inflated = "";
                 }
 
-                if ($uncompressed == 0) {
+                if ($uncompressed === 0) {
                     $inflated .= substr($buf, 0, $size);
                 } else {
                     $inflated .= zlib_decode(substr($buf, 0, $size), $uncompressed);
@@ -1224,7 +1209,7 @@ REGEX;
                     $parsed = [];
                 }
 
-                $lastIn = $len != 0xffffff;
+                $lastIn = $len !== 0xffffff;
                 if ($lastIn) {
                     $size = $len % 0xffffff;
                 } else {
@@ -1316,7 +1301,7 @@ REGEX;
         $this->parseCallback = null;
         switch (ord($packet)) {
             case self::EOF_PACKET:
-                if (\strlen($packet) == 1) {
+                if (\strlen($packet) === 1) {
                     break;
                 }
                 $len = strpos($packet, "\0");
