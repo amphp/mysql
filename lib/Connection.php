@@ -75,9 +75,12 @@ class Connection implements Link {
 
     public function close() {
         $processor = $this->processor;
-        $processor->sendClose()->onResolve(static function () use ($processor) {
-            $processor->close();
-        });
+        // Send close command if connection is not already in a closed or closing state
+        if ($processor->isAlive()) {
+            $processor->sendClose()->onResolve(static function () use ($processor) {
+                $processor->close();
+            });
+        }
     }
 
     public function useDb(string $db): Promise {
