@@ -64,7 +64,7 @@ class ConnectionPoolTest extends AbstractPoolTest {
                 while (yield $result->advance()) ;
             } while (yield $result->nextResultSet());
 
-            yield new Delayed(1000);
+            yield new Delayed(1500);
 
             $this->assertSame(1, $pool->getConnectionCount());
         });

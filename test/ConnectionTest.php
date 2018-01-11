@@ -2,6 +2,7 @@
 
 namespace Amp\Mysql\Test;
 
+use Amp\Loop;
 use Amp\Mysql\Connection;
 use Amp\Mysql\Internal\ConnectionConfig;
 use Amp\Promise;
@@ -33,5 +34,18 @@ class ConnectionTest extends LinkTest {
      */
     public function testInvalidConnectionString() {
         $promise = connect("username=".DB_USER);
+    }
+
+    public function testDoubleClose() {
+        Loop::run(function () {
+            /** @var \Amp\Mysql\Connection $db */
+            $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
+
+            $db->close();
+
+            $this->assertFalse($db->isAlive());
+
+            $db->close(); // Should not throw an exception.
+        });
     }
 }

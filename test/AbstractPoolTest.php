@@ -39,7 +39,6 @@ abstract class AbstractPoolTest extends LinkTest {
      */
     protected function createConnection(): Connection {
         $mock = $this->createMock(Connection::class);
-        $mock->method('isAlive')->willReturn(true);
         return $mock;
     }
 
@@ -52,7 +51,8 @@ abstract class AbstractPoolTest extends LinkTest {
         $connections = [];
 
         for ($i = 0; $i < $count; ++$i) {
-            $connections[] = $this->createConnection();
+            $connections[] = $connection = $this->createConnection();
+            $connection->method('isAlive')->willReturn(true);
         }
 
         return $connections;
@@ -244,6 +244,50 @@ abstract class AbstractPoolTest extends LinkTest {
                 $this->assertInstanceof(Connection::class, $result);
                 $result->query($query);
             }
+        });
+    }
+
+    /**
+     * @dataProvider getConnectionCounts
+     *
+     * @param int $count
+     */
+    public function testConnectionClosedInPool(int $count) {
+        $connections = $this->makeConnectionSet($count);
+        $query = "SELECT * FROM test";
+
+        foreach ($connections as $connection) {
+            $connection->expects($this->exactly(2))
+                ->method('query')
+                ->with($query)
+                ->willReturn(new Delayed(10));
+        }
+
+        $connection = $this->createConnection();
+        $connection->method('isAlive')
+            ->willReturnOnConsecutiveCalls(true, false);
+        $connection->expects($this->once())
+            ->method('query')
+            ->with($query)
+            ->willReturn(new Delayed(10));
+
+        \array_unshift($connections, $connection);
+
+        $pool = $this->createPool($connections);
+        $this->assertSame($count + 1, $pool->getMaxConnections());
+
+        Loop::run(function () use ($pool, $query, $count) {
+            $promises = [];
+            for ($i = 0; $i < $count + 1; ++$i) {
+                $promises[] = $pool->query($query);
+            }
+            yield $promises;
+
+            $promises = [];
+            for ($i = 0; $i < $count; ++$i) {
+                $promises[] = $pool->query($query);
+            }
+            yield $promises;
         });
     }
 }

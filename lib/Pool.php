@@ -86,11 +86,11 @@ class Pool implements Link {
 
     public function close() {
         $this->closed = true;
-        foreach ($this->connections as $connection) {
+        while (!$this->idle->isEmpty()) {
+            $connection = $this->idle->shift();
             $connection->close();
+            $this->connections->detach($connection);
         }
-        $this->idle = new \SplQueue;
-        $this->connections = new \SplObjectStorage;
     }
 
     /**
@@ -174,17 +174,17 @@ class Pool implements Link {
             yield $this->promise; // Prevent simultaneous connection creation when connection count is at maximum - 1.
         }
 
-        while ($this->idle->isEmpty()) { // While loop to ensure an idle connection is available after promises below are resolved.
-            if ($this->connections->count() + $this->pending >= $this->getMaxConnections()) {
-                // All possible connections busy, so wait until one becomes available.
-                try {
-                    $this->deferred = new Deferred;
-                    yield $this->promise = $this->deferred->promise(); // May be resolved with defunct connection.
-                } finally {
-                    $this->deferred = null;
-                    $this->promise = null;
-                }
-            } else {
+        while (!$this->idle->isEmpty()) {
+            $connection = $this->idle->shift();
+            if ($connection->isAlive()) {
+                return $connection;
+            }
+
+            $this->connections->detach($connection);
+        }
+
+        do { // While loop to ensure an idle connection is available after promises below are resolved.
+            if ($this->connections->count() + $this->pending < $this->getMaxConnections()) {
                 // Max connection count has not been reached, so open another connection.
                 ++$this->pending;
                 try {
@@ -203,7 +203,17 @@ class Pool implements Link {
                 $this->connections->attach($connection);
                 return $connection;
             }
-        }
+
+            // All possible connections busy, so wait until one becomes available.
+            try {
+                $this->deferred = new Deferred;
+                // May be resolved with defunct connection, but that connection will not be added to $this->idle.
+                yield $this->promise = $this->deferred->promise();
+            } finally {
+                $this->deferred = null;
+                $this->promise = null;
+            }
+        } while ($this->idle->isEmpty());
 
         // Shift a connection off the idle queue.
         return $this->idle->shift();
@@ -215,11 +225,13 @@ class Pool implements Link {
      * @throws \Error If the connection is not part of this pool.
      */
     private function push(Connection $connection) {
+        \assert(isset($this->connections[$connection]), 'Connection is not part of this pool');
+
         if ($this->closed) {
+            $connection->close();
+            $this->connections->detach($connection);
             return;
         }
-
-        \assert(isset($this->connections[$connection]), 'Connection is not part of this pool');
 
         if ($connection->isAlive()) {
             $this->idle->push($connection);
