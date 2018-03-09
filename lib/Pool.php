@@ -56,9 +56,6 @@ class Pool implements Link {
             throw new \Error("Pool must contain at least one connection");
         }
 
-        $this->connections = new \SplObjectStorage;
-        $this->idle = new \SplQueue;
-
         $this->connections = $connections = new \SplObjectStorage;
         $this->idle = $idle = new \SplQueue;
 
