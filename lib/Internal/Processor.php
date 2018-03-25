@@ -48,7 +48,7 @@ class SessionStateTypes {
 
 class Processor {
     const STATEMENT_PARAM_REGEX = <<<'REGEX'
-~(["'`])(?:\\(?:\\|\1)|(?!\1).)*+\1(*SKIP)(*F)|(\?)|:([a-zA-Z_]+)~ms
+~(["'`])(?:\\(?:\\|\1)|(?!\1).)*+\1(*SKIP)(*FAIL)|(\?)|:([a-zA-Z_][a-zA-Z0-9_]*)~ms
 REGEX;
 
     /** @var \Generator[] */
