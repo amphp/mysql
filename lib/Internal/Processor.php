@@ -15,6 +15,7 @@ use Amp\Mysql\InitializationException;
 use Amp\Mysql\QueryError;
 use Amp\Promise;
 use Amp\Socket\ClientTlsContext;
+use Amp\Socket\Socket;
 
 /* @TODO
  * 14.2.3 Auth switch request??
@@ -131,7 +132,8 @@ REGEX;
     const CLOSING = 3;
     const CLOSED = 4;
 
-    public function __construct(ConnectionConfig $config) {
+    public function __construct(Socket $socket, ConnectionConfig $config) {
+        $this->socket = $socket;
         $this->connInfo = new ConnectionState;
         $this->config = $config;
         $this->lastDataAt = \time();
@@ -182,28 +184,22 @@ REGEX;
     }
 
     public function connect(): Promise {
-        \assert(!$this->deferreds && !$this->socket, self::class."::connect() must not be called twice");
+        \assert(!$this->deferreds, self::class."::connect() must not be called twice");
 
         $this->deferreds[] = $deferred = new Deferred; // Will be resolved below or in sendHandshake().
-        \Amp\Socket\connect($this->config->resolvedHost)->onResolve(function ($error, $socket) use ($deferred) {
-            if ($this->connectionState === self::CLOSED) {
-                $deferred->resolve();
-                if ($socket) {
-                    $socket->close();
+
+        $this->processors = [$this->parseMysql()];
+
+        (new Coroutine($this->read()))->onResolve(function () {
+            $this->close();
+
+            foreach ($this->deferreds as $deferred) {
+                if ($this->query === "") {
+                    $deferred->fail(new InitializationException("Connection went away"));
+                } else {
+                    $deferred->fail(new ConnectionException("Connection went away... unable to fulfil this deferred ... It's unknown whether the query was executed..."));
                 }
-                return;
             }
-
-            if ($error) {
-                $deferred->fail($error);
-                return;
-            }
-
-            $this->socket = $socket;
-
-            $this->processors = [$this->parseMysql()];
-
-            Promise\rethrow(new Coroutine($this->read()));
         });
 
         return $deferred->promise();
@@ -235,16 +231,6 @@ REGEX;
 
             if (!$this->socket) { // Connection closed.
                 break;
-            }
-        }
-
-        $this->close();
-
-        foreach ($this->deferreds as $deferred) {
-            if ($this->query === "") {
-                $deferred->fail(new InitializationException("Connection went away"));
-            } else {
-                $deferred->fail(new ConnectionException("Connection went away... unable to fulfil this deferred ... It's unknown whether the query was executed..."));
             }
         }
     }
@@ -620,7 +606,7 @@ REGEX;
         } elseif ($this->connectionState < self::READY) {
             // connection failure
             $this->close();
-            $this->getDeferred()->fail(new InitializationException("Could not connect to {$this->config->resolvedHost}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
+            $this->getDeferred()->fail(new InitializationException("Could not connect to {$this->config->getResolvedHost()}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
         }
     }
 

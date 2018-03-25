@@ -10,14 +10,19 @@ class ConnectionConfig {
 
     const KEY_MAP = ['username' => 'user', 'password' => 'pass', 'database' => 'db', 'dbname' => 'db'];
 
-    /* <domain/IP-string>(:<port>) */
+    /* string <domain/IP-string>(:<port>) */
     public $host;
-    /* Can be resolved with resolveHost() method */
-    public $resolvedHost;
+
+    /** @var string */
     public $user;
+
+    /** @var string */
     public $pass;
+
+    /** @var string|null */
     public $db;
 
+    /** @var bool */
     public $useCompression = false;
 
     /** @var \Amp\Socket\ClientTlsContext|null Null for no ssl   */
@@ -25,11 +30,17 @@ class ConnectionConfig {
 
     /** @var int Charset id @see 14.1.4 in mysql manual */
     public $binCharset = 45; // utf8mb4_general_ci
+
+    /** @var string */
     public $charset = "utf8mb4";
+    /** @var string  */
     public $collate = "utf8mb4_general_ci";
 
     /* private key to use for sha256_password auth method */
     public $key;
+
+    /** @var string|null */
+    private $resolvedHost;
 
     private function __construct() {
         // Private to force usage of static constructor.
@@ -70,23 +81,28 @@ class ConnectionConfig {
 
         $config->ssl = $sslOptions;
 
-        $config->resolveHost();
-
         return $config;
     }
 
-    private function resolveHost() {
+    /**
+     * @return string
+     */
+    public function getResolvedHost() {
+        if ($this->resolvedHost !== null) {
+            return $this->resolvedHost;
+        }
+
         $index = \strpos($this->host, ':');
 
         if ($index === false) {
-            $this->resolvedHost = "tcp://{$this->host}:3306";
-        } elseif ($index === 0) {
-            $this->resolvedHost = "tcp://localhost:" . (int) \substr($this->host, 1);
-            $this->host = "localhost";
-        } else {
-            list($host, $port) = \explode(':', $this->host, 2);
-            $this->host = $host;
-            $this->resolvedHost = "tcp://$host:" . (int) $port;
+            return $this->resolvedHost = "tcp://{$this->host}:3306";
         }
+
+        if ($index === 0) {
+            return $this->resolvedHost = "tcp://localhost:" . (int) \substr($this->host, 1);
+        }
+
+        list($host, $port) = \explode(':', $this->host, 2);
+        return $this->resolvedHost = "tcp://$host:" . (int) $port;
     }
 }

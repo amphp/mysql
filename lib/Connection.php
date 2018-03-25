@@ -4,6 +4,7 @@ namespace Amp\Mysql;
 
 use Amp\Deferred;
 use Amp\Promise;
+use Amp\Socket;
 use function Amp\call;
 
 class Connection implements Link {
@@ -30,9 +31,9 @@ class Connection implements Link {
      * @return \Amp\Promise
      */
     public static function connect(Internal\ConnectionConfig $config): Promise {
-        $processor = new Internal\Processor($config);
-
-        return \Amp\call(function () use ($processor) {
+        return call(function () use ($config) {
+            $socket = yield Socket\connect($config->getResolvedHost());
+            $processor = new Internal\Processor($socket, $config);
             yield $processor->connect();
             return new self($processor);
         });
@@ -174,7 +175,7 @@ class Connection implements Link {
      * {@inheritdoc}
      */
     public function execute(string $sql, array $params = []): Promise {
-        return \Amp\call(function () use ($sql, $params) {
+        return call(function () use ($sql, $params) {
             /** @var \Amp\Mysql\Statement $statment */
             $statment = yield $this->prepare($sql);
             return yield $statment->execute($params);
