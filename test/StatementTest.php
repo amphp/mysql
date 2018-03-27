@@ -29,7 +29,7 @@ class StatementTest extends TestCase {
         $named = [];
 
         $this->processor->isAlive()->willReturn(true);
-        $this->processor->delRef()->shouldBeCalled();
+        $this->processor->unreference()->shouldBeCalled();
         $this->processor->closeStmt(\Prophecy\Argument::any())->shouldBeCalled();
         $this->resultProxy->columnsToFetch = 1;
         $stmt = new ConnectionStatement($this->processor->reveal(), $query, $stmtId, $named, $this->resultProxy);

@@ -7,11 +7,14 @@ use Amp\Loop;
 use Amp\Promise;
 use function Amp\call;
 
-class Pool implements Link {
+final class Pool implements Link {
     const DEFAULT_MAX_CONNECTIONS = 100;
     const DEFAULT_IDLE_TIMEOUT = 60;
 
-    /** @var \Amp\Mysql\Internal\ConnectionConfig */
+    /** @var \Amp\Mysql\Connector */
+    private $connector;
+
+    /** @var \Amp\Mysql\ConnectionConfig */
     private $config;
 
     /** @var int */
@@ -44,12 +47,18 @@ class Pool implements Link {
     /**
      * @internal Use \Amp\Mysql\pool() instead.
      *
-     * @param \Amp\Mysql\Internal\ConnectionConfig $config
+     * @param ConnectionConfig $config
      * @param int $maxConnections
+     * @param Connector|null $connector
      *
      * @throws \Error If $maxConnections is less than 1.
      */
-    public function __construct(Internal\ConnectionConfig $config, int $maxConnections = self::DEFAULT_MAX_CONNECTIONS) {
+    public function __construct(
+        ConnectionConfig $config,
+        int $maxConnections = self::DEFAULT_MAX_CONNECTIONS,
+        Connector $connector = null
+    ) {
+        $this->connector = $connector ?? connector();
         $this->config = $config;
         $this->maxConnections = $maxConnections;
         if ($this->maxConnections < 1) {
@@ -108,15 +117,6 @@ class Pool implements Link {
         } else {
             Loop::disable($this->timeoutWatcher);
         }
-    }
-
-    /**
-     * @return \Amp\Promise<\Amp\Mysql\Connection>
-     *
-     * @throws \Amp\Mysql\FailureException
-     */
-    protected function createConnection(): Promise {
-        return Connection::connect($this->config);
     }
 
     /**
@@ -185,7 +185,7 @@ class Pool implements Link {
                 // Max connection count has not been reached, so open another connection.
                 ++$this->pending;
                 try {
-                    $connection = yield $this->createConnection();
+                    $connection = yield $this->connector->connect($this->config);
                     if (!$connection instanceof Connection) {
                         throw new \Error(\sprintf(
                             "%s::createConnection() must resolve to an instance of %s",

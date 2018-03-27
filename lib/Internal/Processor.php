@@ -6,8 +6,8 @@ use Amp\Coroutine;
 use Amp\Deferred;
 use Amp\Loop;
 use Amp\Mysql\CommandResult;
+use Amp\Mysql\ConnectionConfig;
 use Amp\Mysql\ConnectionException;
-use Amp\Mysql\ConnectionState;
 use Amp\Mysql\ConnectionStatement;
 use Amp\Mysql\DataTypes;
 use Amp\Mysql\FailureException;
@@ -47,6 +47,7 @@ class SessionStateTypes {
     const SESSION_TRACK_STATE_CHANGE = 0x02;
 }
 
+/** @internal */
 class Processor {
     const STATEMENT_PARAM_REGEX = <<<'REGEX'
 ~(["'`])(?:\\(?:\\|\1)|(?!\1).)*+\1(*SKIP)(*FAIL)|(\?)|:([a-zA-Z_][a-zA-Z0-9_]*)~ms
@@ -76,7 +77,7 @@ REGEX;
     /** @var \Amp\Promise|null */
     private $pendingWrite;
 
-    /** @var \Amp\Mysql\Internal\ConnectionConfig */
+    /** @var \Amp\Mysql\ConnectionConfig */
     public $config;
 
     /** @var \Amp\Deferred[] */
@@ -147,7 +148,7 @@ REGEX;
         return $this->connectionState === self::READY;
     }
 
-    public function delRef() {
+    public function unreference() {
         if (!--$this->refcount) {
             $this->appendTask(function () {
                 $this->close();
@@ -184,7 +185,7 @@ REGEX;
     }
 
     public function connect(): Promise {
-        \assert(!$this->deferreds, self::class."::connect() must not be called twice");
+        \assert(!$this->processors, self::class."::connect() must not be called twice");
 
         $this->deferreds[] = $deferred = new Deferred; // Will be resolved below or in sendHandshake().
 
@@ -202,7 +203,22 @@ REGEX;
             }
         });
 
-        return $deferred->promise();
+        $promise = $deferred->promise();
+
+        if ($this->config->getCharset() !== ConnectionConfig::DEFAULT_CHARSET || $this->config->getCollation() !== ConnectionConfig::DEFAULT_COLLATE) {
+            $promise->onResolve(function ($exception) {
+                if ($exception) {
+                    return;
+                }
+
+                $charset = $this->config->getCharset();
+                $collate = $this->config->getCollation();
+
+                $this->query("SET NAMES '$charset'" . ($collate === "" ? "" : " COLLATE '$collate'"));
+            });
+        }
+
+        return $promise;
     }
 
     private function read(): \Generator {
@@ -294,11 +310,10 @@ REGEX;
                 $charset = substr($collate, 0, $off);
             }
 
-            $query = "SET NAMES '$charset'".($collate == "" ? "" : " COLLATE '$collate'");
+            $query = "SET NAMES '$charset'" . ($collate === "" ? "" : " COLLATE '$collate'");
             $result = yield $this->query($query);
 
-            $this->config->charset = $charset;
-            $this->config->collate = $collate;
+            $this->config = $this->config->withCharset($charset, $collate);
 
             return $result;
         });
@@ -308,7 +323,7 @@ REGEX;
     /** @see 14.6.3 COM_INIT_DB */
     public function useDb(string $db): Promise {
         return $this->startCommand(function () use ($db) {
-            $this->config->db = $db;
+            $this->config = $this->config->withDatabase($db);
             $this->sendPacket("\x02$db");
         });
     }
@@ -576,7 +591,7 @@ REGEX;
         // @TODO flags to use?
         $this->capabilities |= self::CLIENT_SESSION_TRACK | self::CLIENT_TRANSACTIONS | self::CLIENT_PROTOCOL_41 | self::CLIENT_SECURE_CONNECTION | self::CLIENT_MULTI_RESULTS | self::CLIENT_PS_MULTI_RESULTS | self::CLIENT_MULTI_STATEMENTS | self::CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA;
 
-        if (extension_loaded("zlib") && $this->config->useCompression) {
+        if (extension_loaded("zlib") && $this->config->isCompressionEnabled()) {
             $this->capabilities |= self::CLIENT_COMPRESS;
         }
     }
@@ -1234,7 +1249,7 @@ REGEX;
                     switch ($this->authPluginName) {
                         case "sha256_password":
                             $key = substr($packet, 1);
-                            $this->config->key = $key;
+                            $this->config = $this->config->withKey($key);
                             $this->sendHandshake();
                             break;
                         default:
@@ -1293,7 +1308,7 @@ REGEX;
                 $len = strpos($packet, "\0");
                 $pluginName = substr($packet, 0, $len); // @TODO mysql_native_pass only now...
                 $authPluginData = substr($packet, $len + 1);
-                $this->sendPacket($this->secureAuth($this->config->pass, $authPluginData));
+                $this->sendPacket($this->secureAuth($this->config->getPassword(), $authPluginData));
                 break;
             case self::ERR_PACKET:
                 $this->handleError($packet);
@@ -1308,11 +1323,11 @@ REGEX;
      * @see 14.3 Authentication Method
      */
     private function sendHandshake($inSSL = false) {
-        if ($this->config->db !== null) {
+        if ($this->config->getDatabase() !== null) {
             $this->capabilities |= self::CLIENT_CONNECT_WITH_DB;
         }
 
-        if ($this->config->ssl !== null) {
+        if ($this->config->getTlsContext() !== null) {
             $this->capabilities |= self::CLIENT_SSL;
         }
 
@@ -1321,7 +1336,7 @@ REGEX;
         $payload = "";
         $payload .= pack("V", $this->capabilities);
         $payload .= pack("V", 1 << 24 - 1); // max-packet size
-        $payload .= chr($this->config->binCharset);
+        $payload .= chr(ConnectionConfig::BIN_CHARSET);
         $payload .= str_repeat("\0", 23); // reserved
 
         if (!$inSSL && ($this->capabilities & self::CLIENT_SSL)) {
@@ -1329,8 +1344,8 @@ REGEX;
                 try {
                     yield $this->write($payload);
 
-                    $context = $this->config->ssl ?: new ClientTlsContext;
-                    $context = $context->withPeerName($this->config->host);
+                    $context = $this->config->getTlsContext() ?: new ClientTlsContext;
+                    $context = $context->withPeerName($this->config->getHost());
 
                     yield $this->socket->enableCrypto($context);
 
@@ -1344,23 +1359,24 @@ REGEX;
             return;
         }
 
-        $payload .= $this->config->user."\0";
-        if ($this->config->pass == "") {
+        $payload .= $this->config->getUser()."\0";
+        if ($this->config->getPassword() == "") {
             $auth = "";
         } elseif ($this->capabilities & self::CLIENT_PLUGIN_AUTH) {
             switch ($this->authPluginName) {
                 case "mysql_native_password":
-                    $auth = $this->secureAuth($this->config->pass, $this->authPluginData);
+                    $auth = $this->secureAuth($this->config->getPassword(), $this->authPluginData);
                     break;
                 case "mysql_clear_password":
-                    $auth = $this->config->pass;
+                    $auth = $this->config->getPassword();
                     break;
                 case "sha256_password":
-                    if ($this->config->pass === "") {
+                    if ($this->config->getPassword() === "") {
                         $auth = "";
                     } else {
-                        if (isset($this->config->key)) {
-                            $auth = $this->sha256Auth($this->config->pass, $this->authPluginData, $this->config->key);
+                        $key = $this->config->getKey();
+                        if ($key !== null) {
+                            $auth = $this->sha256Auth($this->config->getPassword(), $this->authPluginData, $key);
                         } else {
                             $auth = "\x01";
                         }
@@ -1372,7 +1388,7 @@ REGEX;
                     throw new ConnectionException("Invalid (or unimplemented?) auth method requested by server: {$this->authPluginName}");
             }
         } else {
-            $auth = $this->secureAuth($this->config->pass, $this->authPluginData);
+            $auth = $this->secureAuth($this->config->getPassword(), $this->authPluginData);
         }
         if ($this->capabilities & self::CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA) {
             $payload .= DataTypes::encodeInt(strlen($auth));
@@ -1384,7 +1400,7 @@ REGEX;
             $payload .= "$auth\0";
         }
         if ($this->capabilities & self::CLIENT_CONNECT_WITH_DB) {
-            $payload .= "{$this->config->db}\0";
+            $payload .= "{$this->config->getDatabase()}\0";
         }
         if ($this->capabilities & self::CLIENT_PLUGIN_AUTH) {
             $payload .= "\0"; // @TODO AUTH

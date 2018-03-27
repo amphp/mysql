@@ -4,7 +4,7 @@ namespace Amp\Mysql\Internal;
 
 use Amp\Loop;
 
-class ReferenceQueue {
+final class ReferenceQueue {
     /** @var callable[] */
     private $onDestruct = [];
 

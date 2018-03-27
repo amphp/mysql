@@ -4,10 +4,10 @@ namespace Amp\Mysql;
 
 use Amp\Deferred;
 use Amp\Promise;
-use Amp\Socket;
+use Amp\Socket\Socket;
 use function Amp\call;
 
-class Connection implements Link {
+final class Connection implements Link {
     const REFRESH_GRANT = 0x01;
     const REFRESH_LOG = 0x02;
     const REFRESH_TABLES = 0x04;
@@ -24,15 +24,13 @@ class Connection implements Link {
     private $busy;
 
     /**
-     * @internal Use \Amp\Mysql\connect() instead.
-     *
-     * @param \Amp\Mysql\Internal\ConnectionConfig $config
+     * @param \Amp\Socket\Socket $socket
+     * @param \Amp\Mysql\ConnectionConfig $config
      *
      * @return \Amp\Promise
      */
-    public static function connect(Internal\ConnectionConfig $config): Promise {
-        return call(function () use ($config) {
-            $socket = yield Socket\connect($config->getResolvedHost());
+    public static function connect(Socket $socket, ConnectionConfig $config): Promise {
+        return call(function () use ($socket, $config) {
             $processor = new Internal\Processor($socket, $config);
             yield $processor->connect();
             return new self($processor);
@@ -40,11 +38,9 @@ class Connection implements Link {
     }
 
     /**
-     * @internal
-     *
      * @param \Amp\Mysql\Internal\Processor $processor
      */
-    public function __construct(Internal\Processor $processor) {
+    private function __construct(Internal\Processor $processor) {
         $this->processor = $processor;
     }
 
@@ -64,10 +60,6 @@ class Connection implements Link {
 
     public function isReady(): bool {
         return $this->processor->isReady();
-    }
-
-    public function getConnInfo(): ConnectionState {
-        return $this->processor->getConnInfo();
     }
 
     public function setCharset(string $charset, string $collate = ""): Promise {
@@ -183,6 +175,6 @@ class Connection implements Link {
     }
 
     public function __destruct() {
-        $this->processor->delRef();
+        $this->processor->unreference();
     }
 }

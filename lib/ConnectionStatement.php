@@ -6,7 +6,7 @@ use Amp\Deferred;
 use Amp\Promise;
 use Amp\Success;
 
-class ConnectionStatement implements Statement {
+final class ConnectionStatement implements Statement {
     private $paramCount;
     private $numParamCount;
     private $named = [];
@@ -34,7 +34,7 @@ class ConnectionStatement implements Statement {
 
         $this->queue = new Internal\ReferenceQueue;
 
-        $this->queue->onDestruct([$this->processor, 'delRef']);
+        $this->queue->onDestruct([$this->processor, 'unreference']);
 
         foreach ($named as $name => $ids) {
             foreach ($ids as $id) {
@@ -183,10 +183,6 @@ class ConnectionStatement implements Statement {
         $deferred = new Deferred;
         $this->result->deferreds[Internal\ResultProxy::COLUMNS_FETCHED][0] = [$deferred, &$this->result->columns, null];
         return $deferred->promise();
-    }
-
-    public function connInfo(): ConnectionState {
-        return $this->getProcessor()->getConnInfo();
     }
 
     public function __destruct() {

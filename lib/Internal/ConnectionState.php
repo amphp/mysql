@@ -1,12 +1,13 @@
 <?php
 
-namespace Amp\Mysql;
+namespace Amp\Mysql\Internal;
 
 use Amp\Struct;
 
-class ConnectionState {
+final class ConnectionState {
     use Struct;
 
+    /** @var int|null */
     public $affectedRows;
     public $insertId;
     public $statusFlags;
@@ -16,6 +17,10 @@ class ConnectionState {
     public $errorMsg;
     public $errorCode;
     public $errorState; // begins with "#"
+
+    /** @var string */
     public $serverVersion;
+
+    /** @var string */
     public $charset;
 }

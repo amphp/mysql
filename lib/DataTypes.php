@@ -3,7 +3,7 @@
 namespace Amp\Mysql;
 
 /** @see 14.6.4.1.1.1 Column Type */
-class DataTypes {
+final class DataTypes {
     const MYSQL_TYPE_DECIMAL = 0x00;
     const MYSQL_TYPE_TINY = 0x01;
     const MYSQL_TYPE_SHORT = 0x02;

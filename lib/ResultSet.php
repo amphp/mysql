@@ -9,7 +9,7 @@ use Amp\Producer;
 use Amp\Promise;
 use Amp\Success;
 
-class ResultSet implements Iterator, Operation {
+final class ResultSet implements Iterator, Operation {
     const FETCH_ARRAY = 0;
     const FETCH_ASSOC = 1;
     const FETCH_OBJECT = 2;

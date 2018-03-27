@@ -2,7 +2,7 @@
 
 namespace Amp\Mysql;
 
-class RefreshTypes {
+final class RefreshTypes {
     const REFRESH_GRANT = 0x01;
     const REFRESH_LOG = 0x02;
     const REFRESH_TABLES = 0x04;
