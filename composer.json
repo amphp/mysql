@@ -24,10 +24,10 @@
     },
     "autoload": {
         "psr-4": {
-            "Amp\\Mysql\\": "lib/"
+            "Amp\\Mysql\\": "src"
         },
         "files": [
-            "lib/functions.php"
+            "src/functions.php"
         ]
     },
     "autoload-dev": {
