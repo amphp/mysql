@@ -3,7 +3,8 @@
 namespace Amp\Mysql\Bench;
 
 use Amp\Mysql\Connection;
-use Amp\Mysql\Internal\ConnectionConfig;
+use Amp\Mysql\ConnectionConfig;
+use Amp\Mysql\DefaultConnector;
 use Amp\Mysql\Pool as ConnectionPool;
 use Amp\Mysql\ResultSet;
 use PhpBench\Benchmark\Metadata\Annotations\AfterMethods;
@@ -41,8 +42,9 @@ class QueryBench extends AbstractBench {
 
     public function init() {
         $config = ConnectionConfig::parseConnectionString("host=$this->host;user=$this->user;pass=$this->pass");
-        $this->connectionPool = new ConnectionPool($config, $this->poolLimit);
-        $connectionPromise = Connection::connect($config);
+        $connector = new DefaultConnector;
+        $this->connectionPool = new ConnectionPool($config, $this->poolLimit, $connector);
+        $connectionPromise = $connector->connect($config);
         $this->connection = wait($connectionPromise);
         $this->pdoConnection = new \PDO("mysql:host=$this->host;port=3306", $this->user, $this->pass);
     }
