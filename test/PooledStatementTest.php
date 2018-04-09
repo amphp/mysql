@@ -5,12 +5,12 @@ namespace Amp\Mysql\Test;
 use Amp\Delayed;
 use Amp\Loop;
 use Amp\Mysql\ConnectionConfig;
-use Amp\Mysql\Internal\ResultProxy;
-use Amp\PHPUnit\TestCase;
 use Amp\Mysql\Internal\PooledStatement;
+use Amp\Mysql\Internal\ResultProxy;
 use Amp\Mysql\Pool;
 use Amp\Mysql\ResultSet;
 use Amp\Mysql\Statement;
+use Amp\PHPUnit\TestCase;
 use Amp\Success;
 
 class PooledStatementTest extends TestCase {

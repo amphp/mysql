@@ -7,8 +7,8 @@ use Amp\Mysql\Operation;
 use Amp\Mysql\Pool;
 use Amp\Mysql\Statement;
 use Amp\Promise;
-use function Amp\call;
 use Amp\Success;
+use function Amp\call;
 
 final class PooledStatement implements Statement {
     /** @var \Amp\Mysql\Pool */
