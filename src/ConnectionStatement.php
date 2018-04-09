@@ -6,7 +6,7 @@ use Amp\Deferred;
 use Amp\Promise;
 use Amp\Success;
 
-final class ConnectionStatement implements Statement {
+final class ConnectionStatement implements Statement, Operation {
     private $paramCount;
     private $numParamCount;
     private $named = [];
@@ -23,6 +23,9 @@ final class ConnectionStatement implements Statement {
 
     /** @var \Amp\Mysql\Internal\ResultProxy */
     private $result;
+
+    /** @var int */
+    private $lastUsedAt;
 
     public function __construct(Internal\Processor $processor, string $query, int $stmtId, array $named, Internal\ResultProxy $result) {
         $this->processor = $processor;
@@ -42,6 +45,8 @@ final class ConnectionStatement implements Statement {
                 $this->numParamCount--;
             }
         }
+
+        $this->lastUsedAt = \time();
     }
 
     private function getProcessor(): Internal\Processor {
@@ -60,14 +65,22 @@ final class ConnectionStatement implements Statement {
         $this->queue->onDestruct($onDestruct);
     }
 
+    public function isAlive(): bool {
+        if ($this->processor === null) {
+            return false;
+        }
+
+        return $this->processor->isAlive();
+    }
+
     /** {@inheritdoc} */
     public function bind($paramId, $data) {
-        if (is_int($paramId)) {
+        if (\is_int($paramId)) {
             if ($paramId >= $this->numParamCount) {
                 throw new \Error("Parameter id $paramId is not defined for this prepared statement");
             }
             $i = $paramId;
-        } elseif (is_string($paramId)) {
+        } elseif (\is_string($paramId)) {
             if (!isset($this->byNamed[$paramId])) {
                 throw new \Error("Parameter :$paramId is not defined for this prepared statement");
             }
@@ -77,7 +90,7 @@ final class ConnectionStatement implements Statement {
             throw new \TypeError("Invalid parameter ID type");
         }
 
-        if (!is_scalar($data) && !(is_object($data) && method_exists($data, '__toString'))) {
+        if (!\is_scalar($data) && !(\is_object($data) && \method_exists($data, '__toString'))) {
             throw new \TypeError("Data must be scalar or object that implements __toString method");
         }
 
@@ -101,6 +114,8 @@ final class ConnectionStatement implements Statement {
 
     /** {@inheritdoc} */
     public function execute(array $params = []): Promise {
+        $this->lastUsedAt = \time();
+
         $prebound = $args = [];
         for ($unnamed = $i = 0; $i < $this->paramCount; $i++) {
             if (isset($this->named[$i])) {
@@ -155,7 +170,7 @@ final class ConnectionStatement implements Statement {
         return $this->query;
     }
 
-    public function close() {
+    private function close() {
         if ($this->processor === null) {
             return;
         }
@@ -165,8 +180,8 @@ final class ConnectionStatement implements Statement {
         $this->queue->unreference();
     }
 
-    public function reset() {
-        $this->getProcessor()->resetStmt($this->stmtId);
+    public function reset(): Promise {
+        return $this->getProcessor()->resetStmt($this->stmtId);
     }
 
     // @TODO not necessary, see cursor?!
@@ -177,12 +192,20 @@ final class ConnectionStatement implements Statement {
     public function getFields(): Promise {
         if ($this->result->state >= Internal\ResultProxy::COLUMNS_FETCHED) {
             return new Success($this->result->columns);
-        } elseif (isset($this->result->deferreds[Internal\ResultProxy::COLUMNS_FETCHED][0])) {
+        }
+
+        if (isset($this->result->deferreds[Internal\ResultProxy::COLUMNS_FETCHED][0])) {
             return $this->result->deferreds[Internal\ResultProxy::COLUMNS_FETCHED][0][0]->promise();
         }
+
         $deferred = new Deferred;
         $this->result->deferreds[Internal\ResultProxy::COLUMNS_FETCHED][0] = [$deferred, &$this->result->columns, null];
         return $deferred->promise();
+    }
+
+    /** {@inheritdoc} */
+    public function lastUsedAt(): int {
+        return $this->lastUsedAt;
     }
 
     public function __destruct() {

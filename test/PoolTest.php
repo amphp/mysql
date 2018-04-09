@@ -9,6 +9,7 @@ use Amp\Mysql\Connection;
 use Amp\Mysql\ConnectionConfig;
 use Amp\Mysql\Connector;
 use Amp\Mysql\Internal\Processor;
+use Amp\Mysql\Operation;
 use Amp\Mysql\Pool;
 use Amp\Mysql\ResultSet;
 use Amp\Mysql\Statement;
@@ -17,6 +18,9 @@ use Amp\Promise;
 use Amp\Success;
 use function Amp\call;
 use function Amp\Mysql\pool;
+
+interface StatementOperation extends Statement, Operation {
+}
 
 class PoolTest extends LinkTest {
     protected function getLink(string $connectionString): Promise {
@@ -72,7 +76,7 @@ class PoolTest extends LinkTest {
      * @param int $count
      */
     public function testSingleQuery(int $count) {
-        $result = $this->createMock(Statement::class);
+        $result = $this->createMock(StatementOperation::class);
 
         $processors = $this->makeProcessorSet($count);
 
@@ -97,7 +101,7 @@ class PoolTest extends LinkTest {
      */
     public function testConsecutiveQueries(int $count) {
         $rounds = 3;
-        $result = $this->createMock(Statement::class);
+        $result = $this->createMock(StatementOperation::class);
 
         $processors = $this->makeProcessorSet($count);
 

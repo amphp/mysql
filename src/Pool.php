@@ -2,12 +2,16 @@
 
 namespace Amp\Mysql;
 
+use Amp\CallableMaker;
 use Amp\Deferred;
 use Amp\Loop;
 use Amp\Promise;
 use function Amp\call;
+use function Amp\coroutine;
 
 final class Pool implements Link {
+    use CallableMaker;
+
     const DEFAULT_MAX_CONNECTIONS = 100;
     const DEFAULT_IDLE_TIMEOUT = 60;
 
@@ -44,9 +48,10 @@ final class Pool implements Link {
     /** @var int */
     private $idleTimeout = self::DEFAULT_IDLE_TIMEOUT;
 
+    /** @var callable */
+    private $prepare;
+
     /**
-     * @internal Use \Amp\Mysql\pool() instead.
-     *
      * @param ConnectionConfig $config
      * @param int $maxConnections
      * @param Connector|null $connector
@@ -67,6 +72,7 @@ final class Pool implements Link {
 
         $this->connections = $connections = new \SplObjectStorage;
         $this->idle = $idle = new \SplQueue;
+        $this->prepare = coroutine($this->callableFromInstanceMethod("doPrepare"));
 
         $idleTimeout = &$this->idleTimeout;
 
@@ -90,6 +96,17 @@ final class Pool implements Link {
         Loop::unreference($this->timeoutWatcher);
     }
 
+    public function __destruct() {
+        Loop::cancel($this->timeoutWatcher);
+    }
+
+    /**
+     * @return bool
+     */
+    public function isAlive(): bool {
+        return !$this->closed;
+    }
+
     public function close() {
         $this->closed = true;
         while (!$this->idle->isEmpty()) {
@@ -99,24 +116,22 @@ final class Pool implements Link {
         }
     }
 
+    public function getIdleTimeout(): int {
+        return $this->idleTimeout;
+    }
+
     /**
      * @param int $timeout The maximum number of seconds a connection may be idle before being closed and removed
-     *     from the pool. Use 0 to disable automatic connection removal.
+     *     from the pool.
      *
-     * @throws \Error If the timeout is less than 0.
+     * @throws \Error If the timeout is less than 1.
      */
     public function setIdleTimeout(int $timeout) {
-        if ($timeout < 0) {
-            throw new \Error("Timeout must be greater than or equal to 0");
+        if ($timeout < 1) {
+            throw new \Error("Timeout must be greater than 0");
         }
 
         $this->idleTimeout = $timeout;
-
-        if ($this->idleTimeout > 0) {
-            Loop::enable($this->timeoutWatcher);
-        } else {
-            Loop::disable($this->timeoutWatcher);
-        }
     }
 
     /**
@@ -270,26 +285,38 @@ final class Pool implements Link {
 
     /**
      * {@inheritdoc}
+     *
+     * Prepared statements returned by this method will stay alive as long as the pool remains open.
      */
     public function prepare(string $sql): Promise {
         return call(function () use ($sql) {
-            /** @var \Amp\Mysql\Connection $connection */
-            $connection = yield from $this->pop();
-
-            try {
-                /** @var \Amp\Mysql\Statement $statement */
-                $statement = yield $connection->prepare($sql);
-            } catch (\Throwable $exception) {
-                $this->push($connection);
-                throw $exception;
-            }
-
-            $statement->onDestruct(function () use ($connection) {
-                $this->push($connection);
-            });
-
-            return $statement;
+            $statement = yield from $this->doPrepare($sql);
+            return new Internal\PooledStatement($this, $statement, $this->prepare);
         });
+    }
+
+    private function doPrepare(string $sql): \Generator {
+        /** @var \Amp\Mysql\Connection $connection */
+        $connection = yield from $this->pop();
+
+        try {
+            /** @var \Amp\Mysql\Statement $statement */
+            $statement = yield $connection->prepare($sql);
+        } catch (\Throwable $exception) {
+            $this->push($connection);
+            throw $exception;
+        }
+
+        \assert(
+            $statement instanceof Operation,
+            Statement::class . " instances returned from connections must implement " . Operation::class
+        );
+
+        $statement->onDestruct(function () use ($connection) {
+            $this->push($connection);
+        });
+
+        return $statement;
     }
 
     /**

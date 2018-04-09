@@ -4,7 +4,7 @@ namespace Amp\Mysql;
 
 use Amp\Promise;
 
-interface Statement extends Operation {
+interface Statement {
     /**
      * @param mixed[] $params Data to bind to parameters.
      *
@@ -17,8 +17,15 @@ interface Statement extends Operation {
     /**
      * @param int|string $paramId Parameter ID or name.
      * @param mixed $data Data to bind to parameter.
+     *
+     * @throws \Error If $paramId is not an int or string, or the position does not exist.
      */
-    public function bind($param, $data);
+    public function bind($paramId, $data);
+
+    /**
+     * @return bool True if the statement can still be executed, false if the connection has died.
+     */
+    public function isAlive(): bool;
 
     /**
      * @return string The SQL string used to prepare the statement.
@@ -30,7 +37,15 @@ interface Statement extends Operation {
      */
     public function getFields(): Promise;
 
-    public function reset();
+    /**
+     * Reset statement to state just after preparing.
+     *
+     * @return \Amp\Promise<null>
+     */
+    public function reset(): Promise;
 
-    public function close();
+    /**
+     * @return int Timestamp of when the statement was last used.
+     */
+    public function lastUsedAt(): int;
 }

@@ -191,6 +191,8 @@ abstract class LinkTest extends TestCase {
             $statement = yield $db->prepare("SELECT * FROM main WHERE a = ?");
 
             $statement->bind(1, 1);
+
+            yield $statement->execute(); // Some implementations do not throw until execute() is called.
         });
     }
 
@@ -207,6 +209,8 @@ abstract class LinkTest extends TestCase {
             $statement = yield $db->prepare("SELECT * FROM main WHERE a = :a");
 
             $statement->bind("b", 1);
+
+            yield $statement->execute(); // Some implementations do not throw until execute() is called.
         });
     }
 
@@ -223,6 +227,8 @@ abstract class LinkTest extends TestCase {
             $statement = yield $db->prepare("SELECT * FROM main WHERE a = :a");
 
             $statement->bind(3.14, 1);
+
+            yield $statement->execute(); // Some implementations do not throw until execute() is called.
         });
     }
 
@@ -300,7 +306,6 @@ abstract class LinkTest extends TestCase {
             /** @var \Amp\Mysql\Statement $stmt */
             $stmt = yield $db->prepare("CREATE TABLE tmp SELECT ? AS a");
             yield $stmt->execute([-1]);
-            $stmt->close();
 
             /** @var \Amp\Mysql\ResultSet $result */
             $stmt = yield $db->prepare("SELECT a FROM tmp");
@@ -323,7 +328,6 @@ abstract class LinkTest extends TestCase {
             $statement = yield $transaction->prepare("INSERT INTO main VALUES (?, ?)");
             $result = yield $statement->execute([6, 7]);
             $this->assertInstanceOf(CommandResult::class, $result);
-            $statement->close();
 
             /** @var \Amp\Mysql\ResultSet $result */
             $result = yield $transaction->execute("SELECT * FROM main WHERE a = ?", [6]);
