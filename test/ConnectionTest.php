@@ -4,13 +4,13 @@ namespace Amp\Mysql\Test;
 
 use Amp\Loop;
 use Amp\Mysql\ConnectionConfig;
-use Amp\Mysql\DefaultConnector;
+use Amp\Mysql\TimeoutConnector;
 use Amp\Promise;
 use function Amp\Mysql\connect;
 
 class ConnectionTest extends LinkTest {
     protected function getLink(string $connectionString): Promise {
-        return (new DefaultConnector)->connect(ConnectionConfig::parseConnectionString($connectionString));
+        return (new TimeoutConnector)->connect(ConnectionConfig::parseConnectionString($connectionString));
     }
 
     public function testConnect() {

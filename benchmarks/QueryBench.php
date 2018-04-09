@@ -4,9 +4,9 @@ namespace Amp\Mysql\Bench;
 
 use Amp\Mysql\Connection;
 use Amp\Mysql\ConnectionConfig;
-use Amp\Mysql\DefaultConnector;
 use Amp\Mysql\Pool as ConnectionPool;
 use Amp\Mysql\ResultSet;
+use Amp\Mysql\TimeoutConnector;
 use PhpBench\Benchmark\Metadata\Annotations\AfterMethods;
 use PhpBench\Benchmark\Metadata\Annotations\BeforeMethods;
 use PhpBench\Benchmark\Metadata\Annotations\Iterations;
@@ -42,7 +42,7 @@ class QueryBench extends AbstractBench {
 
     public function init() {
         $config = ConnectionConfig::parseConnectionString("host=$this->host;user=$this->user;pass=$this->pass");
-        $connector = new DefaultConnector;
+        $connector = new TimeoutConnector;
         $this->connectionPool = new ConnectionPool($config, $this->poolLimit, $connector);
         $connectionPromise = $connector->connect($config);
         $this->connection = wait($connectionPromise);
