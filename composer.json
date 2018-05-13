@@ -1,9 +1,9 @@
 {
     "name": "amphp/mysql",
-    "description": "Asynchronous parallel Mysql client built on the Amp concurrency framework",
+    "description": "Asynchronous MySQL client for PHP based on Amp.",
     "require": {
         "amphp/amp": "^2",
-        "amphp/socket": "^0.10"
+        "amphp/socket": "^0.10.9"
     },
     "license": "MIT",
     "authors": [

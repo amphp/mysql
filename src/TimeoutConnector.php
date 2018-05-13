@@ -28,8 +28,13 @@ final class TimeoutConnector implements Connector {
      */
     public function connect(ConnectionConfig $config): Promise {
         return call(function () use ($config) {
+            static $connectContext;
+
+            $connectContext = $connectContext ?? (new Socket\ClientConnectContext())->withTcpNoDelay();
             $token = new TimeoutCancellationToken($this->timeout);
-            $socket = yield Socket\connect($config->getResolvedHost(), null, $token);
+
+            $socket = yield Socket\connect($config->getResolvedHost(), $connectContext, $token);
+
             return Connection::connect($socket, $config);
         });
     }
