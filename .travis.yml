@@ -60,9 +60,6 @@ jobs:
 env:
   - AMP_DEBUG=true
 
-before_install:
-  - phpenv config-rm xdebug.ini || echo "No xdebug config."
-
 install:
   - composer update -n --prefer-dist
   - wget https://github.com/php-coveralls/php-coveralls/releases/download/v1.0.2/coveralls.phar
@@ -74,7 +71,7 @@ before_script:
   - mysql -u root -e "SELECT VERSION(); CREATE DATABASE test; CREATE TABLE test.main (a INT(11), b INT(11)); INSERT INTO test.main VALUES (1, 2), (2, 3), (3, 4), (4, 5), (5, 6);"
 
 script:
-  - phpdbg -qrr vendor/bin/phpunit --coverage-text --coverage-clover build/logs/clover.xml
+  - vendor/bin/phpunit --coverage-text --coverage-clover build/logs/clover.xml
   - PHP_CS_FIXER_IGNORE_ENV=1 php vendor/bin/php-cs-fixer --diff --dry-run -v fix
 
 after_script:
