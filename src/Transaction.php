@@ -35,7 +35,7 @@ final class Transaction implements Executor, Operation {
     }
 
     public function __destruct() {
-        if ($this->processor) {
+        if ($this->isAlive()) {
             $this->rollback(); // Invokes $this->queue->unreference().
         }
     }
