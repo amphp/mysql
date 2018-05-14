@@ -613,9 +613,10 @@ REGEX;
         $this->parseCallback = null;
         if ($this->connectionState === self::READY) {
             // normal error
-            if ($deferred = $this->getDeferred()) {
+            if (($deferred = $this->result) || ($deferred = $this->getDeferred())) {
                 $deferred->fail(new QueryError("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}", $this->query));
             }
+            $this->result = null;
             $this->query = null;
             $this->ready();
         } elseif ($this->connectionState < self::READY) {
@@ -866,8 +867,10 @@ REGEX;
         if (!$this->result->columnsToFetch--) {
             $this->parseCallback = null;
             $this->query = null;
+            $result = $this->result;
+            $this->result = null;
             $this->ready();
-            $this->result->updateState(ResultProxy::COLUMNS_FETCHED);
+            $result->updateState(ResultProxy::COLUMNS_FETCHED);
 
             return;
         }
@@ -949,6 +952,7 @@ REGEX;
             $deferred->resolve();
             $this->parseCallback = null;
             $this->query = null;
+            $this->result = null;
             $this->ready();
         }
         $this->result->updateState(ResultProxy::ROWS_FETCHED);
@@ -956,13 +960,17 @@ REGEX;
 
     /** @see 14.6.4.1.1.3 Resultset Row */
     private function handleTextResultsetRow($packet) {
-        if (ord($packet) === self::EOF_PACKET) {
+        $packettype = \ord($packet);
+        if ($packettype === self::EOF_PACKET) {
             if ($this->capabilities & self::CLIENT_DEPRECATE_EOF) {
                 $this->parseOk($packet);
             } else {
                 $this->parseEof($packet);
             }
             $this->successfulResultsetFetch();
+            return;
+        } elseif ($packettype === self::ERR_PACKET) {
+            $this->handleError($packet);
             return;
         }
 
@@ -983,9 +991,13 @@ REGEX;
 
     /** @see 14.7.2 Binary Protocol Resultset Row */
     private function handleBinaryResultsetRow($packet) {
-        if (ord($packet) === self::EOF_PACKET) {
+        $packettype = \ord($packet);
+        if ($packettype === self::EOF_PACKET) {
             $this->parseEof($packet);
             $this->successfulResultsetFetch();
+            return;
+        } elseif ($packettype === self::ERR_PACKET) {
+            $this->handleError($packet);
             return;
         }
 

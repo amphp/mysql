@@ -58,6 +58,15 @@ final class ResultProxy {
         }
     }
 
+    public function fail(\Amp\Mysql\FailureException $e) {
+        foreach ($this->deferreds as $state) {
+            foreach ($this->deferreds[$state] as list($deferred)) {
+                $deferred->fail($e);
+            }
+            $this->deferreds[$state] = [];
+        }
+    }
+
     /**
      * @return array
      *
