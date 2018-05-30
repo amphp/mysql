@@ -952,10 +952,11 @@ REGEX;
             $deferred->resolve();
             $this->parseCallback = null;
             $this->query = null;
+            $result = $this->result;
             $this->result = null;
             $this->ready();
         }
-        $this->result->updateState(ResultProxy::ROWS_FETCHED);
+        ($result ?? $this->result)->updateState(ResultProxy::ROWS_FETCHED);
     }
 
     /** @see 14.6.4.1.1.3 Resultset Row */
