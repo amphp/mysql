@@ -941,7 +941,8 @@ REGEX;
     }
 
     private function successfulResultsetFetch() {
-        $deferred = &$this->result->next;
+        $result = $this->result;
+        $deferred = &$result->next;
         if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
             $this->parseCallback = [$this, "handleQuery"];
             $this->addDeferred($deferred ?: $deferred = new Deferred);
@@ -955,7 +956,7 @@ REGEX;
             $this->result = null;
             $this->ready();
         }
-        $this->result->updateState(ResultProxy::ROWS_FETCHED);
+        $result->updateState(ResultProxy::ROWS_FETCHED);
     }
 
     /** @see 14.6.4.1.1.3 Resultset Row */
