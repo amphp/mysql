@@ -1080,6 +1080,10 @@ REGEX;
     }
 
     public function close() {
+        if ($this->connectionState === self::CLOSING && $this->deferreds) {
+            array_pop($this->deferreds)->resolve();
+        }
+
         $this->connectionState = self::CLOSED;
 
         if ($this->socket) {
