@@ -48,7 +48,7 @@ final class PooledStatement implements Statement {
 
         $this->timeoutWatcher = Loop::repeat(1000, static function () use ($pool, $statements) {
             $now = \time();
-            $idleTimeout = $pool->getIdleTimeout();
+            $idleTimeout = ((int) ($pool->getIdleTimeout() / 10)) ?: 1;
 
             while (!$statements->isEmpty()) {
                 /** @var \Amp\Mysql\Statement $statement */
@@ -90,16 +90,16 @@ final class PooledStatement implements Statement {
 
                 $result = yield $statement->execute($params);
             } catch (\Throwable $exception) {
-                $this->statements->push($statement);
+                $this->push($statement);
                 throw $exception;
             }
 
             if ($result instanceof Operation) {
                 $result->onDestruct(function () use ($statement) {
-                    $this->statements->push($statement);
+                    $this->push($statement);
                 });
             } else {
-                $this->statements->push($statement);
+                $this->push($statement);
             }
 
             return $result;
@@ -130,7 +130,12 @@ final class PooledStatement implements Statement {
         return call(function () {
             /** @var \Amp\Mysql\Statement $statement */
             $statement = yield from $this->pop();
-            return yield $statement->getFields();
+
+            try {
+                return yield $statement->getFields();
+            } finally {
+                $this->push($statement);
+            }
         });
     }
 
@@ -145,6 +150,29 @@ final class PooledStatement implements Statement {
         return $this->lastUsedAt;
     }
 
+    /**
+     * Only retains statements if less than 10% of the pool is consumed by this statement and the pool has
+     * available connections.
+     *
+     * @param Statement $statement
+     */
+    private function push(Statement $statement) {
+        $maxConnections = $this->pool->getMaxConnections();
+
+        if ($this->statements->count() > ($maxConnections / 10)) {
+            return;
+        }
+
+        if ($maxConnections === $this->pool->getConnectionCount() && $this->pool->getIdleConnectionCount() === 0) {
+            return;
+        }
+
+        $this->statements->push($statement);
+    }
+
+    /**
+     * Get a statement from the idle queue of statements or create a new statement from the pool.
+     */
     private function pop(): \Generator {
         if (!$this->statements->isEmpty()) {
             do {
