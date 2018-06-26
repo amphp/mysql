@@ -8,12 +8,11 @@ use Amp\Loop;
 use Amp\Promise;
 use function Amp\call;
 use function Amp\coroutine;
+use Amp\Sql\Operation;
 
-final class Pool implements Link {
+final class Pool implements \Amp\Sql\Pool
+{
     use CallableMaker;
-
-    const DEFAULT_MAX_CONNECTIONS = 100;
-    const DEFAULT_IDLE_TIMEOUT = 60;
 
     /** @var \Amp\Mysql\Connector */
     private $connector;

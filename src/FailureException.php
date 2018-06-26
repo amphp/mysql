@@ -2,5 +2,5 @@
 
 namespace Amp\Mysql;
 
-class FailureException extends \Exception {
+class FailureException extends \Amp\Sql\FailureException {
 }

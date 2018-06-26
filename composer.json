@@ -3,7 +3,8 @@
     "description": "Asynchronous MySQL client for PHP based on Amp.",
     "require": {
         "amphp/amp": "^2",
-        "amphp/socket": "^0.10.9"
+        "amphp/socket": "^0.10.9",
+        "amphp/sql": "dev-master"
     },
     "license": "MIT",
     "authors": [

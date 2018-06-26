@@ -1,7 +1,7 @@
 <?php
 
 /* Create table and fill in a few rows for examples; for comments see 3-generic-with-yield.php */
-function createGenericTable(\Amp\Mysql\Link $db): Generator {
+function createGenericTable(\Amp\Sql\Link $db): Generator {
     yield $db->query("DROP TABLE IF EXISTS tmp");
 
     yield $db->query("CREATE TABLE tmp (a INT(10), b INT(10))");

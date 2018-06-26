@@ -3,10 +3,10 @@
 namespace Amp\Mysql\Internal;
 
 use Amp\Loop;
-use Amp\Mysql\Operation;
 use Amp\Mysql\Pool;
 use Amp\Mysql\Statement;
 use Amp\Promise;
+use Amp\Sql\Operation;
 use Amp\Success;
 use function Amp\call;
 

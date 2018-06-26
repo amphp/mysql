@@ -4,7 +4,7 @@ namespace Amp\Mysql;
 
 use Amp\Promise;
 
-interface Statement {
+interface Statement extends \Amp\Sql\Statement {
     /**
      * @param mixed[] $params Data to bind to parameters.
      *

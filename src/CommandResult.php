@@ -2,7 +2,7 @@
 
 namespace Amp\Mysql;
 
-final class CommandResult {
+final class CommandResult implements \Amp\Sql\CommandResult {
     /** @var int */
     private $affectedRows;
 

@@ -4,6 +4,7 @@ namespace Amp\Mysql;
 
 use Amp\Promise;
 use Amp\Socket;
+use Amp\Sql\Connector;
 use Amp\TimeoutCancellationToken;
 use function Amp\call;
 

@@ -7,7 +7,7 @@ use Amp\Promise;
 use Amp\Socket\Socket;
 use function Amp\call;
 
-final class Connection implements Link {
+final class Connection implements \Amp\Sql\Connection {
     const REFRESH_GRANT = 0x01;
     const REFRESH_LOG = 0x02;
     const REFRESH_TABLES = 0x04;

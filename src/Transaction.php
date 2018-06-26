@@ -3,14 +3,10 @@
 namespace Amp\Mysql;
 
 use Amp\Promise;
+use Amp\Sql\Executor;
 use function Amp\call;
 
-final class Transaction implements Executor, Operation {
-    const UNCOMMITTED  = 0;
-    const COMMITTED    = 1;
-    const REPEATABLE   = 2;
-    const SERIALIZABLE = 4;
-
+final class Transaction implements \Amp\Sql\Transaction, Executor {
     const SAVEPOINT_PREFIX = "amp_";
 
     /** @var \Amp\Mysql\Internal\Processor */
