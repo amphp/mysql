@@ -173,7 +173,7 @@ final class Pool implements \Amp\Sql\Pool
      *
      * @resolve \Amp\Postgres\Connection
      *
-     * @throws \Amp\Mysql\FailureException If creating a connection fails.
+     * @throws \Amp\Sql\FailureException If creating a connection fails.
      * @throws \Error If the pool has been closed.
      */
     private function pop(): \Generator {

@@ -2,6 +2,8 @@
 
 namespace Amp\Mysql;
 
+use Amp\Sql\FailureException;
+
 /** @see 14.6.4.1.1.1 Column Type */
 final class DataTypes {
     const MYSQL_TYPE_DECIMAL = 0x00;

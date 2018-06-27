@@ -25,9 +25,13 @@ final class TimeoutConnector implements Connector {
     /**
      * {@inheritdoc}
      *
-     * @throws \Amp\Mysql\FailureException If connecting fails.
+     * @throws \Amp\Sql\FailureException If connecting fails.
      */
-    public function connect(ConnectionConfig $config): Promise {
+    public function connect(ConnectionConfig $config = null): Promise {
+        if (null === $config) {
+
+        }
+
         return call(function () use ($config) {
             static $connectContext;
 

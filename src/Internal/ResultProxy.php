@@ -2,6 +2,7 @@
 
 namespace Amp\Mysql\Internal;
 
+use Amp\Sql\FailureException;
 use Amp\Struct;
 
 final class ResultProxy {
@@ -58,7 +59,7 @@ final class ResultProxy {
         }
     }
 
-    public function fail(\Amp\Mysql\FailureException $e) {
+    public function fail(FailureException $e) {
         foreach ($this->deferreds as $state) {
             foreach ($this->deferreds[$state] as list($deferred)) {
                 $deferred->fail($e);

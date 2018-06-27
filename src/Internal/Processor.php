@@ -10,12 +10,12 @@ use Amp\Mysql\ConnectionConfig;
 use Amp\Mysql\ConnectionException;
 use Amp\Mysql\ConnectionStatement;
 use Amp\Mysql\DataTypes;
-use Amp\Mysql\FailureException;
 use Amp\Mysql\InitializationException;
 use Amp\Mysql\QueryError;
 use Amp\Promise;
 use Amp\Socket\ClientTlsContext;
 use Amp\Socket\Socket;
+use Amp\Sql\FailureException;
 
 /* @TODO
  * 14.2.3 Auth switch request??

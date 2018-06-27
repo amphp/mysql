@@ -30,7 +30,7 @@ function connector(Connector $connector = null): Connector {
  *
  * @return \Amp\Promise<\Amp\Mysql\Connection>
  *
- * @throws \Amp\Mysql\FailureException If connecting fails.
+ * @throws \Amp\Sql\FailureException If connecting fails.
  * @throws \Error If the connection string does not contain a host, user, and password.
  */
 function connect(string $connectionString, ClientTlsContext $sslOptions = null): Promise {

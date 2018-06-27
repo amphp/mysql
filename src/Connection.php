@@ -5,6 +5,7 @@ namespace Amp\Mysql;
 use Amp\Deferred;
 use Amp\Promise;
 use Amp\Socket\Socket;
+use Amp\Sql\FailureException;
 use function Amp\call;
 
 final class Connection implements \Amp\Sql\Connection {

@@ -7,10 +7,10 @@ use Amp\Deferred;
 use Amp\Iterator;
 use Amp\Producer;
 use Amp\Promise;
-use Amp\Sql\Operation;
+use Amp\Sql\ResultSet as SqlResultSet;
 use Amp\Success;
 
-final class ResultSet implements Operation, \Amp\Sql\ResultSet {
+final class ResultSet implements SqlResultSet {
     const FETCH_ARRAY = 0;
     const FETCH_ASSOC = 1;
     const FETCH_OBJECT = 2;

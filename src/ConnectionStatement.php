@@ -4,6 +4,7 @@ namespace Amp\Mysql;
 
 use Amp\Deferred;
 use Amp\Promise;
+use Amp\Sql\FailureException;
 use Amp\Sql\Operation;
 use Amp\Success;
 

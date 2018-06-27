@@ -3,10 +3,10 @@
 namespace Amp\Mysql;
 
 use Amp\Promise;
-use Amp\Sql\Executor;
+use Amp\Sql\Transaction as SqlTransaction;
 use function Amp\call;
 
-final class Transaction implements \Amp\Sql\Transaction, Executor {
+final class Transaction implements SqlTransaction {
     const SAVEPOINT_PREFIX = "amp_";
 
     /** @var \Amp\Mysql\Internal\Processor */
