@@ -129,7 +129,7 @@ final class ResultSet implements Iterator, Operation {
          * it'll simply return the row we fetch here instead of fetching a new row
          * since callback order on promises isn't defined, we can't do this via onResolve() */
         $incRow = function ($row) use ($result) {
-            $result->userFetched++;
+            unset($result->rows[$result->userFetched++]);
             return $row;
         };
 
