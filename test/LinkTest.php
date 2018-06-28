@@ -53,12 +53,12 @@ abstract class LinkTest extends TestCase {
     }
 
     /**
-     * @expectedException \Amp\Mysql\QueryError
+     * @expectedException \Amp\Sql\QueryError
      * @expectedExceptionMessage You have an error in your SQL syntax
      */
     public function testQueryWithInvalidQuery() {
         Loop::run(function () {
-            /** @var \Amp\Mysql\Link $db */
+            /** @var \Amp\Sql\Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
 
             yield $db->query("SELECT & FROM main WHERE a = 1");
@@ -166,12 +166,12 @@ abstract class LinkTest extends TestCase {
     }
 
     /**
-     * @expectedException \Amp\Mysql\QueryError
+     * @expectedException \Amp\Sql\QueryError
      * @expectedExceptionMessage You have an error in your SQL syntax
      */
     public function testPrepareWithInvalidQuery() {
         Loop::run(function () {
-            /** @var \Amp\Mysql\Link $db */
+            /** @var \Amp\Sql\Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
 
             yield $db->prepare("SELECT & FROM main WHERE a = ?");
@@ -249,7 +249,7 @@ abstract class LinkTest extends TestCase {
 
     public function testExecute() {
         Loop::run(function () {
-            /** @var \Amp\Mysql\Link $db */
+            /** @var \Amp\Sql\Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
 
             /** @var \Amp\Mysql\ResultSet $result */
@@ -271,12 +271,12 @@ abstract class LinkTest extends TestCase {
     }
 
     /**
-     * @expectedException \Amp\Mysql\QueryError
+     * @expectedException \Amp\Sql\QueryError
      * @expectedExceptionMessage You have an error in your SQL syntax
      */
     public function testExecuteWithInvalidQuery() {
         Loop::run(function () {
-            /** @var \Amp\Mysql\Link $db */
+            /** @var \Amp\Sql\Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
 
             yield $db->execute("SELECT & FROM main WHERE a = ?", [1]);
@@ -289,7 +289,7 @@ abstract class LinkTest extends TestCase {
      */
     public function testExecuteWithTooFewParams() {
         Loop::run(function () {
-            /** @var \Amp\Mysql\Link $db */
+            /** @var \Amp\Sql\Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
 
             yield $db->execute("SELECT * FROM main WHERE a = ? AND b = ?", [1]);
@@ -298,12 +298,12 @@ abstract class LinkTest extends TestCase {
 
     public function testPreparedWithNegativeValue() {
         Loop::run(function () {
-            /** @var \Amp\Mysql\Link $db */
+            /** @var \Amp\Sql\Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
 
             yield $db->query("DROP TABLE IF EXISTS tmp");
 
-            /** @var \Amp\Mysql\Statement $stmt */
+            /** @var \Amp\Sql\Statement $stmt */
             $stmt = yield $db->prepare("CREATE TABLE tmp SELECT ? AS a");
             yield $stmt->execute([-1]);
 
@@ -318,13 +318,13 @@ abstract class LinkTest extends TestCase {
 
     public function testTransaction() {
         Loop::run(function () {
-            /** @var \Amp\Mysql\Link $db */
+            /** @var \Amp\Sql\Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
 
-            /** @var \Amp\Mysql\Transaction $transaction */
+            /** @var \Amp\Sql\Transaction $transaction */
             $transaction = yield $db->transaction();
 
-            /** @var \Amp\Mysql\Statement $statement */
+            /** @var \Amp\Sql\Statement $statement */
             $statement = yield $transaction->prepare("INSERT INTO main VALUES (?, ?)");
             $result = yield $statement->execute([6, 7]);
             $this->assertInstanceOf(CommandResult::class, $result);
