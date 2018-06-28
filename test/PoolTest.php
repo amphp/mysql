@@ -31,8 +31,7 @@ class PoolTest extends LinkTest {
         $connector = $this->createMock(Connector::class);
         $connector->method('connect')
             ->will($this->returnCallback(function () use ($connections): Promise {
-                static $count = 0;
-                return new Success($connections[$count++ % \count($connections)]);
+                return new Success();
             }));
 
         $config = ConnectionConfig::parseConnectionString('host=host;user=user;password=password');

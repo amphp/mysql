@@ -5,10 +5,11 @@ namespace Amp\Mysql;
 use Amp\Deferred;
 use Amp\Promise;
 use Amp\Socket\Socket;
+use Amp\Sql\Connection as SqlConnection;
 use Amp\Sql\FailureException;
 use function Amp\call;
 
-final class Connection implements \Amp\Sql\Connection {
+final class Connection implements SqlConnection {
     const REFRESH_GRANT = 0x01;
     const REFRESH_LOG = 0x02;
     const REFRESH_TABLES = 0x04;
@@ -24,25 +25,14 @@ final class Connection implements \Amp\Sql\Connection {
     /** @var \Amp\Deferred|null */
     private $busy;
 
-    /**
-     * @param \Amp\Socket\Socket $socket
-     * @param \Amp\Mysql\ConnectionConfig $config
-     *
-     * @return \Amp\Promise
-     */
-    public static function connect(Socket $socket, ConnectionConfig $config): Promise {
-        return call(function () use ($socket, $config) {
-            $processor = new Internal\Processor($socket, $config);
-            yield $processor->connect();
-            return new self($processor);
-        });
+    public function __construct(Socket $socket, ConnectionConfig $config) {
+        $this->processor = new Internal\Processor($socket, $config);
     }
 
-    /**
-     * @param \Amp\Mysql\Internal\Processor $processor
-     */
-    private function __construct(Internal\Processor $processor) {
-        $this->processor = $processor;
+    public function connect(): Promise {
+        return call(function () {
+            yield $this->processor->connect();
+        });
     }
 
     /**
