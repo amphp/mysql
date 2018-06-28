@@ -6,12 +6,13 @@ use Amp\CallableMaker;
 use Amp\Deferred;
 use Amp\Loop;
 use Amp\Promise;
-use function Amp\call;
-use function Amp\coroutine;
 use Amp\Sql\Connector;
 use Amp\Sql\Operation;
+use Amp\Sql\Pool as SqlPool;
+use function Amp\call;
+use function Amp\coroutine;
 
-final class Pool implements \Amp\Sql\Pool
+final class Pool implements SqlPool
 {
     use CallableMaker;
 
