@@ -39,35 +39,55 @@ final class Connection implements SqlConnection {
      * @return bool False if the connection has been closed.
      */
     public function isAlive(): bool {
-        return $this->processor->isAlive();
+        return $this->processor && $this->processor->isAlive();
     }
 
     /**
      * @return int Timestamp of the last time this connection was used.
+     *
+     * @throws FailureException
      */
     public function lastUsedAt(): int {
+        if (! $this->processor) {
+            throw new FailureException('Not connected');
+        }
+
         return $this->processor->lastDataAt();
     }
 
     public function isReady(): bool {
-        return $this->processor->isReady();
+        return $this->processor && $this->processor->isReady();
     }
 
+    /**
+     * @throws FailureException
+     */
     public function setCharset(string $charset, string $collate = ""): Promise {
+        if (! $this->processor) {
+            throw new FailureException('Not connected');
+        }
+
         return $this->processor->setCharset($charset, $collate);
     }
 
     public function close() {
         $processor = $this->processor;
         // Send close command if connection is not already in a closed or closing state
-        if ($processor->isAlive()) {
+        if ($processor && $processor->isAlive()) {
             $processor->sendClose()->onResolve(static function () use ($processor) {
                 $processor->close();
             });
         }
     }
 
+    /**
+     * @throws FailureException
+     */
     public function useDb(string $db): Promise {
+        if (! $this->processor) {
+            throw new FailureException('Not connected');
+        }
+
         return $this->processor->useDb($db);
     }
 
@@ -75,12 +95,22 @@ final class Connection implements SqlConnection {
      * @param int $subcommand int one of the self::REFRESH_* constants
      *
      * @return \Amp\Promise
+     *
+     * @throws FailureException
      */
     public function refresh(int $subcommand): Promise {
+        if (! $this->processor) {
+            throw new FailureException('Not connected');
+        }
+
         return $this->processor->refresh($subcommand);
     }
 
     public function query(string $query): Promise {
+        if (! $this->processor) {
+            throw new FailureException('Not connected');
+        }
+
         return call(function () use ($query) {
             while ($this->busy) {
                 yield $this->busy->promise();
@@ -100,7 +130,14 @@ final class Connection implements SqlConnection {
         });
     }
 
+    /**
+     * @throws FailureException
+     */
     public function transaction(int $isolation = Transaction::COMMITTED): Promise {
+        if (! $this->processor) {
+            throw new FailureException('Not connected');
+        }
+
         return call(function () use ($isolation) {
             switch ($isolation) {
                 case Transaction::UNCOMMITTED:
@@ -140,11 +177,22 @@ final class Connection implements SqlConnection {
         });
     }
 
+    /**
+     * @throws FailureException
+     */
     public function ping(): Promise {
+        if (! $this->processor) {
+            throw new FailureException('Not connected');
+        }
+
         return $this->processor->ping();
     }
 
     public function prepare(string $query): Promise {
+        if (! $this->processor) {
+            throw new FailureException('Not connected');
+        }
+
         return call(function () use ($query) {
             while ($this->busy) {
                 yield $this->busy->promise();
@@ -158,6 +206,10 @@ final class Connection implements SqlConnection {
      * {@inheritdoc}
      */
     public function execute(string $sql, array $params = []): Promise {
+        if (! $this->processor) {
+            throw new FailureException('Not connected');
+        }
+
         return call(function () use ($sql, $params) {
             /** @var \Amp\Mysql\Statement $statment */
             $statment = yield $this->prepare($sql);
@@ -166,6 +218,8 @@ final class Connection implements SqlConnection {
     }
 
     public function __destruct() {
-        $this->processor->unreference();
+        if ($this->processor) {
+            $this->processor->unreference();
+        }
     }
 }
