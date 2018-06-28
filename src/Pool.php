@@ -8,13 +8,14 @@ use Amp\Loop;
 use Amp\Promise;
 use function Amp\call;
 use function Amp\coroutine;
+use Amp\Sql\Connector;
 use Amp\Sql\Operation;
 
 final class Pool implements \Amp\Sql\Pool
 {
     use CallableMaker;
 
-    /** @var \Amp\Mysql\Connector */
+    /** @var Connector */
     private $connector;
 
     /** @var \Amp\Mysql\ConnectionConfig */

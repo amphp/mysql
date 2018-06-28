@@ -622,7 +622,7 @@ REGEX;
         } elseif ($this->connectionState < self::READY) {
             // connection failure
             $this->close();
-            $this->getDeferred()->fail(new InitializationException("Could not connect to {$this->config->getResolvedHost()}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
+            $this->getDeferred()->fail(new InitializationException("Could not connect to {$this->config->connectionString()}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
         }
     }
 

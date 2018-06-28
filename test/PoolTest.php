@@ -7,7 +7,7 @@ use Amp\Loop;
 use Amp\Mysql\CommandResult;
 use Amp\Mysql\Connection;
 use Amp\Mysql\ConnectionConfig;
-use Amp\Mysql\Connector;
+use Amp\Sql\Connector;
 use Amp\Mysql\Internal\Processor;
 use Amp\Mysql\Pool;
 use Amp\Mysql\ResultSet;

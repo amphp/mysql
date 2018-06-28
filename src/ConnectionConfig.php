@@ -3,8 +3,9 @@
 namespace Amp\Mysql;
 
 use Amp\Socket\ClientTlsContext;
+use Amp\Sql\ConnectionConfig as SqlConnectionConfig;
 
-final class ConnectionConfig {
+final class ConnectionConfig implements SqlConnectionConfig {
     const BIN_CHARSET = 45; // utf8mb4_general_ci
 
     const ALLOWED_KEYS = [
@@ -102,10 +103,7 @@ final class ConnectionConfig {
         return $config;
     }
 
-    /**
-     * @return string
-     */
-    public function getResolvedHost() {
+    public function connectionString(): string {
         if ($this->resolvedHost !== null) {
             return $this->resolvedHost;
         }

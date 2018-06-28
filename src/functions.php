@@ -5,6 +5,7 @@ namespace Amp\Mysql;
 use Amp\Loop;
 use Amp\Promise;
 use Amp\Socket\ClientTlsContext;
+use Amp\Sql\Connector;
 
 const LOOP_CONNECTOR_IDENTIFIER = Connector::class;
 
