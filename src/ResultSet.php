@@ -116,7 +116,10 @@ final class ResultSet implements Iterator, Operation {
 
     private static function fetchRow(Internal\ResultProxy $result): Promise {
         if ($result->userFetched < $result->fetchedRows) {
-            return new Success($result->rows[$result->userFetched++]);
+            $row = $result->rows[$result->userFetched];
+            unset($result->rows[$result->userFetched]);
+            $result->userFetched++;
+            return new Success($row);
         }
 
         if ($result->state === Internal\ResultProxy::ROWS_FETCHED) {

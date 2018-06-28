@@ -35,7 +35,7 @@ final class ResultProxy {
 
     public function updateState(int $state) {
         $this->state = $state;
-        if ($state == ResultProxy::ROWS_FETCHED) {
+        if ($state === self::ROWS_FETCHED) {
             $this->rowFetched(null);
         }
         if (empty($this->deferreds[$state])) {
@@ -51,9 +51,9 @@ final class ResultProxy {
         if ($row !== null) {
             $this->rows[$this->fetchedRows++] = $row;
         }
-        list($entry, , $cb) = current($this->deferreds[ResultProxy::SINGLE_ROW_FETCH]);
+        list($entry, , $cb) = current($this->deferreds[self::SINGLE_ROW_FETCH]);
         if ($entry !== null) {
-            unset($this->deferreds[ResultProxy::SINGLE_ROW_FETCH][key($this->deferreds[ResultProxy::SINGLE_ROW_FETCH])]);
+            unset($this->deferreds[self::SINGLE_ROW_FETCH][key($this->deferreds[self::SINGLE_ROW_FETCH])]);
             $entry->resolve($cb && $row ? $cb($row) : $row);
         }
     }
