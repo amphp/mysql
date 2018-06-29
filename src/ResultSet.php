@@ -13,10 +13,6 @@ use Amp\Success;
 
 final class ResultSet implements SqlResultSet, Operation
 {
-    const FETCH_ARRAY = 0;
-    const FETCH_ASSOC = 1;
-    const FETCH_OBJECT = 2;
-
     /** @var Internal\ResultProxy|null */
     private $result;
 
