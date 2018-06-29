@@ -160,7 +160,7 @@ final class Pool implements SqlPool
      * Extracts an idle connection from the pool. The connection is completely removed from the pool and cannot be
      * put back into the pool. Useful for operations where connection state must be changed.
      *
-     * @return \Amp\Promise<\Amp\Mysql\Connection>
+     * @return Promise<\Amp\Mysql\Connection>
      */
     public function extractConnection(): Promise {
         return call(function () {

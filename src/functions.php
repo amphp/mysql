@@ -29,7 +29,7 @@ function connector(Connector $connector = null): Connector {
  * @param string $connectionString
  * @param \Amp\Socket\ClientTlsContext $sslOptions
  *
- * @return \Amp\Promise<\Amp\Mysql\Connection>
+ * @return Promise<\Amp\Mysql\Connection>
  *
  * @throws \Amp\Sql\FailureException If connecting fails.
  * @throws \Error If the connection string does not contain a host, user, and password.

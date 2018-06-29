@@ -2,14 +2,17 @@
 
 namespace Amp\Mysql;
 
+use Amp\CancellationToken;
 use Amp\Deferred;
+use Amp\NullCancellationToken;
 use Amp\Promise;
-use Amp\Socket\Socket;
-use Amp\Sql\Connection as SqlConnection;
+use Amp\Socket;
+use Amp\Sql\ConnectionConfig ;
 use Amp\Sql\FailureException;
+use Amp\Sql\Link;
 use function Amp\call;
 
-final class Connection implements SqlConnection {
+final class Connection implements Link {
     const REFRESH_GRANT = 0x01;
     const REFRESH_LOG = 0x02;
     const REFRESH_TABLES = 0x04;
@@ -19,98 +22,86 @@ final class Connection implements SqlConnection {
     const REFRESH_SLAVE = 0x40;
     const REFRESH_MASTER = 0x80;
 
-    /** @var \Amp\Mysql\Internal\Processor */
+    /** @var Internal\Processor */
     private $processor;
 
-    /** @var \Amp\Deferred|null */
+    /** @var Deferred|null */
     private $busy;
 
-    public function __construct(Socket $socket, ConnectionConfig $config) {
-        $this->processor = new Internal\Processor($socket, $config);
+    /**
+     * @param ConnectionConfig $config
+     * @param CancellationToken|null $config
+     *
+     * @return Promise
+     */
+    public static function connect(ConnectionConfig $config, CancellationToken $token = null): Promise {
+        $token = $token ?? new NullCancellationToken();
+
+        return call(function () use ($config, $token) {
+            static $connectContext;
+
+            $connectContext = $connectContext ?? (new Socket\ClientConnectContext())->withTcpNoDelay();
+            $socket = yield Socket\connect($config->connectionString(), $connectContext, $token);
+
+            $processor = new Internal\Processor($socket, $config);
+            yield $processor->connect();
+            return new self($processor);
+        });
     }
 
-    public function connect(): Promise {
-        return call(function () {
-            yield $this->processor->connect();
-        });
+    /**
+     * @param \Amp\Mysql\Internal\Processor $processor
+     */
+    private function __construct(Internal\Processor $processor) {
+        $this->processor = $processor;
     }
 
     /**
      * @return bool False if the connection has been closed.
      */
     public function isAlive(): bool {
-        return $this->processor && $this->processor->isAlive();
+        return $this->processor->isAlive();
     }
 
     /**
      * @return int Timestamp of the last time this connection was used.
-     *
-     * @throws FailureException
      */
     public function lastUsedAt(): int {
-        if (! $this->processor) {
-            throw new FailureException('Not connected');
-        }
-
         return $this->processor->lastDataAt();
     }
 
     public function isReady(): bool {
-        return $this->processor && $this->processor->isReady();
+        return $this->processor->isReady();
     }
 
-    /**
-     * @throws FailureException
-     */
     public function setCharset(string $charset, string $collate = ""): Promise {
-        if (! $this->processor) {
-            throw new FailureException('Not connected');
-        }
-
         return $this->processor->setCharset($charset, $collate);
     }
 
     public function close() {
         $processor = $this->processor;
         // Send close command if connection is not already in a closed or closing state
-        if ($processor && $processor->isAlive()) {
+        if ($processor->isAlive()) {
             $processor->sendClose()->onResolve(static function () use ($processor) {
                 $processor->close();
             });
         }
     }
 
-    /**
-     * @throws FailureException
-     */
     public function useDb(string $db): Promise {
-        if (! $this->processor) {
-            throw new FailureException('Not connected');
-        }
-
         return $this->processor->useDb($db);
     }
 
     /**
      * @param int $subcommand int one of the self::REFRESH_* constants
      *
-     * @return \Amp\Promise
-     *
-     * @throws FailureException
+     * @return Promise
      */
     public function refresh(int $subcommand): Promise {
-        if (! $this->processor) {
-            throw new FailureException('Not connected');
-        }
-
         return $this->processor->refresh($subcommand);
     }
 
     public function query(string $query): Promise {
-        if (! $this->processor) {
-            throw new FailureException('Not connected');
-        }
-
         return call(function () use ($query) {
             while ($this->busy) {
                 yield $this->busy->promise();
@@ -130,29 +121,22 @@ final class Connection implements SqlConnection {
         });
     }
 
-    /**
-     * @throws FailureException
-     */
-    public function transaction(int $isolation = Transaction::COMMITTED): Promise {
-        if (! $this->processor) {
-            throw new FailureException('Not connected');
-        }
-
+    public function transaction(int $isolation = Transaction::ISOLATION_COMMITTED): Promise {
         return call(function () use ($isolation) {
             switch ($isolation) {
-                case Transaction::UNCOMMITTED:
+                case Transaction::ISOLATION_UNCOMMITTED:
                     yield $this->query("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
                     break;
 
-                case Transaction::COMMITTED:
+                case Transaction::ISOLATION_COMMITTED:
                     yield $this->query("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
                     break;
 
-                case Transaction::REPEATABLE:
+                case Transaction::ISOLATION_REPEATABLE:
                     yield $this->query("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ");
                     break;
 
-                case Transaction::SERIALIZABLE:
+                case Transaction::ISOLATION_SERIALIZABLE:
                     yield $this->query("SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE");
                     break;
 
@@ -177,22 +161,11 @@ final class Connection implements SqlConnection {
         });
     }
 
-    /**
-     * @throws FailureException
-     */
     public function ping(): Promise {
-        if (! $this->processor) {
-            throw new FailureException('Not connected');
-        }
-
         return $this->processor->ping();
     }
 
     public function prepare(string $query): Promise {
-        if (! $this->processor) {
-            throw new FailureException('Not connected');
-        }
-
         return call(function () use ($query) {
             while ($this->busy) {
                 yield $this->busy->promise();
@@ -206,10 +179,6 @@ final class Connection implements SqlConnection {
      * {@inheritdoc}
      */
     public function execute(string $sql, array $params = []): Promise {
-        if (! $this->processor) {
-            throw new FailureException('Not connected');
-        }
-
         return call(function () use ($sql, $params) {
             /** @var \Amp\Mysql\Statement $statment */
             $statment = yield $this->prepare($sql);
@@ -218,8 +187,6 @@ final class Connection implements SqlConnection {
     }
 
     public function __destruct() {
-        if ($this->processor) {
-            $this->processor->unreference();
-        }
+        $this->processor->unreference();
     }
 }

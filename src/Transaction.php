@@ -3,6 +3,7 @@
 namespace Amp\Mysql;
 
 use Amp\Promise;
+use Amp\Sql\Operation;
 use Amp\Sql\Transaction as SqlTransaction;
 use function Amp\call;
 
@@ -78,7 +79,7 @@ final class Transaction implements SqlTransaction {
     /**
      * {@inheritdoc}
      *
-     * @throws \Amp\Mysql\TransactionError If the transaction has been committed or rolled back.
+     * @throws TransactionError If the transaction has been committed or rolled back.
      */
     public function query(string $sql): Promise {
         if ($this->processor === null) {
@@ -109,7 +110,7 @@ final class Transaction implements SqlTransaction {
     /**
      * {@inheritdoc}
      *
-     * @throws \Amp\Mysql\TransactionError If the transaction has been committed or rolled back.
+     * @throws TransactionError If the transaction has been committed or rolled back.
      */
     public function prepare(string $sql): Promise {
         if ($this->processor === null) {
@@ -121,7 +122,7 @@ final class Transaction implements SqlTransaction {
         $promise = $this->processor->prepare($sql);
 
         $promise->onResolve(function ($exception, $statement) {
-            if ($statement instanceof Statement) {
+            if ($statement instanceof Operation) {
                 $statement->onDestruct([$this->queue, "unreference"]);
                 return;
             }
@@ -135,7 +136,7 @@ final class Transaction implements SqlTransaction {
     /**
      * {@inheritdoc}
      *
-     * @throws \Amp\Mysql\TransactionError If the transaction has been committed or rolled back.
+     * @throws TransactionError If the transaction has been committed or rolled back.
      */
     public function execute(string $sql, array $params = []): Promise {
         if ($this->processor === null) {
@@ -167,9 +168,9 @@ final class Transaction implements SqlTransaction {
     /**
      * Commits the transaction and makes it inactive.
      *
-     * @return \Amp\Promise<\Amp\Mysql\CommandResult>
+     * @return Promise<\Amp\Mysql\CommandResult>
      *
-     * @throws \Amp\Mysql\TransactionError If the transaction has been committed or rolled back.
+     * @throws TransactionError If the transaction has been committed or rolled back.
      */
     public function commit(): Promise {
         if ($this->processor === null) {
@@ -186,9 +187,9 @@ final class Transaction implements SqlTransaction {
     /**
      * Rolls back the transaction and makes it inactive.
      *
-     * @return \Amp\Promise<\Amp\Mysql\CommandResult>
+     * @return Promise<\Amp\Mysql\CommandResult>
      *
-     * @throws \Amp\Mysql\TransactionError If the transaction has been committed or rolled back.
+     * @throws TransactionError If the transaction has been committed or rolled back.
      */
     public function rollback(): Promise {
         if ($this->processor === null) {
@@ -207,11 +208,11 @@ final class Transaction implements SqlTransaction {
      *
      * @param string $identifier Savepoint identifier.
      *
-     * @return \Amp\Promise<\Amp\Mysql\CommandResult>
+     * @return Promise<\Amp\Mysql\CommandResult>
      *
-     * @throws \Amp\Mysql\TransactionError If the transaction has been committed or rolled back.
+     * @throws TransactionError If the transaction has been committed or rolled back.
      */
-    public function savepoint(string $identifier): Promise {
+    public function createSavepoint(string $identifier): Promise {
         return $this->query(\sprintf("SAVEPOINT `%s%s`", self::SAVEPOINT_PREFIX, \sha1($identifier)));
     }
 
@@ -220,9 +221,9 @@ final class Transaction implements SqlTransaction {
      *
      * @param string $identifier Savepoint identifier.
      *
-     * @return \Amp\Promise<\Amp\Mysql\CommandResult>
+     * @return Promise<\Amp\Mysql\CommandResult>
      *
-     * @throws \Amp\Mysql\TransactionError If the transaction has been committed or rolled back.
+     * @throws TransactionError If the transaction has been committed or rolled back.
      */
     public function rollbackTo(string $identifier): Promise {
         return $this->query(\sprintf("ROLLBACK TO `%s%s`", self::SAVEPOINT_PREFIX, \sha1($identifier)));
@@ -233,11 +234,11 @@ final class Transaction implements SqlTransaction {
      *
      * @param string $identifier Savepoint identifier.
      *
-     * @return \Amp\Promise<\Amp\Mysql\CommandResult>
+     * @return Promise<\Amp\Mysql\CommandResult>
      *
-     * @throws \Amp\Mysql\TransactionError If the transaction has been committed or rolled back.
+     * @throws TransactionError If the transaction has been committed or rolled back.
      */
-    public function release(string $identifier): Promise {
+    public function releaseSavepoint(string $identifier): Promise {
         return $this->query(\sprintf("RELEASE SAVEPOINT `%s%s`", self::SAVEPOINT_PREFIX, \sha1($identifier)));
     }
 }

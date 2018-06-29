@@ -142,7 +142,7 @@ final class ResultSet implements SqlResultSet {
     }
 
     /**
-     * @return \Amp\Promise<bool> Resolves with true if another result set exists, false if all result sets have
+     * @return Promise<bool> Resolves with true if another result set exists, false if all result sets have
      *     been consumed.
      */
     public function nextResultSet(): Promise {
@@ -169,7 +169,7 @@ final class ResultSet implements SqlResultSet {
     }
 
     /**
-     * @return \Amp\Promise<mixed[][]>
+     * @return Promise<mixed[][]>
      *
      * @throws \Error If nextResultSet() has been invoked and no further result sets were available.
      */
