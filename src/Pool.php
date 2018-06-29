@@ -9,6 +9,7 @@ use Amp\Promise;
 use Amp\Sql\Connector;
 use Amp\Sql\Operation;
 use Amp\Sql\Pool as SqlPool;
+use Amp\Sql\Transaction;
 use function Amp\call;
 use function Amp\coroutine;
 
@@ -47,7 +48,7 @@ final class Pool implements SqlPool
     private $timeoutWatcher;
 
     /** @var int */
-    private $idleTimeout = self::DEFAULT_IDLE_TIMEOUT;
+    private $idleTimeout = SqlPool::DEFAULT_IDLE_TIMEOUT;
 
     /** @var callable */
     private $prepare;
@@ -64,7 +65,7 @@ final class Pool implements SqlPool
      */
     public function __construct(
         ConnectionConfig $config,
-        int $maxConnections = self::DEFAULT_MAX_CONNECTIONS,
+        int $maxConnections = SqlPool::DEFAULT_MAX_CONNECTIONS,
         Connector $connector = null
     ) {
         $this->connector = $connector ?? connector();
@@ -390,7 +391,7 @@ final class Pool implements SqlPool
     /**
      * {@inheritdoc}
      */
-    public function transaction(int $isolation = Transaction::COMMITTED): Promise
+    public function transaction(int $isolation = Transaction::ISOLATION_COMMITTED): Promise
     {
         return call(function () use ($isolation) {
             /** @var Connection $connection */
