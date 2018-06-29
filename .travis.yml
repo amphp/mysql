@@ -57,12 +57,6 @@ jobs:
       php: 'nightly'
   fast_finish: true
 
-cache:
-  directories:
-    - $HOME/.composer/cache
-    - $HOME/.php-cs-fixer
-    - $HOME/.local
-
 env:
   - AMP_DEBUG=true
 
@@ -86,3 +80,5 @@ after_script:
 cache:
   directories:
     - $HOME/.composer/cache
+    - $HOME/.php-cs-fixer
+    - $HOME/.local
