@@ -22,12 +22,12 @@ Amp\Loop::run(function () {
 
     print "Query 1 Results:" . PHP_EOL;
     while (yield $result1->advance()) {
-        var_dump($result1->getCurrent());
+        \var_dump($result1->getCurrent());
     }
 
     print  PHP_EOL . "Query 2 Results:" . PHP_EOL;
     while (yield $result2->advance()) {
-        var_dump($result2->getCurrent());
+        \var_dump($result2->getCurrent());
     }
 
     yield $db->query("DROP TABLE tmp");

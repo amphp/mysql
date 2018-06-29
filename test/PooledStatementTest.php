@@ -13,8 +13,10 @@ use Amp\Mysql\Statement;
 use Amp\PHPUnit\TestCase;
 use Amp\Success;
 
-class PooledStatementTest extends TestCase {
-    public function testActiveStatementsRemainAfterTimeout() {
+class PooledStatementTest extends TestCase
+{
+    public function testActiveStatementsRemainAfterTimeout()
+    {
         Loop::run(function () {
             $pool = new Pool(ConnectionConfig::parseConnectionString('host=host user=user pass=pass'));
 
@@ -40,7 +42,8 @@ class PooledStatementTest extends TestCase {
         });
     }
 
-    public function testIdleStatementsRemovedAfterTimeout() {
+    public function testIdleStatementsRemovedAfterTimeout()
+    {
         Loop::run(function () {
             $pool = new Pool(ConnectionConfig::parseConnectionString('host=host user=user pass=pass'));
 

@@ -9,7 +9,8 @@ use Amp\Mysql\ResultSet;
 use Amp\Promise;
 use PHPUnit\Framework\TestCase;
 
-abstract class LinkTest extends TestCase {
+abstract class LinkTest extends TestCase
+{
     /**
      * Returns the Link class to be tested.
      *
@@ -17,7 +18,8 @@ abstract class LinkTest extends TestCase {
      */
     abstract protected function getLink(string $connectionString): Promise;
 
-    public function testQuery() {
+    public function testQuery()
+    {
         Loop::run(function () {
             /** @var \Amp\Mysql\Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
@@ -34,7 +36,8 @@ abstract class LinkTest extends TestCase {
         });
     }
 
-    public function testQueryFetchRow() {
+    public function testQueryFetchRow()
+    {
         Loop::run(function () {
             /** @var \Amp\Mysql\Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
@@ -56,7 +59,8 @@ abstract class LinkTest extends TestCase {
      * @expectedException \Amp\Sql\QueryError
      * @expectedExceptionMessage You have an error in your SQL syntax
      */
-    public function testQueryWithInvalidQuery() {
+    public function testQueryWithInvalidQuery()
+    {
         Loop::run(function () {
             /** @var \Amp\Sql\Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
@@ -65,7 +69,8 @@ abstract class LinkTest extends TestCase {
         });
     }
 
-    public function testMultiStmt() {
+    public function testMultiStmt()
+    {
         Loop::run(function () {
             /** @var \Amp\Mysql\Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test;useCompression=true");
@@ -106,7 +111,8 @@ abstract class LinkTest extends TestCase {
         });
     }
 
-    public function testPrepared() {
+    public function testPrepared()
+    {
         Loop::run(function () {
             /** @var \Amp\Mysql\Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test;useCompression=true");
@@ -169,7 +175,8 @@ abstract class LinkTest extends TestCase {
      * @expectedException \Amp\Sql\QueryError
      * @expectedExceptionMessage You have an error in your SQL syntax
      */
-    public function testPrepareWithInvalidQuery() {
+    public function testPrepareWithInvalidQuery()
+    {
         Loop::run(function () {
             /** @var \Amp\Sql\Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
@@ -182,7 +189,8 @@ abstract class LinkTest extends TestCase {
      * @expectedException \Error
      * @expectedExceptionMessage Parameter id 1 is not defined for this prepared statement
      */
-    public function testBindWithInvalidParamId() {
+    public function testBindWithInvalidParamId()
+    {
         Loop::run(function () {
             /** @var \Amp\Mysql\Link $db */
             $db = yield $this->getLink("host=" . DB_HOST . ";user=" . DB_USER . ";pass=" . DB_PASS . ";db=test");
@@ -200,7 +208,8 @@ abstract class LinkTest extends TestCase {
      * @expectedException \Error
      * @expectedExceptionMessage Parameter :b is not defined for this prepared statement
      */
-    public function testBindWithInvalidParamName() {
+    public function testBindWithInvalidParamName()
+    {
         Loop::run(function () {
             /** @var \Amp\Mysql\Link $db */
             $db = yield $this->getLink("host=" . DB_HOST . ";user=" . DB_USER . ";pass=" . DB_PASS . ";db=test");
@@ -218,7 +227,8 @@ abstract class LinkTest extends TestCase {
      * @expectedException \Error
      * @expectedExceptionMessage Invalid parameter ID type
      */
-    public function testBindWithInvalidParamType() {
+    public function testBindWithInvalidParamType()
+    {
         Loop::run(function () {
             /** @var \Amp\Mysql\Link $db */
             $db = yield $this->getLink("host=" . DB_HOST . ";user=" . DB_USER . ";pass=" . DB_PASS . ";db=test");
@@ -236,7 +246,8 @@ abstract class LinkTest extends TestCase {
      * @expectedException \Error
      * @expectedExceptionMessage Parameter 1 for prepared statement missing
      */
-    public function testStatementExecuteWithTooFewParams() {
+    public function testStatementExecuteWithTooFewParams()
+    {
         Loop::run(function () {
             /** @var \Amp\Mysql\Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
@@ -247,7 +258,8 @@ abstract class LinkTest extends TestCase {
         });
     }
 
-    public function testExecute() {
+    public function testExecute()
+    {
         Loop::run(function () {
             /** @var \Amp\Sql\Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
@@ -274,7 +286,8 @@ abstract class LinkTest extends TestCase {
      * @expectedException \Amp\Sql\QueryError
      * @expectedExceptionMessage You have an error in your SQL syntax
      */
-    public function testExecuteWithInvalidQuery() {
+    public function testExecuteWithInvalidQuery()
+    {
         Loop::run(function () {
             /** @var \Amp\Sql\Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
@@ -287,7 +300,8 @@ abstract class LinkTest extends TestCase {
      * @expectedException \Error
      * @expectedExceptionMessage Parameter 1 for prepared statement missing
      */
-    public function testExecuteWithTooFewParams() {
+    public function testExecuteWithTooFewParams()
+    {
         Loop::run(function () {
             /** @var \Amp\Sql\Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
@@ -296,7 +310,8 @@ abstract class LinkTest extends TestCase {
         });
     }
 
-    public function testPreparedWithNegativeValue() {
+    public function testPreparedWithNegativeValue()
+    {
         Loop::run(function () {
             /** @var \Amp\Sql\Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
@@ -316,7 +331,8 @@ abstract class LinkTest extends TestCase {
         });
     }
 
-    public function testTransaction() {
+    public function testTransaction()
+    {
         Loop::run(function () {
             /** @var \Amp\Sql\Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");

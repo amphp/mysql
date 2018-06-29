@@ -9,7 +9,8 @@ use Amp\Sql\Connector;
 
 const LOOP_CONNECTOR_IDENTIFIER = Connector::class;
 
-function connector(Connector $connector = null): Connector {
+function connector(Connector $connector = null): Connector
+{
     if ($connector === null) {
         $connector = Loop::getState(LOOP_CONNECTOR_IDENTIFIER);
         if ($connector) {
@@ -34,7 +35,8 @@ function connector(Connector $connector = null): Connector {
  * @throws \Amp\Sql\FailureException If connecting fails.
  * @throws \Error If the connection string does not contain a host, user, and password.
  */
-function connect(string $connectionString, ClientTlsContext $sslOptions = null): Promise {
+function connect(string $connectionString, ClientTlsContext $sslOptions = null): Promise
+{
     $config = ConnectionConfig::parseConnectionString($connectionString, $sslOptions);
     return connector()->connect($config);
 }

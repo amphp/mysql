@@ -102,14 +102,16 @@ final class Pool implements SqlPool
         $this->lastUsedAt = \time();
     }
 
-    public function __destruct() {
+    public function __destruct()
+    {
         Loop::cancel($this->timeoutWatcher);
     }
 
     /**
      * @return bool
      */
-    public function isAlive(): bool {
+    public function isAlive(): bool
+    {
         return !$this->closed;
     }
 
@@ -118,7 +120,8 @@ final class Pool implements SqlPool
         return $this->lastUsedAt;
     }
 
-    public function close() {
+    public function close()
+    {
         $this->closed = true;
         while (!$this->idle->isEmpty()) {
             $connection = $this->idle->shift();
@@ -127,7 +130,8 @@ final class Pool implements SqlPool
         }
     }
 
-    public function getIdleTimeout(): int {
+    public function getIdleTimeout(): int
+    {
         return $this->idleTimeout;
     }
 
@@ -137,7 +141,8 @@ final class Pool implements SqlPool
      *
      * @throws \Error If the timeout is less than 1.
      */
-    public function setIdleTimeout(int $timeout) {
+    public function setIdleTimeout(int $timeout)
+    {
         if ($timeout < 1) {
             throw new \Error("Timeout must be greater than 0");
         }
@@ -148,21 +153,24 @@ final class Pool implements SqlPool
     /**
      * @return int Maximum number of connections.
      */
-    public function getMaxConnections(): int {
+    public function getMaxConnections(): int
+    {
         return $this->maxConnections;
     }
 
     /**
      * @return int Current number of connections in the pool.
      */
-    public function getConnectionCount(): int {
+    public function getConnectionCount(): int
+    {
         return $this->connections->count();
     }
 
     /**
      * @return int Current number of idle connections in the pool.
      */
-    public function getIdleConnectionCount(): int {
+    public function getIdleConnectionCount(): int
+    {
         return $this->idle->count();
     }
 
@@ -172,7 +180,8 @@ final class Pool implements SqlPool
      *
      * @return Promise<Connection>
      */
-    public function extractConnection(): Promise {
+    public function extractConnection(): Promise
+    {
         $this->lastUsedAt = \time();
 
         return call(function () {
@@ -190,7 +199,8 @@ final class Pool implements SqlPool
      * @throws \Amp\Sql\FailureException If creating a connection fails.
      * @throws \Error If the pool has been closed.
      */
-    private function pop(): \Generator {
+    private function pop(): \Generator
+    {
         if ($this->closed) {
             throw new \Error("The pool has been closed");
         }
@@ -251,7 +261,8 @@ final class Pool implements SqlPool
      *
      * @throws \Error If the connection is not part of this pool.
      */
-    private function push(Connection $connection) {
+    private function push(Connection $connection)
+    {
         \assert(isset($this->connections[$connection]), 'Connection is not part of this pool');
 
         if ($this->closed) {
@@ -276,7 +287,8 @@ final class Pool implements SqlPool
     /**
      * {@inheritdoc}
      */
-    public function query(string $sql): Promise {
+    public function query(string $sql): Promise
+    {
         return call(function () use ($sql) {
             /** @var Connection $connection */
             $connection = yield from $this->pop();
@@ -307,7 +319,8 @@ final class Pool implements SqlPool
      *
      * Prepared statements returned by this method will stay alive as long as the pool remains open.
      */
-    public function prepare(string $sql): Promise {
+    public function prepare(string $sql): Promise
+    {
         return call(function () use ($sql) {
             $statement = yield from $this->doPrepare($sql);
 
@@ -317,7 +330,8 @@ final class Pool implements SqlPool
         });
     }
 
-    private function doPrepare(string $sql): \Generator {
+    private function doPrepare(string $sql): \Generator
+    {
         /** @var Connection $connection */
         $connection = yield from $this->pop();
 
@@ -346,7 +360,8 @@ final class Pool implements SqlPool
     /**
      * {@inheritdoc}
      */
-    public function execute(string $sql, array $params = []): Promise {
+    public function execute(string $sql, array $params = []): Promise
+    {
         return call(function () use ($sql, $params) {
             /** @var Connection $connection */
             $connection = yield from $this->pop();
@@ -375,7 +390,8 @@ final class Pool implements SqlPool
     /**
      * {@inheritdoc}
      */
-    public function transaction(int $isolation = Transaction::COMMITTED): Promise {
+    public function transaction(int $isolation = Transaction::COMMITTED): Promise
+    {
         return call(function () use ($isolation) {
             /** @var Connection $connection */
             $connection = yield from $this->pop();

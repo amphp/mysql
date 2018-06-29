@@ -10,7 +10,8 @@ use Amp\Sql\Operation;
 use Amp\Success;
 use function Amp\call;
 
-final class ConnectionStatement implements Statement, Operation {
+final class ConnectionStatement implements Statement, Operation
+{
     private $paramCount;
     private $numParamCount;
     private $named = [];
@@ -31,7 +32,8 @@ final class ConnectionStatement implements Statement, Operation {
     /** @var int */
     private $lastUsedAt;
 
-    public function __construct(Internal\Processor $processor, string $query, int $stmtId, array $named, Internal\ResultProxy $result) {
+    public function __construct(Internal\Processor $processor, string $query, int $stmtId, array $named, Internal\ResultProxy $result)
+    {
         $this->processor = $processor;
         $this->query = $query;
         $this->stmtId = $stmtId;
@@ -53,7 +55,8 @@ final class ConnectionStatement implements Statement, Operation {
         $this->lastUsedAt = \time();
     }
 
-    private function getProcessor(): Internal\Processor {
+    private function getProcessor(): Internal\Processor
+    {
         if ($this->processor === null) {
             throw new \Error("The statement has been closed");
         }
@@ -65,11 +68,13 @@ final class ConnectionStatement implements Statement, Operation {
         return $this->processor;
     }
 
-    public function onDestruct(callable $onDestruct) {
+    public function onDestruct(callable $onDestruct)
+    {
         $this->queue->onDestruct($onDestruct);
     }
 
-    public function isAlive(): bool {
+    public function isAlive(): bool
+    {
         if ($this->processor === null) {
             return false;
         }
@@ -78,7 +83,8 @@ final class ConnectionStatement implements Statement, Operation {
     }
 
     /** {@inheritdoc} */
-    public function bind($paramId, $data) {
+    public function bind($paramId, $data)
+    {
         if (\is_int($paramId)) {
             if ($paramId >= $this->numParamCount) {
                 throw new \Error("Parameter id $paramId is not defined for this prepared statement");
@@ -89,7 +95,7 @@ final class ConnectionStatement implements Statement, Operation {
                 throw new \Error("Parameter :$paramId is not defined for this prepared statement");
             }
             $array = $this->byNamed[$paramId];
-            $i = reset($array);
+            $i = \reset($array);
         } else {
             throw new \TypeError("Invalid parameter ID type");
         }
@@ -101,13 +107,13 @@ final class ConnectionStatement implements Statement, Operation {
         do {
             $realId = -1;
             while (isset($this->named[++$realId]) || $i-- > 0) {
-                if (!is_numeric($paramId) && isset($this->named[$realId]) && $this->named[$realId] == $paramId) {
+                if (!\is_numeric($paramId) && isset($this->named[$realId]) && $this->named[$realId] == $paramId) {
                     break;
                 }
             }
 
             $this->getProcessor()->bindParam($this->stmtId, $realId, $data);
-        } while (isset($array) && $i = next($array));
+        } while (isset($array) && $i = \next($array));
 
         if (isset($this->prebound[$paramId])) {
             $this->prebound[$paramId] .= $data;
@@ -117,17 +123,18 @@ final class ConnectionStatement implements Statement, Operation {
     }
 
     /** {@inheritdoc} */
-    public function execute(array $params = []): Promise {
+    public function execute(array $params = []): Promise
+    {
         $this->lastUsedAt = \time();
 
         $prebound = $args = [];
         for ($unnamed = $i = 0; $i < $this->paramCount; $i++) {
             if (isset($this->named[$i])) {
                 $name = $this->named[$i];
-                if (array_key_exists($name, $params) && $params[$name] !== []) {
+                if (\array_key_exists($name, $params) && $params[$name] !== []) {
                     if (\is_array($params[$name])) {
-                        $args[$i] = reset($params[$name]);
-                        unset($params[$name][key($params[$name])]);
+                        $args[$i] = \reset($params[$name]);
+                        unset($params[$name][\key($params[$name])]);
                     } else {
                         $args[$i] = $params[$name];
                         unset($params[$name]);
@@ -140,7 +147,7 @@ final class ConnectionStatement implements Statement, Operation {
                 } else {
                     $prebound[$i] = $this->prebound[$name];
                 }
-            } elseif (array_key_exists($unnamed, $params)) {
+            } elseif (\array_key_exists($unnamed, $params)) {
                 $args[$i] = $params[$unnamed];
                 $unnamed++;
             } elseif (!isset($this->prebound[$unnamed])) {
@@ -170,11 +177,13 @@ final class ConnectionStatement implements Statement, Operation {
         });
     }
 
-    public function getQuery(): string {
+    public function getQuery(): string
+    {
         return $this->query;
     }
 
-    private function close() {
+    private function close()
+    {
         if ($this->processor === null) {
             return;
         }
@@ -184,16 +193,19 @@ final class ConnectionStatement implements Statement, Operation {
         $this->queue->unreference();
     }
 
-    public function reset(): Promise {
+    public function reset(): Promise
+    {
         return $this->getProcessor()->resetStmt($this->stmtId);
     }
 
     // @TODO not necessary, see cursor?!
-    public function fetch(): Promise {
+    public function fetch(): Promise
+    {
         return $this->getProcessor()->fetchStmt($this->stmtId);
     }
 
-    public function getFields(): Promise {
+    public function getFields(): Promise
+    {
         if ($this->result->state >= Internal\ResultProxy::COLUMNS_FETCHED) {
             return new Success($this->result->columns);
         }
@@ -208,11 +220,13 @@ final class ConnectionStatement implements Statement, Operation {
     }
 
     /** {@inheritdoc} */
-    public function lastUsedAt(): int {
+    public function lastUsedAt(): int
+    {
         return $this->lastUsedAt;
     }
 
-    public function __destruct() {
+    public function __destruct()
+    {
         $this->close();
     }
 }

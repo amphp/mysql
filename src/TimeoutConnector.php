@@ -8,7 +8,8 @@ use Amp\Sql\Connector;
 use Amp\TimeoutCancellationToken;
 use function Amp\call;
 
-final class TimeoutConnector implements Connector {
+final class TimeoutConnector implements Connector
+{
     const DEFAULT_TIMEOUT = 5000;
 
     /** @var int */
@@ -17,7 +18,8 @@ final class TimeoutConnector implements Connector {
     /**
      * @param int $timeout Milliseconds until connections attempts are cancelled.
      */
-    public function __construct(int $timeout = self::DEFAULT_TIMEOUT) {
+    public function __construct(int $timeout = self::DEFAULT_TIMEOUT)
+    {
         $this->timeout = $timeout;
     }
 
@@ -27,7 +29,8 @@ final class TimeoutConnector implements Connector {
      *
      * @throws \Amp\Sql\FailureException If connecting fails.
      */
-    public function connect(ConnectionConfig $config): Promise {
+    public function connect(ConnectionConfig $config): Promise
+    {
         return call(function () use ($config) {
             $token = new TimeoutCancellationToken($this->timeout);
 

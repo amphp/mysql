@@ -17,7 +17,7 @@ require 'support/generic-table.php';
     do {
         print PHP_EOL . "Query " . ++$i . " Results:" . PHP_EOL;
         while (yield $result->advance()) {
-            var_dump($result->getCurrent());
+            \var_dump($result->getCurrent());
         }
     } while (yield $result->nextResultSet()); // Advances to the next result set.
 

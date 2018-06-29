@@ -12,7 +12,8 @@ use Amp\Sql\FailureException;
 use Amp\Sql\Link;
 use function Amp\call;
 
-final class Connection implements Link {
+final class Connection implements Link
+{
     const REFRESH_GRANT = 0x01;
     const REFRESH_LOG = 0x02;
     const REFRESH_TABLES = 0x04;
@@ -34,7 +35,8 @@ final class Connection implements Link {
      *
      * @return Promise
      */
-    public static function connect(ConnectionConfig $config, CancellationToken $token = null): Promise {
+    public static function connect(ConnectionConfig $config, CancellationToken $token = null): Promise
+    {
         $token = $token ?? new NullCancellationToken();
 
         return call(function () use ($config, $token) {
@@ -52,33 +54,39 @@ final class Connection implements Link {
     /**
      * @param Internal\Processor $processor
      */
-    private function __construct(Internal\Processor $processor) {
+    private function __construct(Internal\Processor $processor)
+    {
         $this->processor = $processor;
     }
 
     /**
      * @return bool False if the connection has been closed.
      */
-    public function isAlive(): bool {
+    public function isAlive(): bool
+    {
         return $this->processor->isAlive();
     }
 
     /**
      * @return int Timestamp of the last time this connection was used.
      */
-    public function lastUsedAt(): int {
+    public function lastUsedAt(): int
+    {
         return $this->processor->lastDataAt();
     }
 
-    public function isReady(): bool {
+    public function isReady(): bool
+    {
         return $this->processor->isReady();
     }
 
-    public function setCharset(string $charset, string $collate = ""): Promise {
+    public function setCharset(string $charset, string $collate = ""): Promise
+    {
         return $this->processor->setCharset($charset, $collate);
     }
 
-    public function close() {
+    public function close()
+    {
         $processor = $this->processor;
         // Send close command if connection is not already in a closed or closing state
         if ($processor->isAlive()) {
@@ -88,7 +96,8 @@ final class Connection implements Link {
         }
     }
 
-    public function useDb(string $db): Promise {
+    public function useDb(string $db): Promise
+    {
         return $this->processor->useDb($db);
     }
 
@@ -97,11 +106,13 @@ final class Connection implements Link {
      *
      * @return Promise
      */
-    public function refresh(int $subcommand): Promise {
+    public function refresh(int $subcommand): Promise
+    {
         return $this->processor->refresh($subcommand);
     }
 
-    public function query(string $query): Promise {
+    public function query(string $query): Promise
+    {
         return call(function () use ($query) {
             while ($this->busy) {
                 yield $this->busy->promise();
@@ -121,7 +132,8 @@ final class Connection implements Link {
         });
     }
 
-    public function transaction(int $isolation = Transaction::ISOLATION_COMMITTED): Promise {
+    public function transaction(int $isolation = Transaction::ISOLATION_COMMITTED): Promise
+    {
         return call(function () use ($isolation) {
             switch ($isolation) {
                 case Transaction::ISOLATION_UNCOMMITTED:
@@ -161,11 +173,13 @@ final class Connection implements Link {
         });
     }
 
-    public function ping(): Promise {
+    public function ping(): Promise
+    {
         return $this->processor->ping();
     }
 
-    public function prepare(string $query): Promise {
+    public function prepare(string $query): Promise
+    {
         return call(function () use ($query) {
             while ($this->busy) {
                 yield $this->busy->promise();
@@ -178,7 +192,8 @@ final class Connection implements Link {
     /**
      * {@inheritdoc}
      */
-    public function execute(string $sql, array $params = []): Promise {
+    public function execute(string $sql, array $params = []): Promise
+    {
         return call(function () use ($sql, $params) {
             /** @var Statement $statment */
             $statment = yield $this->prepare($sql);
@@ -186,7 +201,8 @@ final class Connection implements Link {
         });
     }
 
-    public function __destruct() {
+    public function __destruct()
+    {
         $this->processor->unreference();
     }
 }

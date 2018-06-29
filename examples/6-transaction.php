@@ -18,7 +18,7 @@ Amp\Loop::run(function () {
     $result = yield $transaction->execute("SELECT * FROM tmp WHERE a >= ?", [5]); // Two rows should be returned.
 
     while (yield $result->advance()) {
-        var_dump($result->getCurrent());
+        \var_dump($result->getCurrent());
     }
 
     yield $transaction->rollback();
@@ -27,7 +27,7 @@ Amp\Loop::run(function () {
     $result = yield $db->execute("SELECT * FROM tmp WHERE a >= ?", [5]);
 
     while (yield $result->advance()) {
-        var_dump($result->getCurrent());
+        \var_dump($result->getCurrent());
     }
 
     $db->close();

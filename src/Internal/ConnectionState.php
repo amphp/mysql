@@ -4,7 +4,8 @@ namespace Amp\Mysql\Internal;
 
 use Amp\Struct;
 
-final class ConnectionState {
+final class ConnectionState
+{
     use Struct;
 
     /** @var int|null */

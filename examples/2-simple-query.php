@@ -12,7 +12,7 @@ Amp\Loop::run(function () {
 
     while (yield $result->advance(ResultSet::FETCH_ARRAY)) {
         $row = $result->getCurrent();
-        var_dump($row[0]);
+        \var_dump($row[0]);
     }
 
     $db->close();

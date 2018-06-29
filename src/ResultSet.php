@@ -31,13 +31,15 @@ final class ResultSet implements SqlResultSet, Operation
     /** @var string[]|null */
     private $columnNames;
 
-    public function __construct(Internal\ResultProxy $result) {
+    public function __construct(Internal\ResultProxy $result)
+    {
         $this->result = $result;
         $this->queue = new Internal\ReferenceQueue;
         $this->producer = self::makeIterator($result);
     }
 
-    private static function makeIterator(Internal\ResultProxy $result): Iterator {
+    private static function makeIterator(Internal\ResultProxy $result): Iterator
+    {
         return new Producer(static function (callable $emit) use ($result) {
             $row = yield self::fetchRow($result);
             while ($row !== null) {
@@ -48,13 +50,15 @@ final class ResultSet implements SqlResultSet, Operation
         });
     }
 
-    public function __destruct() {
+    public function __destruct()
+    {
         if ($this->result) { // All results were not necessarily consumed.
             Promise\rethrow(new Coroutine($this->dispose()));
         }
     }
 
-    private function dispose(): \Generator {
+    private function dispose(): \Generator
+    {
         try {
             do {
                 while (yield $this->advance()); // Discard unused result rows.
@@ -68,7 +72,8 @@ final class ResultSet implements SqlResultSet, Operation
     /**
      * {@inheritdoc}
      */
-    public function onDestruct(callable $onDestruct) {
+    public function onDestruct(callable $onDestruct)
+    {
         $this->queue->onDestruct($onDestruct);
     }
 
@@ -77,7 +82,8 @@ final class ResultSet implements SqlResultSet, Operation
      *
      * @param int $type Result fetch type. Use the FETCH_* constant defined by this class.
      */
-    public function advance(int $type = self::FETCH_ASSOC): Promise {
+    public function advance(int $type = self::FETCH_ASSOC): Promise
+    {
         $this->currentRow = null;
         $this->type = $type;
 
@@ -87,7 +93,8 @@ final class ResultSet implements SqlResultSet, Operation
     /**
      * {@inheritdoc}
      */
-    public function getCurrent() {
+    public function getCurrent()
+    {
         if ($this->currentRow !== null) {
             return $this->currentRow;
         }
@@ -113,7 +120,8 @@ final class ResultSet implements SqlResultSet, Operation
         }
     }
 
-    private static function fetchRow(Internal\ResultProxy $result): Promise {
+    private static function fetchRow(Internal\ResultProxy $result): Promise
+    {
         if ($result->userFetched < $result->fetchedRows) {
             $row = $result->rows[$result->userFetched];
             unset($result->rows[$result->userFetched]);
@@ -143,7 +151,8 @@ final class ResultSet implements SqlResultSet, Operation
      * @return Promise<bool> Resolves with true if another result set exists, false if all result sets have
      *     been consumed.
      */
-    public function nextResultSet(): Promise {
+    public function nextResultSet(): Promise
+    {
         if (!$this->result) {
             return new Success(false);
         }
@@ -171,7 +180,8 @@ final class ResultSet implements SqlResultSet, Operation
      *
      * @throws \Error If nextResultSet() has been invoked and no further result sets were available.
      */
-    public function getFields(): Promise {
+    public function getFields(): Promise
+    {
         if ($this->result === null) {
             throw new \Error("The current result set is empty; call this method before invoking ResultSet::nextResultSet()");
         }

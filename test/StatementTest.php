@@ -6,14 +6,16 @@ use Amp\Mysql\ConnectionStatement;
 use Amp\Mysql\Internal\ResultProxy;
 use PHPUnit\Framework\TestCase;
 
-class StatementTest extends TestCase {
+class StatementTest extends TestCase
+{
     /** @var \Prophecy\Prophecy\ObjectProphecy */
     protected $processor;
 
     /** @var \Amp\Mysql\Internal\ResultProxy */
     protected $resultProxy;
 
-    public function setUp() {
+    public function setUp()
+    {
         $this->processor = $this->prophesize('Amp\Mysql\Internal\Processor');
         $this->resultProxy = new ResultProxy;
     }
@@ -21,7 +23,8 @@ class StatementTest extends TestCase {
     /**
      * @dataProvider provideTestBindDataTypes
      */
-    public function testBindDataTypes($data, $expectedException) {
+    public function testBindDataTypes($data, $expectedException)
+    {
         // arrange
         $query = 'SELECT * FROM test WHERE id = ?';
         $stmtId = 1;
@@ -49,7 +52,8 @@ class StatementTest extends TestCase {
         $stmt->bind($paramId, $data);
     }
 
-    public function provideTestBindDataTypes() {
+    public function provideTestBindDataTypes()
+    {
         return [
             'test scalar' => [
                 'data' => 1,
@@ -65,7 +69,8 @@ class StatementTest extends TestCase {
             ],
             'test object with __toString defined' => [
                 'data' => new class {
-                    public function __toString() {
+                    public function __toString()
+                    {
                         return '';
                     }
                 },

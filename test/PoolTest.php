@@ -7,27 +7,31 @@ use Amp\Loop;
 use Amp\Mysql\CommandResult;
 use Amp\Mysql\Connection;
 use Amp\Mysql\ConnectionConfig;
-use Amp\Sql\Connector;
 use Amp\Mysql\Internal\Processor;
 use Amp\Mysql\Pool;
 use Amp\Mysql\ResultSet;
 use Amp\Mysql\Statement;
 use Amp\Mysql\Transaction;
 use Amp\Promise;
+use Amp\Sql\Connector;
 use Amp\Sql\Operation;
 use Amp\Success;
 use function Amp\call;
 use function Amp\Mysql\pool;
 
-interface StatementOperation extends Statement, Operation {
+interface StatementOperation extends Statement, Operation
+{
 }
 
-class PoolTest extends LinkTest {
-    protected function getLink(string $connectionString): Promise {
+class PoolTest extends LinkTest
+{
+    protected function getLink(string $connectionString): Promise
+    {
         return new Success(new Pool(ConnectionConfig::parseConnectionString($connectionString)));
     }
 
-    protected function createPool(array $connections): Pool {
+    protected function createPool(array $connections): Pool
+    {
         $connector = $this->createMock(Connector::class);
         $connector->method('connect')
             ->will($this->returnCallback(function () use ($connections): Promise {
@@ -44,7 +48,8 @@ class PoolTest extends LinkTest {
      *
      * @return \Amp\Mysql\Internal\Processor[]|\PHPUnit\Framework\MockObject\MockObject[]
      */
-    private function makeProcessorSet(int $count) {
+    private function makeProcessorSet(int $count)
+    {
         $processors = [];
 
         for ($i = 0; $i < $count; ++$i) {
@@ -56,7 +61,8 @@ class PoolTest extends LinkTest {
         return $processors;
     }
 
-    private function makeConnectionSet(array $processors) {
+    private function makeConnectionSet(array $processors)
+    {
         return \array_map((function (Processor $processor): Connection {
             return new self($processor);
         })->bindTo(null, Connection::class), $processors);
@@ -65,7 +71,8 @@ class PoolTest extends LinkTest {
     /**
      * @return array
      */
-    public function getConnectionCounts(): array {
+    public function getConnectionCounts(): array
+    {
         return \array_map(function (int $count): array { return [$count]; }, \range(2, 10, 2));
     }
 
@@ -74,7 +81,8 @@ class PoolTest extends LinkTest {
      *
      * @param int $count
      */
-    public function testSingleQuery(int $count) {
+    public function testSingleQuery(int $count)
+    {
         $result = $this->createMock(StatementOperation::class);
 
         $processors = $this->makeProcessorSet($count);
@@ -98,7 +106,8 @@ class PoolTest extends LinkTest {
      *
      * @param int $count
      */
-    public function testConsecutiveQueries(int $count) {
+    public function testConsecutiveQueries(int $count)
+    {
         $rounds = 3;
         $result = $this->createMock(StatementOperation::class);
 
@@ -132,7 +141,8 @@ class PoolTest extends LinkTest {
      *
      * @param int $count
      */
-    public function testMutlipleTransactions(int $count) {
+    public function testMutlipleTransactions(int $count)
+    {
         $processors = $this->makeProcessorSet($count);
 
         $connection = $processors[0];
@@ -156,7 +166,8 @@ class PoolTest extends LinkTest {
      *
      * @param int $count
      */
-    public function testConsecutiveTransactions(int $count) {
+    public function testConsecutiveTransactions(int $count)
+    {
         $rounds = 3;
         $result = new CommandResult(0, 0);
 
@@ -196,7 +207,8 @@ class PoolTest extends LinkTest {
      *
      * @param int $count
      */
-    public function testExtractConnection(int $count) {
+    public function testExtractConnection(int $count)
+    {
         $processors = $this->makeProcessorSet($count);
         $query = "SELECT * FROM test";
 
@@ -228,7 +240,8 @@ class PoolTest extends LinkTest {
      *
      * @param int $count
      */
-    public function testConnectionClosedInPool(int $count) {
+    public function testConnectionClosedInPool(int $count)
+    {
         $processors = $this->makeProcessorSet($count);
         $query = "SELECT * FROM test";
         $result = new CommandResult(0, 0);
@@ -268,7 +281,8 @@ class PoolTest extends LinkTest {
         });
     }
 
-    public function testIdleConnectionsRemovedAfterTimeout() {
+    public function testIdleConnectionsRemovedAfterTimeout()
+    {
         Loop::run(function () {
             $pool = new Pool(
                 ConnectionConfig::parseConnectionString("host=".DB_HOST." user=".DB_USER." pass=".DB_PASS." db=test")
@@ -308,13 +322,14 @@ class PoolTest extends LinkTest {
     }
 
 
-    public function testSmallPool() {
+    public function testSmallPool()
+    {
         Loop::run(function () {
             $db = new Pool(ConnectionConfig::parseConnectionString("host=".DB_HOST." user=".DB_USER." pass=".DB_PASS." db=test"), 2);
 
             $queries = [];
 
-            foreach (range(0, 5) as $value) {
+            foreach (\range(0, 5) as $value) {
                 $queries[] = $db->query("SELECT $value");
             }
 
@@ -337,7 +352,8 @@ class PoolTest extends LinkTest {
      * @expectedException \Amp\Mysql\InitializationException
      * @expectedExceptionMessage Access denied for user
      */
-    public function testWrongPassword() {
+    public function testWrongPassword()
+    {
         Loop::run(function () {
             $db = pool("host=".DB_HOST.";user=".DB_USER.";pass=the_wrong_password;db=test");
 

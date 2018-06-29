@@ -4,14 +4,16 @@ namespace Amp\Mysql;
 
 use Amp\Sql\CommandResult as SqlCommandResult;
 
-final class CommandResult implements SqlCommandResult {
+final class CommandResult implements SqlCommandResult
+{
     /** @var int */
     private $affectedRows;
 
     /** @var int */
     private $insertId;
 
-    public function __construct(int $affectedRows, int $insertId) {
+    public function __construct(int $affectedRows, int $insertId)
+    {
         $this->affectedRows = $affectedRows;
         $this->insertId = $insertId;
     }
@@ -19,14 +21,16 @@ final class CommandResult implements SqlCommandResult {
     /**
      * @return int Number of rows affected by the modification query.
      */
-    public function affectedRows(): int {
+    public function affectedRows(): int
+    {
         return $this->affectedRows;
     }
 
     /**
      * @return int Insert ID of the last auto increment row.
      */
-    public function insertId(): int {
+    public function insertId(): int
+    {
         return $this->insertId;
     }
 }

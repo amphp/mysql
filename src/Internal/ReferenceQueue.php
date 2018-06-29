@@ -4,14 +4,16 @@ namespace Amp\Mysql\Internal;
 
 use Amp\Loop;
 
-final class ReferenceQueue {
+final class ReferenceQueue
+{
     /** @var callable[] */
     private $onDestruct = [];
 
     /** @var int */
     private $refCount = 1;
 
-    public function onDestruct(callable $onDestruct) {
+    public function onDestruct(callable $onDestruct)
+    {
         if (!$this->refCount) {
             try {
                 $onDestruct();
@@ -26,12 +28,14 @@ final class ReferenceQueue {
         $this->onDestruct[] = $onDestruct;
     }
 
-    public function reference() {
+    public function reference()
+    {
         \assert($this->refCount, "The reference queue has already been fully unreferenced and destroyed");
         ++$this->refCount;
     }
 
-    public function unreference() {
+    public function unreference()
+    {
         \assert($this->refCount, "The reference queue has already been fully unreferenced and destroyed");
 
         if (--$this->refCount) {
@@ -50,7 +54,8 @@ final class ReferenceQueue {
         $this->onDestruct = null;
     }
 
-    public function isReferenced(): bool {
+    public function isReferenced(): bool
+    {
         return (bool) $this->refCount;
     }
 }

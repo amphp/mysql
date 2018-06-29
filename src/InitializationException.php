@@ -4,5 +4,6 @@ namespace Amp\Mysql;
 
 use Amp\Sql\FailureException;
 
-class InitializationException extends FailureException {
+class InitializationException extends FailureException
+{
 }

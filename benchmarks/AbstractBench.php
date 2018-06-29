@@ -2,7 +2,8 @@
 
 namespace Amp\Mysql\Bench;
 
-class AbstractBench {
+class AbstractBench
+{
     /** @var string */
     protected $host = '127.0.0.1';
 

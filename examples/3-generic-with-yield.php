@@ -15,7 +15,7 @@ Amp\Loop::run(function () {
     $statement = yield $db->prepare("INSERT INTO tmp (a, b) VALUES (?, ? * 2)");
 
     $promises = [];
-    foreach (range(1, 5) as $num) {
+    foreach (\range(1, 5) as $num) {
         $promises[] = $statement->execute([$num, $num]);
     }
 
@@ -28,7 +28,7 @@ Amp\Loop::run(function () {
     $result = yield $db->query("SELECT a, b FROM tmp");
 
     while (yield $result->advance()) {
-        var_dump($result->getCurrent());
+        \var_dump($result->getCurrent());
     }
 
     yield $db->query("DROP TABLE tmp");

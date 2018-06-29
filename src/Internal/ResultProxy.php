@@ -5,7 +5,8 @@ namespace Amp\Mysql\Internal;
 use Amp\Sql\FailureException;
 use Amp\Struct;
 
-final class ResultProxy {
+final class ResultProxy
+{
     use Struct;
 
     public $columnCount;
@@ -30,11 +31,13 @@ final class ResultProxy {
 
     const SINGLE_ROW_FETCH = 255;
 
-    public function setColumns(int $columns) {
+    public function setColumns(int $columns)
+    {
         $this->columnCount = $this->columnsToFetch = $columns;
     }
 
-    public function updateState(int $state) {
+    public function updateState(int $state)
+    {
         $this->state = $state;
         if ($state === self::ROWS_FETCHED) {
             $this->rowFetched(null);
@@ -48,18 +51,20 @@ final class ResultProxy {
         $this->deferreds[$state] = [];
     }
 
-    public function rowFetched($row) {
+    public function rowFetched($row)
+    {
         if ($row !== null) {
             $this->rows[$this->fetchedRows++] = $row;
         }
-        list($entry, , $cb) = current($this->deferreds[self::SINGLE_ROW_FETCH]);
+        list($entry, , $cb) = \current($this->deferreds[self::SINGLE_ROW_FETCH]);
         if ($entry !== null) {
-            unset($this->deferreds[self::SINGLE_ROW_FETCH][key($this->deferreds[self::SINGLE_ROW_FETCH])]);
+            unset($this->deferreds[self::SINGLE_ROW_FETCH][\key($this->deferreds[self::SINGLE_ROW_FETCH])]);
             $entry->resolve($cb && $row ? $cb($row) : $row);
         }
     }
 
-    public function fail(FailureException $e) {
+    public function fail(FailureException $e)
+    {
         foreach ($this->deferreds as $state) {
             foreach ($this->deferreds[$state] as list($deferred)) {
                 $deferred->fail($e);
@@ -73,7 +78,8 @@ final class ResultProxy {
      *
      * @codeCoverageIgnore
      */
-    public function __debugInfo(): array {
+    public function __debugInfo(): array
+    {
         $tmp = clone $this;
         foreach ($tmp->deferreds as &$type) {
             foreach ($type as &$entry) {

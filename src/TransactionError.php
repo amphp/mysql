@@ -2,5 +2,6 @@
 
 namespace Amp\Mysql;
 
-class TransactionError extends \Amp\Sql\TransactionError {
+class TransactionError extends \Amp\Sql\TransactionError
+{
 }

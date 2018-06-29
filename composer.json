@@ -20,7 +20,7 @@
     "require-dev": {
         "phpunit/phpunit": "^6",
         "amphp/phpunit-util": "^1",
-        "friendsofphp/php-cs-fixer": "^2.3",
+        "amphp/php-cs-fixer-config": "dev-master",
         "phpbench/phpbench": "^0.13.0"
     },
     "autoload": {
@@ -43,7 +43,12 @@
         }
     },
     "scripts": {
-        "test": "@php -dzend.assertions=1 -dassert.exception=1 ./vendor/bin/phpunit",
-        "code-style": "@php ./vendor/bin/php-cs-fixer fix"
+        "check": [
+            "@cs",
+            "@test"
+        ],
+        "cs": "php-cs-fixer fix -v --diff --dry-run",
+        "cs-fix": "php-cs-fixer fix -v --diff",
+        "test": "@php -dzend.assertions=1 -dassert.exception=1 ./vendor/bin/phpunit"
     }
 }

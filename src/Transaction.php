@@ -7,7 +7,8 @@ use Amp\Sql\Operation;
 use Amp\Sql\Transaction as SqlTransaction;
 use function Amp\call;
 
-final class Transaction implements SqlTransaction {
+final class Transaction implements SqlTransaction
+{
     const SAVEPOINT_PREFIX = "amp_";
 
     /** @var Internal\Processor */
@@ -25,13 +26,15 @@ final class Transaction implements SqlTransaction {
      *
      * @throws \Error If the isolation level is invalid.
      */
-    public function __construct(Internal\Processor $processor, int $isolation) {
+    public function __construct(Internal\Processor $processor, int $isolation)
+    {
         $this->processor = $processor;
         $this->isolation = $isolation;
         $this->queue = new Internal\ReferenceQueue;
     }
 
-    public function __destruct() {
+    public function __destruct()
+    {
         if ($this->isAlive()) {
             $this->rollback(); // Invokes $this->queue->unreference().
         }
@@ -42,7 +45,8 @@ final class Transaction implements SqlTransaction {
      *
      * Closes and commits all changes in the transaction.
      */
-    public function close() {
+    public function close()
+    {
         if ($this->processor) {
             $this->commit(); // Invokes $this->queue->unreference().
         }
@@ -51,28 +55,32 @@ final class Transaction implements SqlTransaction {
     /**
      * @return int
      */
-    public function getIsolationLevel(): int {
+    public function getIsolationLevel(): int
+    {
         return $this->isolation;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function onDestruct(callable $onDestruct) {
+    public function onDestruct(callable $onDestruct)
+    {
         $this->queue->onDestruct($onDestruct);
     }
 
     /**
      * {@inheritdoc}
      */
-    public function isAlive(): bool {
+    public function isAlive(): bool
+    {
         return $this->processor !== null && $this->processor->isAlive();
     }
 
     /**
      * @return bool True if the transaction is active, false if it has been committed or rolled back.
      */
-    public function isActive(): bool {
+    public function isActive(): bool
+    {
         return $this->processor !== null;
     }
 
@@ -86,7 +94,8 @@ final class Transaction implements SqlTransaction {
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
-    public function query(string $sql): Promise {
+    public function query(string $sql): Promise
+    {
         if ($this->processor === null) {
             throw new TransactionError("The transaction has been committed or rolled back");
         }
@@ -117,7 +126,8 @@ final class Transaction implements SqlTransaction {
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
-    public function prepare(string $sql): Promise {
+    public function prepare(string $sql): Promise
+    {
         if ($this->processor === null) {
             throw new TransactionError("The transaction has been committed or rolled back");
         }
@@ -143,7 +153,8 @@ final class Transaction implements SqlTransaction {
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
-    public function execute(string $sql, array $params = []): Promise {
+    public function execute(string $sql, array $params = []): Promise
+    {
         if ($this->processor === null) {
             throw new TransactionError("The transaction has been committed or rolled back");
         }
@@ -177,7 +188,8 @@ final class Transaction implements SqlTransaction {
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
-    public function commit(): Promise {
+    public function commit(): Promise
+    {
         if ($this->processor === null) {
             throw new TransactionError("The transaction has been committed or rolled back");
         }
@@ -196,7 +208,8 @@ final class Transaction implements SqlTransaction {
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
-    public function rollback(): Promise {
+    public function rollback(): Promise
+    {
         if ($this->processor === null) {
             throw new TransactionError("The transaction has been committed or rolled back");
         }
@@ -217,7 +230,8 @@ final class Transaction implements SqlTransaction {
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
-    public function createSavepoint(string $identifier): Promise {
+    public function createSavepoint(string $identifier): Promise
+    {
         return $this->query(\sprintf("SAVEPOINT `%s%s`", self::SAVEPOINT_PREFIX, \sha1($identifier)));
     }
 
@@ -230,7 +244,8 @@ final class Transaction implements SqlTransaction {
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
-    public function rollbackTo(string $identifier): Promise {
+    public function rollbackTo(string $identifier): Promise
+    {
         return $this->query(\sprintf("ROLLBACK TO `%s%s`", self::SAVEPOINT_PREFIX, \sha1($identifier)));
     }
 
@@ -243,7 +258,8 @@ final class Transaction implements SqlTransaction {
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
-    public function releaseSavepoint(string $identifier): Promise {
+    public function releaseSavepoint(string $identifier): Promise
+    {
         return $this->query(\sprintf("RELEASE SAVEPOINT `%s%s`", self::SAVEPOINT_PREFIX, \sha1($identifier)));
     }
 }

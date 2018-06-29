@@ -10,7 +10,8 @@ use Amp\Sql\Operation;
 use Amp\Success;
 use function Amp\call;
 
-final class PooledStatement implements Statement {
+final class PooledStatement implements Statement
+{
     /** @var Pool */
     private $pool;
 
@@ -37,7 +38,8 @@ final class PooledStatement implements Statement {
      * @param Statement $statement
      * @param callable $prepare
      */
-    public function __construct(Pool $pool, Statement $statement, callable $prepare) {
+    public function __construct(Pool $pool, Statement $statement, callable $prepare)
+    {
         $this->lastUsedAt = \time();
         $this->statements = $statements = new \SplQueue;
         $this->pool = $pool;
@@ -65,7 +67,8 @@ final class PooledStatement implements Statement {
         Loop::unreference($this->timeoutWatcher);
     }
 
-    public function __destruct() {
+    public function __destruct()
+    {
         Loop::cancel($this->timeoutWatcher);
     }
 
@@ -74,7 +77,8 @@ final class PooledStatement implements Statement {
      *
      * Unlike regular statements, as long as the pool is open this statement will not die.
      */
-    public function execute(array $params = []): Promise {
+    public function execute(array $params = []): Promise
+    {
         $this->lastUsedAt = \time();
 
         return call(function () use ($params) {
@@ -107,7 +111,8 @@ final class PooledStatement implements Statement {
     }
 
     /** {@inheritdoc} */
-    public function bind($paramId, $data) {
+    public function bind($paramId, $data)
+    {
         if (!\is_int($paramId) && !\is_string($paramId)) {
             throw new \TypeError("Invalid parameter ID type");
         }
@@ -116,17 +121,20 @@ final class PooledStatement implements Statement {
     }
 
     /** {@inheritdoc} */
-    public function isAlive(): bool {
+    public function isAlive(): bool
+    {
         return $this->pool->isAlive();
     }
 
     /** {@inheritdoc} */
-    public function getQuery(): string {
+    public function getQuery(): string
+    {
         return $this->sql;
     }
 
     /** {@inheritdoc} */
-    public function getFields(): Promise {
+    public function getFields(): Promise
+    {
         return call(function () {
             /** @var Statement $statement */
             $statement = yield from $this->pop();
@@ -140,13 +148,15 @@ final class PooledStatement implements Statement {
     }
 
     /** {@inheritdoc} */
-    public function reset(): Promise {
+    public function reset(): Promise
+    {
         $this->boundParams = [];
         return new Success;
     }
 
     /** {@inheritdoc} */
-    public function lastUsedAt(): int {
+    public function lastUsedAt(): int
+    {
         return $this->lastUsedAt;
     }
 
@@ -156,7 +166,8 @@ final class PooledStatement implements Statement {
      *
      * @param Statement $statement
      */
-    private function push(Statement $statement) {
+    private function push(Statement $statement)
+    {
         $maxConnections = $this->pool->getMaxConnections();
 
         if ($this->statements->count() > ($maxConnections / 10)) {
@@ -173,7 +184,8 @@ final class PooledStatement implements Statement {
     /**
      * Get a statement from the idle queue of statements or create a new statement from the pool.
      */
-    private function pop(): \Generator {
+    private function pop(): \Generator
+    {
         if (!$this->statements->isEmpty()) {
             do {
                 /** @var Statement $statement */
