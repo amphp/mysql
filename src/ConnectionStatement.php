@@ -8,6 +8,7 @@ use Amp\Sql\ConnectionException;
 use Amp\Sql\FailureException;
 use Amp\Sql\Operation;
 use Amp\Success;
+use function Amp\call;
 
 final class ConnectionStatement implements Statement, Operation {
     private $paramCount;
@@ -151,7 +152,7 @@ final class ConnectionStatement implements Statement, Operation {
 
         $promise = $this->getProcessor()->execute($this->stmtId, $this->query, $this->result->params, $prebound, $args);
 
-        return \Amp\call(function () use ($promise) {
+        return call(function () use ($promise) {
             $result = yield $promise;
 
             if ($result instanceof Internal\ResultProxy) {
