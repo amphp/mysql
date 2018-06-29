@@ -7,21 +7,23 @@ use Amp\Deferred;
 use Amp\Iterator;
 use Amp\Producer;
 use Amp\Promise;
+use Amp\Sql\Operation;
 use Amp\Sql\ResultSet as SqlResultSet;
 use Amp\Success;
 
-final class ResultSet implements SqlResultSet {
+final class ResultSet implements SqlResultSet, Operation
+{
     const FETCH_ARRAY = 0;
     const FETCH_ASSOC = 1;
     const FETCH_OBJECT = 2;
 
-    /** @var \Amp\Mysql\Internal\ResultProxy|null */
+    /** @var Internal\ResultProxy|null */
     private $result;
 
     /** @var \Amp\Producer */
     private $producer;
 
-    /** @var \Amp\Mysql\Internal\ReferenceQueue */
+    /** @var Internal\ReferenceQueue */
     private $queue;
 
     /** @var array|object Last emitted row. */

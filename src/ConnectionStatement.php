@@ -18,13 +18,13 @@ final class ConnectionStatement implements Statement, Operation {
     private $stmtId;
     private $prebound = [];
 
-    /** @var \Amp\Mysql\Internal\ReferenceQueue */
+    /** @var Internal\ReferenceQueue */
     private $queue;
 
-    /** @var \Amp\Mysql\Internal\Processor|null */
+    /** @var Internal\Processor|null */
     private $processor;
 
-    /** @var \Amp\Mysql\Internal\ResultProxy */
+    /** @var Internal\ResultProxy */
     private $result;
 
     /** @var int */

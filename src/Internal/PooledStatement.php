@@ -11,7 +11,7 @@ use Amp\Success;
 use function Amp\call;
 
 final class PooledStatement implements Statement {
-    /** @var \Amp\Mysql\Pool */
+    /** @var Pool */
     private $pool;
 
     /** @var \SplQueue */
@@ -33,8 +33,8 @@ final class PooledStatement implements Statement {
     private $prepare;
 
     /**
-     * @param \Amp\Mysql\Pool $pool Pool used to re-create the statement if the original closes.
-     * @param \Amp\Mysql\Statement $statement
+     * @param Pool $pool Pool used to re-create the statement if the original closes.
+     * @param Statement $statement
      * @param callable $prepare
      */
     public function __construct(Pool $pool, Statement $statement, callable $prepare) {
@@ -51,7 +51,7 @@ final class PooledStatement implements Statement {
             $idleTimeout = ((int) ($pool->getIdleTimeout() / 10)) ?: 1;
 
             while (!$statements->isEmpty()) {
-                /** @var \Amp\Mysql\Statement $statement */
+                /** @var Statement $statement */
                 $statement = $statements->bottom();
 
                 if ($statement->lastUsedAt() + $idleTimeout > $now) {
@@ -78,7 +78,7 @@ final class PooledStatement implements Statement {
         $this->lastUsedAt = \time();
 
         return call(function () use ($params) {
-            /** @var \Amp\Mysql\Statement $statement */
+            /** @var Statement $statement */
             $statement = yield from $this->pop();
 
             yield $statement->reset();
@@ -128,7 +128,7 @@ final class PooledStatement implements Statement {
     /** {@inheritdoc} */
     public function getFields(): Promise {
         return call(function () {
-            /** @var \Amp\Mysql\Statement $statement */
+            /** @var Statement $statement */
             $statement = yield from $this->pop();
 
             try {
@@ -176,7 +176,7 @@ final class PooledStatement implements Statement {
     private function pop(): \Generator {
         if (!$this->statements->isEmpty()) {
             do {
-                /** @var \Amp\Mysql\Statement $statement */
+                /** @var Statement $statement */
                 $statement = $this->statements->shift();
             } while (!$statement->isAlive() && !$this->statements->isEmpty());
         } else {

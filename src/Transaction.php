@@ -10,17 +10,17 @@ use function Amp\call;
 final class Transaction implements SqlTransaction {
     const SAVEPOINT_PREFIX = "amp_";
 
-    /** @var \Amp\Mysql\Internal\Processor */
+    /** @var Internal\Processor */
     private $processor;
 
-    /** @var \Amp\Mysql\Internal\ReferenceQueue */
+    /** @var Internal\ReferenceQueue */
     private $queue;
 
     /** @var int */
     private $isolation;
 
     /**
-     * @param \Amp\Mysql\Internal\Processor $processor
+     * @param Internal\Processor $processor
      * @param int $isolation
      *
      * @throws \Error If the isolation level is invalid.
@@ -74,6 +74,11 @@ final class Transaction implements SqlTransaction {
      */
     public function isActive(): bool {
         return $this->processor !== null;
+    }
+
+    public function lastUsedAt(): int
+    {
+        return $this->processor->lastDataAt();
     }
 
     /**
@@ -147,7 +152,7 @@ final class Transaction implements SqlTransaction {
             $this->queue->reference();
 
             try {
-                /** @var \Amp\Mysql\Statement $statement */
+                /** @var Statement $statement */
                 $statement = yield $this->processor->prepare($sql);
                 $result = yield $statement->execute($params);
             } catch (\Throwable $exception) {
@@ -168,7 +173,7 @@ final class Transaction implements SqlTransaction {
     /**
      * Commits the transaction and makes it inactive.
      *
-     * @return Promise<\Amp\Mysql\CommandResult>
+     * @return Promise<CommandResult>
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
@@ -187,7 +192,7 @@ final class Transaction implements SqlTransaction {
     /**
      * Rolls back the transaction and makes it inactive.
      *
-     * @return Promise<\Amp\Mysql\CommandResult>
+     * @return Promise<CommandResult>
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
@@ -208,7 +213,7 @@ final class Transaction implements SqlTransaction {
      *
      * @param string $identifier Savepoint identifier.
      *
-     * @return Promise<\Amp\Mysql\CommandResult>
+     * @return Promise<CommandResult>
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
@@ -221,7 +226,7 @@ final class Transaction implements SqlTransaction {
      *
      * @param string $identifier Savepoint identifier.
      *
-     * @return Promise<\Amp\Mysql\CommandResult>
+     * @return Promise<CommandResult>
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
@@ -234,7 +239,7 @@ final class Transaction implements SqlTransaction {
      *
      * @param string $identifier Savepoint identifier.
      *
-     * @return Promise<\Amp\Mysql\CommandResult>
+     * @return Promise<CommandResult>
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */

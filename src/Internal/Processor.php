@@ -77,7 +77,7 @@ REGEX;
     /** @var \Amp\Promise|null */
     private $pendingWrite;
 
-    /** @var \Amp\Mysql\ConnectionConfig */
+    /** @var \Amp\Sql\ConnectionConfig */
     public $config;
 
     /** @var \Amp\Deferred[] */
@@ -86,7 +86,7 @@ REGEX;
     /** @var callable[] */
     private $onReady = [];
 
-    /** @var \Amp\Mysql\Internal\ResultProxy|null */
+    /** @var ResultProxy|null */
     private $result;
 
     /** @var int */

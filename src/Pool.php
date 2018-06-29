@@ -19,7 +19,7 @@ final class Pool implements SqlPool
     /** @var Connector */
     private $connector;
 
-    /** @var \Amp\Mysql\ConnectionConfig */
+    /** @var ConnectionConfig */
     private $config;
 
     /** @var int */
@@ -31,13 +31,13 @@ final class Pool implements SqlPool
     /** @var \SplObjectStorage */
     private $connections;
 
-    /** @var \Amp\Promise|null */
+    /** @var Promise|null */
     private $promise;
 
     /** @var int Number of pending connections. */
     private $pending = 0;
 
-    /** @var \Amp\Deferred|null */
+    /** @var Deferred|null */
     private $deferred;
 
     /** @var bool */
@@ -80,7 +80,7 @@ final class Pool implements SqlPool
         $this->timeoutWatcher = Loop::repeat(1000, static function () use (&$idleTimeout, $connections, $idle) {
             $now = \time();
             while (!$idle->isEmpty()) {
-                /** @var \Amp\Mysql\Connection $connection */
+                /** @var Connection $connection */
                 $connection = $idle->bottom();
 
                 if ($connection->lastUsedAt() + $idleTimeout > $now) {
@@ -106,6 +106,11 @@ final class Pool implements SqlPool
      */
     public function isAlive(): bool {
         return !$this->closed;
+    }
+
+    public function lastUsedAt(): int
+    {
+        // TODO: Implement lastUsedAt() method.
     }
 
     public function close() {
@@ -160,7 +165,7 @@ final class Pool implements SqlPool
      * Extracts an idle connection from the pool. The connection is completely removed from the pool and cannot be
      * put back into the pool. Useful for operations where connection state must be changed.
      *
-     * @return Promise<\Amp\Mysql\Connection>
+     * @return Promise<Connection>
      */
     public function extractConnection(): Promise {
         return call(function () {
@@ -233,7 +238,7 @@ final class Pool implements SqlPool
     }
 
     /**
-     * @param \Amp\Mysql\Connection $connection
+     * @param Connection $connection
      *
      * @throws \Error If the connection is not part of this pool.
      */
@@ -262,7 +267,7 @@ final class Pool implements SqlPool
      */
     public function query(string $sql): Promise {
         return call(function () use ($sql) {
-            /** @var \Amp\Mysql\Connection $connection */
+            /** @var Connection $connection */
             $connection = yield from $this->pop();
 
             try {
@@ -297,11 +302,11 @@ final class Pool implements SqlPool
     }
 
     private function doPrepare(string $sql): \Generator {
-        /** @var \Amp\Mysql\Connection $connection */
+        /** @var Connection $connection */
         $connection = yield from $this->pop();
 
         try {
-            /** @var \Amp\Mysql\Statement $statement */
+            /** @var Statement $statement */
             $statement = yield $connection->prepare($sql);
         } catch (\Throwable $exception) {
             $this->push($connection);
@@ -325,7 +330,7 @@ final class Pool implements SqlPool
      */
     public function execute(string $sql, array $params = []): Promise {
         return call(function () use ($sql, $params) {
-            /** @var \Amp\Mysql\Connection $connection */
+            /** @var Connection $connection */
             $connection = yield from $this->pop();
 
             try {
@@ -352,11 +357,11 @@ final class Pool implements SqlPool
      */
     public function transaction(int $isolation = Transaction::COMMITTED): Promise {
         return call(function () use ($isolation) {
-            /** @var \Amp\Mysql\Connection $connection */
+            /** @var Connection $connection */
             $connection = yield from $this->pop();
 
             try {
-                /** @var \Amp\Mysql\Transaction $transaction */
+                /** @var Transaction $transaction */
                 $transaction = yield $connection->transaction($isolation);
             } catch (\Throwable $exception) {
                 $this->push($connection);

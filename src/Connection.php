@@ -50,7 +50,7 @@ final class Connection implements Link {
     }
 
     /**
-     * @param \Amp\Mysql\Internal\Processor $processor
+     * @param Internal\Processor $processor
      */
     private function __construct(Internal\Processor $processor) {
         $this->processor = $processor;
@@ -180,7 +180,7 @@ final class Connection implements Link {
      */
     public function execute(string $sql, array $params = []): Promise {
         return call(function () use ($sql, $params) {
-            /** @var \Amp\Mysql\Statement $statment */
+            /** @var Statement $statment */
             $statment = yield $this->prepare($sql);
             return yield $statment->execute($params);
         });
