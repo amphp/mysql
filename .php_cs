@@ -1,6 +1,6 @@
 <?php
 
-$config = new Amp\CS\Config\Amp();
+$config = new Amp\CodeStyle\Config();
 $config->getFinder()->in(__DIR__);
 
 $cacheDir = getenv('TRAVIS') ? getenv('HOME') . '/.php-cs-fixer' : __DIR__;
