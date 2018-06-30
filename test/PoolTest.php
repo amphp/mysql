@@ -357,7 +357,7 @@ class PoolTest extends LinkTest
     public function testWrongPassword()
     {
         Loop::run(function () {
-            $db = pool("host=".DB_HOST.";user=".DB_USER.";pass=the_wrong_password;db=test");
+            $db = pool(ConnectionConfig::parseConnectionString("host=".DB_HOST.";user=".DB_USER.";pass=the_wrong_password;db=test"));
 
             /* Try a query */
             yield $db->query("CREATE TABLE tmp SELECT 1 AS a, 2 AS b");

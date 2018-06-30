@@ -3,8 +3,10 @@
 require 'support/bootstrap.php';
 require 'support/generic-table.php';
 
+use Amp\Mysql;
+
 \Amp\Loop::run(function () {
-    $db = \Amp\Mysql\pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME);
+    $db = Mysql\pool(Mysql\ConnectionConfig::parseConnectionString("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME));
 
     /* create same table than in 3-generic-with-yield.php */
     yield from createGenericTable($db);
@@ -13,7 +15,7 @@ require 'support/generic-table.php';
     $result = yield $db->query("SELECT a + b FROM tmp; SELECT a - b FROM tmp;");
 
     $i = 0;
-    /** @var \Amp\Mysql\ResultSet $result */
+    /** @var Mysql\ResultSet $result */
     do {
         print PHP_EOL . "Query " . ++$i . " Results:" . PHP_EOL;
         while (yield $result->advance()) {

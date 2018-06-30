@@ -3,8 +3,10 @@
 require 'support/bootstrap.php';
 require 'support/generic-table.php';
 
+use Amp\Mysql;
+
 Amp\Loop::run(function () {
-    $db = Amp\Mysql\pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME);
+    $db = Mysql\pool(Mysql\ConnectionConfig::parseConnectionString("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME));
 
     /* create same table than in 3-generic-with-yield.php */
     yield from createGenericTable($db);
@@ -15,8 +17,8 @@ Amp\Loop::run(function () {
     $promises[] = $db->execute("SELECT POW(a, ?) AS power FROM tmp", [2]);
 
     /**
-     * @var \Amp\Mysql\ResultSet $result1
-     * @var \Amp\Mysql\ResultSet $result2
+     * @var Mysql\ResultSet $result1
+     * @var Mysql\ResultSet $result2
      */
     list($result1, $result2) = yield $promises; // Both queries execute simultaneously. Wait for both to finish here.
 

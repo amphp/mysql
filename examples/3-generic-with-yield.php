@@ -2,8 +2,10 @@
 
 require 'support/bootstrap.php';
 
+use Amp\Mysql;
+
 Amp\Loop::run(function () {
-    $db = Amp\Mysql\pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME);
+    $db = Mysql\pool(Mysql\ConnectionConfig::parseConnectionString("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME));
 
     /* Create table and insert a few rows */
     /* we need to wait until table is finished, so that we can insert. */
@@ -11,7 +13,7 @@ Amp\Loop::run(function () {
 
     print "Table successfully created." . PHP_EOL;
 
-    /** @var \Amp\Mysql\Statement $statement */
+    /** @var Mysql\Statement $statement */
     $statement = yield $db->prepare("INSERT INTO tmp (a, b) VALUES (?, ? * 2)");
 
     $promises = [];
@@ -24,7 +26,7 @@ Amp\Loop::run(function () {
 
     print "Insertion successful (if it wasn't, an exception would have been thrown by now)" . PHP_EOL;
 
-    /** @var \Amp\Mysql\ResultSet $result */
+    /** @var Mysql\ResultSet $result */
     $result = yield $db->query("SELECT a, b FROM tmp");
 
     while (yield $result->advance()) {

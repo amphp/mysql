@@ -3,18 +3,20 @@
 require 'support/bootstrap.php';
 require 'support/generic-table.php';
 
+use Amp\Mysql;
+
 Amp\Loop::run(function () {
-    $db = Amp\Mysql\pool("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME);
+    $db = Mysql\pool(Mysql\ConnectionConfig::parseConnectionString("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME));
 
     /* create same table than in 3-generic-with-yield.php */
     yield from createGenericTable($db);
 
-    /** @var \Amp\Mysql\Transaction $transaction */
+    /** @var Mysql\Transaction $transaction */
     $transaction = yield $db->transaction();
 
     yield $transaction->execute("INSERT INTO tmp VALUES (?, ? * 2)", [6, 6]);
 
-    /** @var \Amp\Mysql\ResultSet $result */
+    /** @var Mysql\ResultSet $result */
     $result = yield $transaction->execute("SELECT * FROM tmp WHERE a >= ?", [5]); // Two rows should be returned.
 
     while (yield $result->advance()) {
