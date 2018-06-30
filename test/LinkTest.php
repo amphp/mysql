@@ -7,6 +7,7 @@ use Amp\Mysql\CommandResult;
 use Amp\Mysql\DataTypes;
 use Amp\Mysql\ResultSet;
 use Amp\Promise;
+use Amp\Sql\ResultSet as SqlResultSet;
 use PHPUnit\Framework\TestCase;
 
 abstract class LinkTest extends TestCase
@@ -47,7 +48,7 @@ abstract class LinkTest extends TestCase
             $this->assertInstanceOf(ResultSet::class, $resultset);
 
             $got = [];
-            while (yield $resultset->advance(ResultSet::FETCH_ARRAY)) {
+            while (yield $resultset->advance(SqlResultSet::FETCH_ARRAY)) {
                 $got[] = $resultset->getCurrent();
             }
 
@@ -80,21 +81,21 @@ abstract class LinkTest extends TestCase
             $this->assertInstanceOf(ResultSet::class, $resultset);
 
             $got = [];
-            while (yield $resultset->advance(ResultSet::FETCH_ARRAY)) {
+            while (yield $resultset->advance(SqlResultSet::FETCH_ARRAY)) {
                 $got[] = $resultset->getCurrent();
             }
             $this->assertSame([[1], [2], [3], [4], [5]], $got);
             $this->assertTrue(yield $resultset->nextResultSet());
 
             $got = [];
-            while (yield $resultset->advance(ResultSet::FETCH_ARRAY)) {
+            while (yield $resultset->advance(SqlResultSet::FETCH_ARRAY)) {
                 $got[] = $resultset->getCurrent();
             }
             $this->assertSame([[6]], $got);
             $this->assertTrue(yield $resultset->nextResultSet());
 
             $got = [];
-            while (yield $resultset->advance(ResultSet::FETCH_ASSOC)) {
+            while (yield $resultset->advance(SqlResultSet::FETCH_ASSOC)) {
                 $got[] = $resultset->getCurrent();
             }
             $this->assertSame([["d" => 5, "c" => 5], ["d" => 6, "c" => 6]], $got);
@@ -138,7 +139,7 @@ abstract class LinkTest extends TestCase
             $result = yield $stmt->execute([2]);
             $this->assertInstanceOf(ResultSet::class, $result);
             $got = [];
-            while (yield $result->advance(ResultSet::FETCH_ARRAY)) {
+            while (yield $result->advance(SqlResultSet::FETCH_ARRAY)) {
                 $got[] = $result->getCurrent();
             }
             $this->assertCount(2, $got);
@@ -147,7 +148,7 @@ abstract class LinkTest extends TestCase
             $result = yield $stmt->execute([1, 8]);
             $this->assertInstanceOf(ResultSet::class, $result);
             $got = [];
-            while (yield $result->advance(ResultSet::FETCH_ARRAY)) {
+            while (yield $result->advance(SqlResultSet::FETCH_ARRAY)) {
                 $got[] = $result->getCurrent();
             }
             $this->assertCount(1, $got);
@@ -156,7 +157,7 @@ abstract class LinkTest extends TestCase
             $result = yield $stmt->execute(["a" => 2, 5]);
             $this->assertInstanceOf(ResultSet::class, $result);
             $got = [];
-            while (yield $result->advance(ResultSet::FETCH_ARRAY)) {
+            while (yield $result->advance(SqlResultSet::FETCH_ARRAY)) {
                 $got[] = $result->getCurrent();
             }
             $this->assertCount(2, $got);
@@ -268,7 +269,7 @@ abstract class LinkTest extends TestCase
             $result = yield $db->execute("SELECT * FROM main WHERE a = ? OR b = ?", [2, 5]);
             $this->assertInstanceOf(ResultSet::class, $result);
             $got = [];
-            while (yield $result->advance(ResultSet::FETCH_ARRAY)) {
+            while (yield $result->advance(SqlResultSet::FETCH_ARRAY)) {
                 $got[] = $result->getCurrent();
             }
             $this->assertCount(2, $got);
@@ -325,7 +326,7 @@ abstract class LinkTest extends TestCase
             /** @var \Amp\Mysql\ResultSet $result */
             $stmt = yield $db->prepare("SELECT a FROM tmp");
             $result = yield $stmt->execute();
-            yield $result->advance(ResultSet::FETCH_ARRAY);
+            yield $result->advance(SqlResultSet::FETCH_ARRAY);
 
             $this->assertEquals($result->getCurrent(), [-1]);
         });
@@ -349,7 +350,7 @@ abstract class LinkTest extends TestCase
             $result = yield $transaction->execute("SELECT * FROM main WHERE a = ?", [6]);
 
             $got = [];
-            while (yield $result->advance(ResultSet::FETCH_ARRAY)) {
+            while (yield $result->advance(SqlResultSet::FETCH_ARRAY)) {
                 $got[] = $result->getCurrent();
             }
             $this->assertCount(1, $got);
@@ -360,7 +361,7 @@ abstract class LinkTest extends TestCase
             $result = yield $db->execute("SELECT * FROM main WHERE a = ?", [6]);
 
             $got = [];
-            while (yield $result->advance(ResultSet::FETCH_ARRAY)) {
+            while (yield $result->advance(SqlResultSet::FETCH_ARRAY)) {
                 $got[] = $result->getCurrent();
             }
             $this->assertCount(0, $got);

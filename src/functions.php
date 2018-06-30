@@ -4,8 +4,9 @@ namespace Amp\Mysql;
 
 use Amp\Loop;
 use Amp\Promise;
-use Amp\Socket\ClientTlsContext;
+use Amp\Sql\ConnectionConfig as SqlConnectionConfig;
 use Amp\Sql\Connector;
+use Amp\Sql\Pool as SqlPool;
 
 const LOOP_CONNECTOR_IDENTIFIER = Connector::class;
 
@@ -27,7 +28,7 @@ function connector(Connector $connector = null): Connector
 /**
  * Create a connection using the global Connector instance.
  *
- * @param string $connectionString
+ * @param SqlConnectionConfig $config
  * @param \Amp\Socket\ClientTlsContext $sslOptions
  *
  * @return Promise<Connection>
@@ -35,28 +36,24 @@ function connector(Connector $connector = null): Connector
  * @throws \Amp\Sql\FailureException If connecting fails.
  * @throws \Error If the connection string does not contain a host, user, and password.
  */
-function connect(string $connectionString, ClientTlsContext $sslOptions = null): Promise
+function connect(SqlConnectionConfig $config): Promise
 {
-    $config = ConnectionConfig::parseConnectionString($connectionString, $sslOptions);
     return connector()->connect($config);
 }
 
 /**
  * Create a pool using the global Connector instance.
  *
- * @param string $connectionString
- * @param \Amp\Socket\ClientTlsContext $sslOptions
+ * @param SqlConnectionConfig $config
  * @param int $maxConnections
  *
- * @return Pool
+ * @return SqlPool
  *
  * @throws \Error If the connection string does not contain a host, user, and password.
  */
 function pool(
-    string $connectionString,
-    ClientTlsContext $sslOptions = null,
-    int $maxConnections = Pool::DEFAULT_MAX_CONNECTIONS
-): Pool {
-    $config = ConnectionConfig::parseConnectionString($connectionString, $sslOptions);
+    SqlConnectionConfig $config,
+    int $maxConnections = SqlPool::DEFAULT_MAX_CONNECTIONS
+): SqlPool {
     return new Pool($config, $maxConnections, connector());
 }

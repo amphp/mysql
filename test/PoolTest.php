@@ -15,6 +15,7 @@ use Amp\Mysql\Transaction;
 use Amp\Promise;
 use Amp\Sql\Connector;
 use Amp\Sql\Operation;
+use Amp\Sql\Transaction as SqlTransaction;
 use Amp\Success;
 use function Amp\call;
 use function Amp\Mysql\pool;
@@ -156,7 +157,7 @@ class PoolTest extends LinkTest
         $pool = $this->createPool($this->makeConnectionSet($processors));
 
         Loop::run(function () use ($pool, $result) {
-            $return = yield $pool->transaction(Transaction::COMMITTED);
+            $return = yield $pool->transaction(SqlTransaction::ISOLATION_COMMITTED);
             $this->assertInstanceOf(Transaction::class, $return);
             yield $return->rollback();
         });
@@ -186,7 +187,7 @@ class PoolTest extends LinkTest
         Loop::run(function () use ($count, $rounds, $pool) {
             $promises = [];
             for ($i = 0; $i < $count; ++$i) {
-                $promises[] = $pool->transaction(Transaction::COMMITTED);
+                $promises[] = $pool->transaction(SqlTransaction::ISOLATION_COMMITTED);
             }
 
             $results = yield \array_map(function (Promise $promise): Promise {
