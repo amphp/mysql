@@ -326,9 +326,9 @@ abstract class LinkTest extends TestCase
             /** @var \Amp\Mysql\ResultSet $result */
             $stmt = yield $db->prepare("SELECT a FROM tmp");
             $result = yield $stmt->execute();
-            yield $result->advance(SqlResultSet::FETCH_ARRAY);
+            yield $result->advance();
 
-            $this->assertEquals($result->getCurrent(), [-1]);
+            $this->assertEquals($result->getCurrent(SqlResultSet::FETCH_ARRAY), [-1]);
         });
     }
 

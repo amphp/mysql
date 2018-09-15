@@ -2,6 +2,7 @@
 
 namespace Amp\Mysql;
 
+use Amp\Promise;
 use Amp\Sql\PooledResultSet as SqlPooledResultSet;
 
 final class PooledResultSet extends SqlPooledResultSet
@@ -17,5 +18,10 @@ final class PooledResultSet extends SqlPooledResultSet
     {
         parent::__construct($result, $release);
         $this->result = $result;
+    }
+
+    public function nextResultSet(): Promise
+    {
+        return $this->result->nextResultSet();
     }
 }

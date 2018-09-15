@@ -9,7 +9,9 @@ final class StatementPool extends SqlStatementPool
 {
     protected function createResultSet(SqlResultSet $resultSet, callable $release): SqlResultSet
     {
-        \assert($resultSet instanceof ResultSet);
+        \assert($resultSet instanceof ResultSet
+            || $resultSet instanceof PooledResultSet
+        );
         return new PooledResultSet($resultSet, $release);
     }
 }
