@@ -43,7 +43,7 @@ class QueryBench extends AbstractBench
 
     public function init()
     {
-        $config = ConnectionConfig::parseConnectionString("host=$this->host;user=$this->user;pass=$this->pass");
+        $config = ConnectionConfig::fromString("host=$this->host;user=$this->user;pass=$this->pass");
         $connector = new TimeoutConnector;
         $this->connectionPool = new ConnectionPool($config, $this->poolLimit, $connector);
         $connectionPromise = $connector->connect($config);

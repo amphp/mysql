@@ -12,7 +12,7 @@ class ConnectionTest extends LinkTest
 {
     protected function getLink(string $connectionString): Promise
     {
-        return (new TimeoutConnector)->connect(ConnectionConfig::parseConnectionString($connectionString));
+        return (new TimeoutConnector)->connect(ConnectionConfig::fromString($connectionString));
     }
 
     public function testConnect()
@@ -20,7 +20,7 @@ class ConnectionTest extends LinkTest
         $complete = false;
         Loop::run(function () use (&$complete) {
             /** @var \Amp\Mysql\Connection $db */
-            $db = yield connect(ConnectionConfig::parseConnectionString("host=".DB_HOST." user=".DB_USER." pass=".DB_PASS." db=test"));
+            $db = yield connect(ConnectionConfig::fromString("host=".DB_HOST." user=".DB_USER." pass=".DB_PASS." db=test"));
 
             /* use an alternative charset... Default is utf8mb4_general_ci */
             yield $db->setCharset("latin1_general_ci");
@@ -37,7 +37,7 @@ class ConnectionTest extends LinkTest
      */
     public function testInvalidConnectionString()
     {
-        $promise = connect(ConnectionConfig::parseConnectionString("username=".DB_USER));
+        $promise = connect(ConnectionConfig::fromString("username=".DB_USER));
     }
 
     public function testDoubleClose()

@@ -7,10 +7,10 @@ use Amp\Loop;
 use Amp\Mysql\ConnectionConfig;
 use Amp\Mysql\Internal\ResultProxy;
 use Amp\Mysql\Pool;
+use Amp\Mysql\PooledStatement;
 use Amp\Mysql\ResultSet;
 use Amp\Mysql\Statement;
 use Amp\PHPUnit\TestCase;
-use Amp\Sql\PooledStatement;
 use Amp\Success;
 
 class PooledStatementTest extends TestCase
@@ -18,7 +18,7 @@ class PooledStatementTest extends TestCase
     public function testActiveStatementsRemainAfterTimeout()
     {
         Loop::run(function () {
-            $pool = new Pool(ConnectionConfig::parseConnectionString('host=host user=user pass=pass'));
+            $pool = new Pool(ConnectionConfig::fromString('host=host user=user pass=pass'));
 
             $statement = $this->createMock(Statement::class);
             $statement->method('getQuery')
@@ -30,7 +30,7 @@ class PooledStatementTest extends TestCase
             $statement->method('reset')
                 ->willReturn(new Success);
 
-            $pooledStatement = new PooledStatement($pool, $statement, $this->createCallback(0));
+            $pooledStatement = new PooledStatement($statement, $this->createCallback(0));
 
             $this->assertTrue($pooledStatement->isAlive());
 
@@ -45,7 +45,7 @@ class PooledStatementTest extends TestCase
     public function testIdleStatementsRemovedAfterTimeout()
     {
         Loop::run(function () {
-            $pool = new Pool(ConnectionConfig::parseConnectionString('host=host user=user pass=pass'));
+            $pool = new Pool(ConnectionConfig::fromString('host=host user=user pass=pass'));
 
             $statement = $this->createMock(Statement::class);
             $statement->method('getQuery')
@@ -67,7 +67,7 @@ class PooledStatementTest extends TestCase
                 return new Success($statement);
             };
 
-            $pooledStatement = new PooledStatement($pool, $statement, $prepare);
+            $pooledStatement = new PooledStatement($statement, $prepare);
 
             $this->assertTrue($pooledStatement->isAlive());
 
