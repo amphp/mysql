@@ -3,7 +3,6 @@
 namespace Amp\Mysql;
 
 use Amp\Promise;
-use Amp\Sql\Operation;
 use Amp\Sql\Transaction as SqlTransaction;
 use function Amp\call;
 
@@ -84,9 +83,9 @@ final class Transaction implements SqlTransaction
         return $this->processor !== null;
     }
 
-    public function lastUsedAt(): int
+    public function getLastUsedAt(): int
     {
-        return $this->processor->lastDataAt();
+        return $this->processor->getLastUsedAt();
     }
 
     /**
@@ -137,7 +136,7 @@ final class Transaction implements SqlTransaction
         $promise = $this->processor->prepare($sql);
 
         $promise->onResolve(function ($exception, $statement) {
-            if ($statement instanceof Operation) {
+            if (\is_callable([$statement, 'onDestruct'])) {
                 $statement->onDestruct([$this->queue, "unreference"]);
                 return;
             }

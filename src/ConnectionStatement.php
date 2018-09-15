@@ -6,11 +6,10 @@ use Amp\Deferred;
 use Amp\Promise;
 use Amp\Sql\ConnectionException;
 use Amp\Sql\FailureException;
-use Amp\Sql\Operation;
 use Amp\Success;
 use function Amp\call;
 
-final class ConnectionStatement implements Statement, Operation
+final class ConnectionStatement implements Statement
 {
     private $paramCount;
     private $numParamCount;
@@ -220,7 +219,7 @@ final class ConnectionStatement implements Statement, Operation
     }
 
     /** {@inheritdoc} */
-    public function lastUsedAt(): int
+    public function getLastUsedAt(): int
     {
         return $this->lastUsedAt;
     }

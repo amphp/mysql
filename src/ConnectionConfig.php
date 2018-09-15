@@ -5,18 +5,10 @@ namespace Amp\Mysql;
 use Amp\Socket\ClientTlsContext;
 use Amp\Sql\ConnectionConfig as SqlConnectionConfig;
 
-final class ConnectionConfig implements SqlConnectionConfig
+final class ConnectionConfig extends SqlConnectionConfig
 {
+    const DEFAULT_PORT = 3306;
     const BIN_CHARSET = 45; // utf8mb4_general_ci
-
-    const ALLOWED_KEYS = [
-        'host',
-        'user',
-        'pass',
-        'db',
-        'useCompression',
-        'key',
-    ];
 
     const KEY_MAP = [
         'username' => 'user',
@@ -24,133 +16,93 @@ final class ConnectionConfig implements SqlConnectionConfig
         'database' => 'db',
         'dbname' => 'db',
         'compress' => 'useCompression',
+        'charset' => 'charset',
     ];
 
     const DEFAULT_CHARSET = "utf8mb4";
     const DEFAULT_COLLATE = "utf8mb4_general_ci";
 
-    /* string <domain/IP-string>(:<port>) */
-    private $host;
-
-    /** @var string */
-    private $user;
-
-    /** @var string */
-    private $pass;
-
-    /** @var string|null */
-    private $db;
-
     /** @var bool */
     private $useCompression = false;
-
-    /** @var \Amp\Socket\ClientTlsContext|null Null for no ssl   */
+    /** @var ClientTlsContext|null Null for no ssl   */
     private $ssl;
-
     /** @var string */
     private $charset = "utf8mb4";
     /** @var string  */
     private $collate = "utf8mb4_general_ci";
-
-    /* private key to use for sha256_password auth method */
+    /* @var string private key to use for sha256_password auth method */
     private $key;
-
     /** @var string|null */
-    private $resolvedHost;
+    private $string;
 
-    private function __construct()
+    public static function fromString(string $connectionString, ClientTlsContext $tlsContext = null): self
     {
-        // Private to force usage of static constructor.
+        $parts = self::parseConnectionString($connectionString);
+
+        if (!isset($parts["host"])) {
+            throw new \Error("Host must be provided in connection string");
+        }
+
+        return new self(
+            $parts["host"],
+            $parts["port"] ?? self::DEFAULT_PORT,
+            $parts["user"] ?? null,
+            $parts["password"] ?? null,
+            $parts["db"] ?? null,
+            $tlsContext,
+            $parts['charset'] ?? self::DEFAULT_CHARSET,
+            self::DEFAULT_COLLATE,
+            $parts['compress'] ?? false
+        );
     }
 
-    /**
-     * @param string $connectionString
-     * @param \Amp\Socket\ClientTlsContext|null $sslOptions
-     *
-     * @return self
-     *
-     * @throws \Error If a host, user, and password are not provided.
-     */
-    public static function parseConnectionString(string $connectionString, ClientTlsContext $sslOptions = null): self
-    {
-        $config = new self;
+    public function __construct(
+        string $host,
+        int $port = self::DEFAULT_PORT,
+        string $user = null,
+        string $password = null,
+        string $database = null,
+        ClientTlsContext $tlsContext = null,
+        string $charset = self::DEFAULT_CHARSET,
+        string $collate = self::DEFAULT_COLLATE,
+        bool $useCompression = false,
+        string $key = ''
+    ) {
+        parent::__construct($host, $port, $user, $password, $database);
 
-        $params = \explode(";", $connectionString);
-
-        if (\count($params) === 1) { // Attempt to explode on a space if no ';' are found.
-            $params = \explode(" ", $connectionString);
-        }
-
-        foreach ($params as $param) {
-            list($key, $value) = \array_map("trim", \explode("=", $param, 2) + [1 => null]);
-
-            if (isset(self::KEY_MAP[$key])) {
-                $key = self::KEY_MAP[$key];
-            }
-
-            if (!\in_array($key, self::ALLOWED_KEYS, true)) {
-                throw new \Error("Invalid key in connection string: " . $key);
-            }
-
-            $config->{$key} = $value;
-        }
-
-        if (!isset($config->host, $config->user, $config->pass)) {
-            throw new \Error("Required parameters host, user and pass need to be passed in connection string");
-        }
-
-        $config->useCompression = $config->useCompression && $config->useCompression !== "false";
-
-        $config->ssl = $sslOptions;
-
-        return $config;
+        $this->ssl = $tlsContext;
+        $this->charset = $charset;
+        $this->collate = $collate;
+        $this->useCompression = $useCompression;
+        $this->key = $key;
     }
 
-    public function connectionString(): string
+    public function __clone()
     {
-        if ($this->resolvedHost !== null) {
-            return $this->resolvedHost;
+        $this->string = null;
+    }
+
+    public function getConnectionString(): string
+    {
+        if ($this->string !== null) {
+            return $this->string;
         }
 
-        $index = \strpos($this->host, ':');
+        $host = $this->getHost();
+
+        $index = \strpos($host, ':');
 
         if ($index === false) {
-            return $this->resolvedHost = "tcp://{$this->host}:3306";
+            return $this->string = "tcp://$host:3306";
         }
 
         if ($index === 0) {
-            return $this->resolvedHost = "tcp://localhost:" . (int) \substr($this->host, 1);
+            return $this->string = "tcp://localhost:" . (int) \substr($host, 1);
         }
 
-        list($host, $port) = \explode(':', $this->host, 2);
-        return $this->resolvedHost = "tcp://$host:" . (int) $port;
-    }
+        list($host, $port) = \explode(':', $host, 2);
 
-    public function getHost(): string
-    {
-        return $this->host;
-    }
-
-    public function getUser(): string
-    {
-        return $this->user;
-    }
-
-    public function getPassword(): string
-    {
-        return $this->pass;
-    }
-
-    public function getDatabase()
-    {
-        return $this->db;
-    }
-
-    public function withDatabase(string $database): self
-    {
-        $new = clone $this;
-        $new->db = $database;
-        return $new;
+        return $this->string = "tcp://$host:" . (int) $port;
     }
 
     public function isCompressionEnabled(): bool
@@ -158,14 +110,14 @@ final class ConnectionConfig implements SqlConnectionConfig
         return $this->useCompression;
     }
 
-    public function withCompression()
+    public function withCompression(): self
     {
         $new = clone $this;
         $new->useCompression = true;
         return $new;
     }
 
-    public function withoutCompression()
+    public function withoutCompression(): self
     {
         $new = clone $this;
         $new->useCompression = false;
@@ -177,14 +129,14 @@ final class ConnectionConfig implements SqlConnectionConfig
         return $this->ssl;
     }
 
-    public function withTlsContext(ClientTlsContext $context)
+    public function withTlsContext(ClientTlsContext $context): self
     {
         $new = clone $this;
         $new->ssl = $context;
         return $new;
     }
 
-    public function withoutTlsContext()
+    public function withoutTlsContext(): self
     {
         $new = clone $this;
         $new->ssl = null;
@@ -201,7 +153,7 @@ final class ConnectionConfig implements SqlConnectionConfig
         return $this->collate;
     }
 
-    public function withCharset(string $charset, string $collate)
+    public function withCharset(string $charset = self::DEFAULT_CHARSET, string $collate = self::DEFAULT_COLLATE): self
     {
         $new = clone $this;
         $new->charset = $charset;
@@ -209,12 +161,12 @@ final class ConnectionConfig implements SqlConnectionConfig
         return $new;
     }
 
-    public function getKey()
+    public function getKey(): string
     {
         return $this->key;
     }
 
-    public function withKey(string $key)
+    public function withKey(string $key): self
     {
         $new = clone $this;
         $new->key = $key;

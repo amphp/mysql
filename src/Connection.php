@@ -7,7 +7,6 @@ use Amp\Deferred;
 use Amp\NullCancellationToken;
 use Amp\Promise;
 use Amp\Socket;
-use Amp\Sql\ConnectionConfig ;
 use Amp\Sql\FailureException;
 use Amp\Sql\Link;
 use function Amp\call;
@@ -43,7 +42,7 @@ final class Connection implements Link
             static $connectContext;
 
             $connectContext = $connectContext ?? (new Socket\ClientConnectContext())->withTcpNoDelay();
-            $socket = yield Socket\connect($config->connectionString(), $connectContext, $token);
+            $socket = yield Socket\connect($config->getConnectionString(), $connectContext, $token);
 
             $processor = new Internal\Processor($socket, $config);
             yield $processor->connect();
@@ -70,9 +69,9 @@ final class Connection implements Link
     /**
      * @return int Timestamp of the last time this connection was used.
      */
-    public function lastUsedAt(): int
+    public function getLastUsedAt(): int
     {
-        return $this->processor->lastDataAt();
+        return $this->processor->getLastUsedAt();
     }
 
     public function isReady(): bool
@@ -132,7 +131,7 @@ final class Connection implements Link
         });
     }
 
-    public function transaction(int $isolation = Transaction::ISOLATION_COMMITTED): Promise
+    public function beginTransaction(int $isolation = Transaction::ISOLATION_COMMITTED): Promise
     {
         return call(function () use ($isolation) {
             switch ($isolation) {

@@ -16,6 +16,7 @@ use Amp\Socket\Socket;
 use Amp\Sql\ConnectionException;
 use Amp\Sql\FailureException;
 use Amp\Sql\QueryError;
+use Amp\Sql\TransientResource;
 
 /* @TODO
  * 14.2.3 Auth switch request??
@@ -50,7 +51,7 @@ class SessionStateTypes
 }
 
 /** @internal */
-class Processor
+class Processor implements TransientResource
 {
     const STATEMENT_PARAM_REGEX = <<<'REGEX'
 ~(["'`])(?:\\(?:\\|\1)|(?!\1).)*+\1(*SKIP)(*FAIL)|(\?)|:([a-zA-Z_][a-zA-Z0-9_]*)~ms
@@ -93,7 +94,7 @@ REGEX;
     private $result;
 
     /** @var int */
-    private $lastDataAt;
+    private $lastUsedAt;
 
     private $connectionId;
     private $authPluginData;
@@ -141,7 +142,7 @@ REGEX;
         $this->socket = $socket;
         $this->connInfo = new ConnectionState;
         $this->config = $config;
-        $this->lastDataAt = \time();
+        $this->lastUsedAt = \time();
     }
 
     public function isAlive(): bool
@@ -251,7 +252,7 @@ REGEX;
             })());
             // @codeCoverageIgnoreEnd
 
-            $this->lastDataAt = \time();
+            $this->lastUsedAt = \time();
 
             $this->processData($bytes);
             $bytes = null; // Free last data read.
@@ -301,9 +302,9 @@ REGEX;
         return $this->connectionId;
     }
 
-    public function lastDataAt(): int
+    public function getLastUsedAt(): int
     {
-        return $this->lastDataAt;
+        return $this->lastUsedAt;
     }
 
     protected function startCommand(callable $callback): Promise

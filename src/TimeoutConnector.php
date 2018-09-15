@@ -23,7 +23,6 @@ final class TimeoutConnector implements Connector
         $this->timeout = $timeout;
     }
 
-
     /**
      * {@inheritdoc}
      *

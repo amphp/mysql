@@ -7,11 +7,10 @@ use Amp\Deferred;
 use Amp\Iterator;
 use Amp\Producer;
 use Amp\Promise;
-use Amp\Sql\Operation;
 use Amp\Sql\ResultSet as SqlResultSet;
 use Amp\Success;
 
-final class ResultSet implements SqlResultSet, Operation
+final class ResultSet implements SqlResultSet
 {
     /** @var Internal\ResultProxy|null */
     private $result;
@@ -24,9 +23,6 @@ final class ResultSet implements SqlResultSet, Operation
 
     /** @var array|object Last emitted row. */
     private $currentRow;
-
-    /** @var int Fetch type of next row. */
-    private $type;
 
     /** @var string[]|null */
     private $columnNames;
@@ -79,13 +75,10 @@ final class ResultSet implements SqlResultSet, Operation
 
     /**
      * {@inheritdoc}
-     *
-     * @param int $type Result fetch type. Use the FETCH_* constant defined by this class.
      */
-    public function advance(int $type = self::FETCH_ASSOC): Promise
+    public function advance(): Promise
     {
         $this->currentRow = null;
-        $this->type = $type;
 
         return $this->producer->advance();
     }
@@ -93,7 +86,7 @@ final class ResultSet implements SqlResultSet, Operation
     /**
      * {@inheritdoc}
      */
-    public function getCurrent()
+    public function getCurrent(int $type = self::FETCH_ASSOC)
     {
         if ($this->currentRow !== null) {
             return $this->currentRow;
@@ -105,7 +98,7 @@ final class ResultSet implements SqlResultSet, Operation
             $this->columnNames = \array_column($this->result->columns, "name");
         }
 
-        switch ($this->type) {
+        switch ($type) {
             case self::FETCH_ASSOC:
                 return $this->currentRow = \array_combine($this->columnNames, $row);
 

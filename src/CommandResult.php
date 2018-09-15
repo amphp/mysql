@@ -10,18 +10,18 @@ final class CommandResult implements SqlCommandResult
     private $affectedRows;
 
     /** @var int */
-    private $insertId;
+    private $lastInsertId;
 
-    public function __construct(int $affectedRows, int $insertId)
+    public function __construct(int $affectedRows, int $lastInsertId)
     {
         $this->affectedRows = $affectedRows;
-        $this->insertId = $insertId;
+        $this->lastInsertId = $lastInsertId;
     }
 
     /**
      * @return int Number of rows affected by the modification query.
      */
-    public function affectedRows(): int
+    public function getAffectedRowCount(): int
     {
         return $this->affectedRows;
     }
@@ -29,8 +29,8 @@ final class CommandResult implements SqlCommandResult
     /**
      * @return int Insert ID of the last auto increment row.
      */
-    public function insertId(): int
+    public function getLastInsertId(): int
     {
-        return $this->insertId;
+        return $this->lastInsertId;
     }
 }

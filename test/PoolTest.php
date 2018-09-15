@@ -20,7 +20,7 @@ use Amp\Success;
 use function Amp\call;
 use function Amp\Mysql\pool;
 
-interface StatementOperation extends Statement, Operation
+interface StatementOperation extends Statement
 {
 }
 
@@ -28,7 +28,7 @@ class PoolTest extends LinkTest
 {
     protected function getLink(string $connectionString): Promise
     {
-        return new Success(new Pool(ConnectionConfig::parseConnectionString($connectionString)));
+        return new Success(new Pool(ConnectionConfig::fromString($connectionString)));
     }
 
     protected function createPool(array $connections): Pool
@@ -40,7 +40,7 @@ class PoolTest extends LinkTest
                 return new Success($connections[$count++ % \count($connections)]);
             }));
 
-        $config = ConnectionConfig::parseConnectionString('host=host;user=user;password=password');
+        $config = ConnectionConfig::fromString('host=host;user=user;password=password');
 
         return new Pool($config, \count($connections), $connector);
     }
@@ -287,7 +287,7 @@ class PoolTest extends LinkTest
     {
         Loop::run(function () {
             $pool = new Pool(
-                ConnectionConfig::parseConnectionString("host=".DB_HOST." user=".DB_USER." pass=".DB_PASS." db=test")
+                ConnectionConfig::fromString("host=".DB_HOST." user=".DB_USER." pass=".DB_PASS." db=test")
             );
             $pool->setIdleTimeout(2);
             $count = 3;
@@ -327,7 +327,7 @@ class PoolTest extends LinkTest
     public function testSmallPool()
     {
         Loop::run(function () {
-            $db = new Pool(ConnectionConfig::parseConnectionString("host=".DB_HOST." user=".DB_USER." pass=".DB_PASS." db=test"), 2);
+            $db = new Pool(ConnectionConfig::fromString("host=".DB_HOST." user=".DB_USER." pass=".DB_PASS." db=test"), 2);
 
             $queries = [];
 
@@ -340,8 +340,8 @@ class PoolTest extends LinkTest
             foreach ($queries as $query) {
                 $result = yield $query;
                 do {
-                    while (yield $result->advance(ResultSet::FETCH_ARRAY)) {
-                        $values[] = $result->getCurrent()[0];
+                    while (yield $result->advance()) {
+                        $values[] = $result->getCurrent(ResultSet::FETCH_ARRAY)[0];
                     }
                 } while (yield $result->nextResultSet());
             }
@@ -357,7 +357,7 @@ class PoolTest extends LinkTest
     public function testWrongPassword()
     {
         Loop::run(function () {
-            $db = pool(ConnectionConfig::parseConnectionString("host=".DB_HOST.";user=".DB_USER.";pass=the_wrong_password;db=test"));
+            $db = pool(ConnectionConfig::fromString("host=".DB_HOST.";user=".DB_USER.";pass=the_wrong_password;db=test"));
 
             /* Try a query */
             yield $db->query("CREATE TABLE tmp SELECT 1 AS a, 2 AS b");

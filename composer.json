@@ -2,6 +2,7 @@
     "name": "amphp/mysql",
     "description": "Asynchronous MySQL client for PHP based on Amp.",
     "require": {
+        "php": "^7.0",
         "amphp/amp": "^2",
         "amphp/socket": "^0.10.9",
         "amphp/sql": "dev-master"
