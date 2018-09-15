@@ -48,8 +48,8 @@ abstract class LinkTest extends TestCase
             $this->assertInstanceOf(ResultSet::class, $resultset);
 
             $got = [];
-            while (yield $resultset->advance(SqlResultSet::FETCH_ARRAY)) {
-                $got[] = $resultset->getCurrent();
+            while (yield $resultset->advance()) {
+                $got[] = $resultset->getCurrent(SqlResultSet::FETCH_ARRAY);
             }
 
             $this->assertSame($got, [[1], [2], [3]]);
@@ -81,22 +81,22 @@ abstract class LinkTest extends TestCase
             $this->assertInstanceOf(ResultSet::class, $resultset);
 
             $got = [];
-            while (yield $resultset->advance(SqlResultSet::FETCH_ARRAY)) {
-                $got[] = $resultset->getCurrent();
+            while (yield $resultset->advance()) {
+                $got[] = $resultset->getCurrent(SqlResultSet::FETCH_ARRAY);
             }
             $this->assertSame([[1], [2], [3], [4], [5]], $got);
             $this->assertTrue(yield $resultset->nextResultSet());
 
             $got = [];
-            while (yield $resultset->advance(SqlResultSet::FETCH_ARRAY)) {
-                $got[] = $resultset->getCurrent();
+            while (yield $resultset->advance()) {
+                $got[] = $resultset->getCurrent(SqlResultSet::FETCH_ARRAY);
             }
             $this->assertSame([[6]], $got);
             $this->assertTrue(yield $resultset->nextResultSet());
 
             $got = [];
-            while (yield $resultset->advance(SqlResultSet::FETCH_ASSOC)) {
-                $got[] = $resultset->getCurrent();
+            while (yield $resultset->advance()) {
+                $got[] = $resultset->getCurrent(SqlResultSet::FETCH_ASSOC);
             }
             $this->assertSame([["d" => 5, "c" => 5], ["d" => 6, "c" => 6]], $got);
 
@@ -139,8 +139,8 @@ abstract class LinkTest extends TestCase
             $result = yield $stmt->execute([2]);
             $this->assertInstanceOf(ResultSet::class, $result);
             $got = [];
-            while (yield $result->advance(SqlResultSet::FETCH_ARRAY)) {
-                $got[] = $result->getCurrent();
+            while (yield $result->advance()) {
+                $got[] = $result->getCurrent(SqlResultSet::FETCH_ARRAY);
             }
             $this->assertCount(2, $got);
 
@@ -148,8 +148,8 @@ abstract class LinkTest extends TestCase
             $result = yield $stmt->execute([1, 8]);
             $this->assertInstanceOf(ResultSet::class, $result);
             $got = [];
-            while (yield $result->advance(SqlResultSet::FETCH_ARRAY)) {
-                $got[] = $result->getCurrent();
+            while (yield $result->advance()) {
+                $got[] = $result->getCurrent(SqlResultSet::FETCH_ARRAY);
             }
             $this->assertCount(1, $got);
 
@@ -157,8 +157,8 @@ abstract class LinkTest extends TestCase
             $result = yield $stmt->execute(["a" => 2, 5]);
             $this->assertInstanceOf(ResultSet::class, $result);
             $got = [];
-            while (yield $result->advance(SqlResultSet::FETCH_ARRAY)) {
-                $got[] = $result->getCurrent();
+            while (yield $result->advance()) {
+                $got[] = $result->getCurrent(SqlResultSet::FETCH_ARRAY);
             }
             $this->assertCount(2, $got);
 
@@ -269,8 +269,8 @@ abstract class LinkTest extends TestCase
             $result = yield $db->execute("SELECT * FROM main WHERE a = ? OR b = ?", [2, 5]);
             $this->assertInstanceOf(ResultSet::class, $result);
             $got = [];
-            while (yield $result->advance(SqlResultSet::FETCH_ARRAY)) {
-                $got[] = $result->getCurrent();
+            while (yield $result->advance()) {
+                $got[] = $result->getCurrent(SqlResultSet::FETCH_ARRAY);
             }
             $this->assertCount(2, $got);
             $this->assertSame([[2, 3], [4, 5]], $got);
@@ -339,7 +339,7 @@ abstract class LinkTest extends TestCase
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
 
             /** @var \Amp\Sql\Transaction $transaction */
-            $transaction = yield $db->transaction();
+            $transaction = yield $db->beginTransaction();
 
             /** @var \Amp\Sql\Statement $statement */
             $statement = yield $transaction->prepare("INSERT INTO main VALUES (?, ?)");
@@ -350,8 +350,8 @@ abstract class LinkTest extends TestCase
             $result = yield $transaction->execute("SELECT * FROM main WHERE a = ?", [6]);
 
             $got = [];
-            while (yield $result->advance(SqlResultSet::FETCH_ARRAY)) {
-                $got[] = $result->getCurrent();
+            while (yield $result->advance()) {
+                $got[] = $result->getCurrent(SqlResultSet::FETCH_ARRAY);
             }
             $this->assertCount(1, $got);
             yield $result->nextResultSet();
@@ -361,8 +361,8 @@ abstract class LinkTest extends TestCase
             $result = yield $db->execute("SELECT * FROM main WHERE a = ?", [6]);
 
             $got = [];
-            while (yield $result->advance(SqlResultSet::FETCH_ARRAY)) {
-                $got[] = $result->getCurrent();
+            while (yield $result->advance()) {
+                $got[] = $result->getCurrent(SqlResultSet::FETCH_ARRAY);
             }
             $this->assertCount(0, $got);
         });
