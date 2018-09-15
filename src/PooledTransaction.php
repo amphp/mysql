@@ -2,7 +2,6 @@
 
 namespace Amp\Mysql;
 
-use Amp\Promise;
 use Amp\Sql\PooledTransaction as SqlPooledTransaction;
 use Amp\Sql\ResultSet as SqlResultSet;
 use Amp\Sql\Statement as SqlStatement;
