@@ -8,11 +8,9 @@ use Amp\Sql\Statement as SqlStatement;
 
 final class PooledTransaction extends SqlPooledTransaction
 {
-    /** @var Transaction|null */
-    private $transaction;
-
     protected function createStatement(SqlStatement $statement, callable $release): SqlStatement
     {
+        \assert($statement instanceof Statement);
         return new PooledStatement($statement, $release);
     }
 
@@ -20,15 +18,5 @@ final class PooledTransaction extends SqlPooledTransaction
     {
         \assert($resultSet instanceof ResultSet);
         return new PooledResultSet($resultSet, $release);
-    }
-
-    /**
-     * @param Transaction $transaction
-     * @param callable    $release
-     */
-    public function __construct(Transaction $transaction, callable $release)
-    {
-        parent::__construct($transaction, $release);
-        $this->transaction = $transaction;
     }
 }

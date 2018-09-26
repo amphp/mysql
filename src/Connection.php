@@ -28,6 +28,9 @@ final class Connection implements Link
     /** @var Deferred|null */
     private $busy;
 
+    /** @var callable Function used to release connection after a transaction has completed. */
+    private $release;
+
     /**
      * @param ConnectionConfig $config
      * @param CancellationToken|null $config
@@ -56,6 +59,12 @@ final class Connection implements Link
     private function __construct(Internal\Processor $processor)
     {
         $this->processor = $processor;
+        $this->release = function () {
+            \assert($this->busy instanceof Deferred);
+            $deferred = $this->busy;
+            $this->busy = null;
+            $deferred->resolve();
+        };
     }
 
     /**
@@ -120,7 +129,7 @@ final class Connection implements Link
             $result = yield $this->processor->query($query);
 
             if ($result instanceof Internal\ResultProxy) {
-                return new ResultSet($result);
+                return new ConnectionResultSet($result);
             }
 
             if ($result instanceof CommandResult) {
@@ -131,23 +140,23 @@ final class Connection implements Link
         });
     }
 
-    public function beginTransaction(int $isolation = Transaction::ISOLATION_COMMITTED): Promise
+    public function beginTransaction(int $isolation = ConnectionTransaction::ISOLATION_COMMITTED): Promise
     {
         return call(function () use ($isolation) {
             switch ($isolation) {
-                case Transaction::ISOLATION_UNCOMMITTED:
+                case ConnectionTransaction::ISOLATION_UNCOMMITTED:
                     yield $this->query("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
                     break;
 
-                case Transaction::ISOLATION_COMMITTED:
+                case ConnectionTransaction::ISOLATION_COMMITTED:
                     yield $this->query("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
                     break;
 
-                case Transaction::ISOLATION_REPEATABLE:
+                case ConnectionTransaction::ISOLATION_REPEATABLE:
                     yield $this->query("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ");
                     break;
 
-                case Transaction::ISOLATION_SERIALIZABLE:
+                case ConnectionTransaction::ISOLATION_SERIALIZABLE:
                     yield $this->query("SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE");
                     break;
 
@@ -159,16 +168,7 @@ final class Connection implements Link
 
             $this->busy = new Deferred;
 
-            $transaction = new Transaction($this->processor, $isolation);
-            $transaction->onDestruct(function () {
-                \assert($this->busy !== null);
-
-                $deferred = $this->busy;
-                $this->busy = null;
-                $deferred->resolve();
-            });
-
-            return $transaction;
+            return new ConnectionTransaction($this->processor, $this->release, $isolation);
         });
     }
 

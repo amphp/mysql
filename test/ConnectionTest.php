@@ -33,7 +33,7 @@ class ConnectionTest extends LinkTest
 
     /**
      * @expectedException \Error
-     * @expectedExceptionMessage Required parameters host, user and pass need to be passed in connection string
+     * @expectedExceptionMessage Host must be provided in connection string
      */
     public function testInvalidConnectionString()
     {

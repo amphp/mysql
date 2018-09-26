@@ -19,9 +19,6 @@ final class ConnectionStatement implements Statement
     private $stmtId;
     private $prebound = [];
 
-    /** @var Internal\ReferenceQueue */
-    private $queue;
-
     /** @var Internal\Processor|null */
     private $processor;
 
@@ -39,10 +36,6 @@ final class ConnectionStatement implements Statement
         $this->result = $result;
         $this->numParamCount = $this->paramCount = $this->result->columnsToFetch;
         $this->byNamed = $named;
-
-        $this->queue = new Internal\ReferenceQueue;
-
-        $this->queue->onDestruct([$this->processor, 'unreference']);
 
         foreach ($named as $name => $ids) {
             foreach ($ids as $id) {
@@ -65,11 +58,6 @@ final class ConnectionStatement implements Statement
         }
 
         return $this->processor;
-    }
-
-    public function onDestruct(callable $onDestruct)
-    {
-        $this->queue->onDestruct($onDestruct);
     }
 
     public function isAlive(): bool
@@ -162,9 +150,7 @@ final class ConnectionStatement implements Statement
             $result = yield $promise;
 
             if ($result instanceof Internal\ResultProxy) {
-                $result = new ResultSet($result);
-                $this->queue->reference();
-                $result->onDestruct([$this->queue, "unreference"]);
+                $result = new ConnectionResultSet($result);
                 return $result;
             }
 
@@ -188,19 +174,13 @@ final class ConnectionStatement implements Statement
         }
 
         $this->processor->closeStmt($this->stmtId);
+        $this->processor->unreference();
         $this->processor = null;
-        $this->queue->unreference();
     }
 
     public function reset(): Promise
     {
         return $this->getProcessor()->resetStmt($this->stmtId);
-    }
-
-    // @TODO not necessary, see cursor?!
-    public function fetch(): Promise
-    {
-        return $this->getProcessor()->fetchStmt($this->stmtId);
     }
 
     public function getFields(): Promise

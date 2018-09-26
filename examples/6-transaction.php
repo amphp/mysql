@@ -11,7 +11,7 @@ Amp\Loop::run(function () {
     /* create same table than in 3-generic-with-yield.php */
     yield from createGenericTable($db);
 
-    /** @var Mysql\Transaction $transaction */
+    /** @var \Amp\Sql\Transaction $transaction */
     $transaction = yield $db->beginTransaction();
 
     yield $transaction->execute("INSERT INTO tmp VALUES (?, ? * 2)", [6, 6]);

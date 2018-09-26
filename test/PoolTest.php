@@ -9,9 +9,7 @@ use Amp\Mysql\Connection;
 use Amp\Mysql\ConnectionConfig;
 use Amp\Mysql\Internal\Processor;
 use Amp\Mysql\Pool;
-use Amp\Mysql\ResultSet;
 use Amp\Mysql\Statement;
-use Amp\Mysql\Transaction;
 use Amp\Promise;
 use Amp\Sql\Connector;
 use Amp\Sql\Transaction as SqlTransaction;
@@ -157,7 +155,7 @@ class PoolTest extends LinkTest
 
         Loop::run(function () use ($pool, $result) {
             $return = yield $pool->beginTransaction(SqlTransaction::ISOLATION_COMMITTED);
-            $this->assertInstanceOf(Transaction::class, $return);
+            $this->assertInstanceOf(SqlTransaction::class, $return);
             yield $return->rollback();
         });
     }
@@ -192,7 +190,7 @@ class PoolTest extends LinkTest
             $results = yield \array_map(function (Promise $promise): Promise {
                 return call(function () use ($promise) {
                     $transaction = yield $promise;
-                    $this->assertInstanceOf(Transaction::class, $transaction);
+                    $this->assertInstanceOf(SqlTransaction::class, $transaction);
                     return yield $transaction->rollback();
                 });
             }, $promises);
@@ -265,7 +263,7 @@ class PoolTest extends LinkTest
         \array_unshift($processors, $processor);
 
         $pool = $this->createPool($this->makeConnectionSet($processors));
-        $this->assertSame($count + 1, $pool->getMaxConnections());
+        $this->assertSame($count + 1, $pool->getConnectionLimit());
 
         Loop::run(function () use ($pool, $query, $count) {
             $promises = [];
@@ -282,73 +280,6 @@ class PoolTest extends LinkTest
         });
     }
 
-    public function testIdleConnectionsRemovedAfterTimeout()
-    {
-        Loop::run(function () {
-            $pool = new Pool(
-                ConnectionConfig::fromString("host=".DB_HOST." user=".DB_USER." pass=".DB_PASS." db=test")
-            );
-            $pool->setIdleTimeout(2);
-            $count = 3;
-
-            $promises = [];
-            for ($i = 0; $i < $count; ++$i) {
-                $promises[] = $pool->query("SELECT $i");
-            }
-
-            $results = yield $promises;
-
-            /** @var \Amp\Mysql\ResultSet $result */
-            foreach ($results as $result) {
-                do { // Consume results to free connection
-                    while (yield $result->advance());
-                } while (yield $result->nextResultSet());
-            }
-
-            $this->assertSame($count, $pool->getConnectionCount());
-
-            yield new Delayed(1000);
-
-            $this->assertSame($count, $pool->getConnectionCount());
-
-            $result = yield $pool->query("SELECT $i");
-            do { // Consume results to free connection
-                while (yield $result->advance()) ;
-            } while (yield $result->nextResultSet());
-
-            yield new Delayed(1500);
-
-            $this->assertSame(1, $pool->getConnectionCount());
-        });
-    }
-
-
-    public function testSmallPool()
-    {
-        Loop::run(function () {
-            $db = new Pool(ConnectionConfig::fromString("host=".DB_HOST." user=".DB_USER." pass=".DB_PASS." db=test"), 2);
-
-            $queries = [];
-
-            foreach (\range(0, 5) as $value) {
-                $queries[] = $db->query("SELECT $value");
-            }
-
-            $values = [];
-
-            foreach ($queries as $query) {
-                $result = yield $query;
-                do {
-                    while (yield $result->advance()) {
-                        $values[] = $result->getCurrent(ResultSet::FETCH_ARRAY)[0];
-                    }
-                } while (yield $result->nextResultSet());
-            }
-
-            $this->assertEquals(\range(0, 5), $values);
-        });
-    }
-
     /**
      * @expectedException \Amp\Mysql\InitializationException
      * @expectedExceptionMessage Access denied for user
@@ -358,8 +289,10 @@ class PoolTest extends LinkTest
         Loop::run(function () {
             $db = pool(ConnectionConfig::fromString("host=".DB_HOST.";user=".DB_USER.";pass=the_wrong_password;db=test"));
 
+            $promise = $db->query("CREATE TABLE tmp SELECT 1 AS a, 2 AS b");
+
             /* Try a query */
-            yield $db->query("CREATE TABLE tmp SELECT 1 AS a, 2 AS b");
+            $result = yield $promise;
         });
     }
 }

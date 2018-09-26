@@ -4,39 +4,69 @@ namespace Amp\Mysql;
 
 use Amp\Promise;
 use Amp\Sql\Transaction as SqlTransaction;
+use Amp\Sql\TransactionError;
 use function Amp\call;
 
-final class Transaction implements SqlTransaction
+final class ConnectionTransaction implements SqlTransaction
 {
     const SAVEPOINT_PREFIX = "amp_";
 
-    /** @var Internal\Processor */
+    /** @var Internal\Processor|null */
     private $processor;
-
-    /** @var Internal\ReferenceQueue */
-    private $queue;
 
     /** @var int */
     private $isolation;
 
+    /** @var callable */
+    private $release;
+
+    /** @var int */
+    private $refCount = 1;
+
     /**
      * @param Internal\Processor $processor
+     * @param callable $release
      * @param int $isolation
      *
      * @throws \Error If the isolation level is invalid.
      */
-    public function __construct(Internal\Processor $processor, int $isolation)
+    public function __construct(Internal\Processor $processor, callable $release, int $isolation = SqlTransaction::ISOLATION_COMMITTED)
     {
+        switch ($isolation) {
+            case SqlTransaction::ISOLATION_UNCOMMITTED:
+            case SqlTransaction::ISOLATION_COMMITTED:
+            case SqlTransaction::ISOLATION_REPEATABLE:
+            case SqlTransaction::ISOLATION_SERIALIZABLE:
+                $this->isolation = $isolation;
+                break;
+
+            default:
+                throw new \Error("Isolation must be a valid transaction isolation level");
+        }
+
         $this->processor = $processor;
-        $this->isolation = $isolation;
-        $this->queue = new Internal\ReferenceQueue;
+
+        $refCount =& $this->refCount;
+        $this->release = static function () use (&$refCount, $release) {
+            if (--$refCount === 0) {
+                $release();
+            }
+        };
     }
 
     public function __destruct()
     {
-        if ($this->isAlive()) {
-            $this->rollback(); // Invokes $this->queue->unreference().
+        if ($this->processor && $this->processor->isAlive()) {
+            $this->rollback(); // Invokes $this->release callback.
         }
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getLastUsedAt(): int
+    {
+        return $this->processor->getLastUsedAt();
     }
 
     /**
@@ -47,24 +77,8 @@ final class Transaction implements SqlTransaction
     public function close()
     {
         if ($this->processor) {
-            $this->commit(); // Invokes $this->queue->unreference().
+            $this->commit(); // Invokes $this->release callback.
         }
-    }
-
-    /**
-     * @return int
-     */
-    public function getIsolationLevel(): int
-    {
-        return $this->isolation;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function onDestruct(callable $onDestruct)
-    {
-        $this->queue->onDestruct($onDestruct);
     }
 
     /**
@@ -72,7 +86,7 @@ final class Transaction implements SqlTransaction
      */
     public function isAlive(): bool
     {
-        return $this->processor !== null && $this->processor->isAlive();
+        return $this->processor && $this->processor->isAlive();
     }
 
     /**
@@ -83,9 +97,12 @@ final class Transaction implements SqlTransaction
         return $this->processor !== null;
     }
 
-    public function getLastUsedAt(): int
+    /**
+     * @return int
+     */
+    public function getIsolationLevel(): int
     {
-        return $this->processor->getLastUsedAt();
+        return $this->isolation;
     }
 
     /**
@@ -100,20 +117,11 @@ final class Transaction implements SqlTransaction
         }
 
         return call(function () use ($sql) {
-            $this->queue->reference();
+            $result = yield $this->processor->query($sql);
 
-            try {
-                $result = yield $this->processor->query($sql);
-            } catch (\Throwable $exception) {
-                $this->queue->unreference();
-                throw $exception;
-            }
-
-            if ($result instanceof Internal\ResultProxy) {
-                $result = new ResultSet($result);
-                $result->onDestruct([$this->queue, "unreference"]);
-            } else {
-                $this->queue->unreference();
+            if ($result instanceof ResultSet) {
+                ++$this->refCount;
+                return new PooledResultSet($result, $this->release);
             }
 
             return $result;
@@ -131,20 +139,10 @@ final class Transaction implements SqlTransaction
             throw new TransactionError("The transaction has been committed or rolled back");
         }
 
-        $this->queue->reference();
-
-        $promise = $this->processor->prepare($sql);
-
-        $promise->onResolve(function ($exception, $statement) {
-            if (\is_callable([$statement, 'onDestruct'])) {
-                $statement->onDestruct([$this->queue, "unreference"]);
-                return;
-            }
-
-            $this->queue->unreference();
+        return call(function () use ($sql) {
+            $statement = yield $this->processor->prepare($sql);
+            return new PooledStatement($statement, $this->release);
         });
-
-        return $promise;
     }
 
     /**
@@ -159,21 +157,13 @@ final class Transaction implements SqlTransaction
         }
 
         return call(function () use ($sql, $params) {
-            $this->queue->reference();
-
-            try {
-                /** @var Statement $statement */
-                $statement = yield $this->processor->prepare($sql);
-                $result = yield $statement->execute($params);
-            } catch (\Throwable $exception) {
-                $this->queue->unreference();
-                throw $exception;
-            }
+            $statement = yield $this->processor->prepare($sql);
+            \assert($statement instanceof Statement);
+            $result = yield $statement->execute($params);
 
             if ($result instanceof ResultSet) {
-                $result->onDestruct([$this->queue, "unreference"]);
-            } else {
-                $this->queue->unreference();
+                ++$this->refCount;
+                return new PooledResultSet($result, $this->release);
             }
 
             return $result;
@@ -183,7 +173,7 @@ final class Transaction implements SqlTransaction
     /**
      * Commits the transaction and makes it inactive.
      *
-     * @return Promise<CommandResult>
+     * @return Promise<\Amp\Sql\CommandResult>
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
@@ -195,7 +185,7 @@ final class Transaction implements SqlTransaction
 
         $promise = $this->processor->query("COMMIT");
         $this->processor = null;
-        $promise->onResolve([$this->queue, "unreference"]);
+        $promise->onResolve($this->release);
 
         return $promise;
     }
@@ -203,7 +193,7 @@ final class Transaction implements SqlTransaction
     /**
      * Rolls back the transaction and makes it inactive.
      *
-     * @return Promise<CommandResult>
+     * @return Promise<\Amp\Sql\CommandResult>
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
@@ -215,7 +205,7 @@ final class Transaction implements SqlTransaction
 
         $promise = $this->processor->query("ROLLBACK");
         $this->processor = null;
-        $promise->onResolve([$this->queue, "unreference"]);
+        $promise->onResolve($this->release);
 
         return $promise;
     }
@@ -225,7 +215,7 @@ final class Transaction implements SqlTransaction
      *
      * @param string $identifier Savepoint identifier.
      *
-     * @return Promise<CommandResult>
+     * @return Promise<\Amp\Sql\CommandResult>
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
@@ -239,7 +229,7 @@ final class Transaction implements SqlTransaction
      *
      * @param string $identifier Savepoint identifier.
      *
-     * @return Promise<CommandResult>
+     * @return Promise<\Amp\Sql\CommandResult>
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
@@ -253,7 +243,7 @@ final class Transaction implements SqlTransaction
      *
      * @param string $identifier Savepoint identifier.
      *
-     * @return Promise<CommandResult>
+     * @return Promise<\Amp\Sql\CommandResult>
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */

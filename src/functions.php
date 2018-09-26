@@ -6,7 +6,6 @@ use Amp\Loop;
 use Amp\Promise;
 use Amp\Sql\ConnectionConfig as SqlConnectionConfig;
 use Amp\Sql\Connector;
-use Amp\Sql\Pool as SqlPool;
 
 const LOOP_CONNECTOR_IDENTIFIER = Connector::class;
 
@@ -47,13 +46,14 @@ function connect(SqlConnectionConfig $config): Promise
  * @param SqlConnectionConfig $config
  * @param int $maxConnections
  *
- * @return SqlPool
+ * @return Pool
  *
  * @throws \Error If the connection string does not contain a host, user, and password.
  */
 function pool(
     SqlConnectionConfig $config,
-    int $maxConnections = SqlPool::DEFAULT_MAX_CONNECTIONS
-): SqlPool {
-    return new Pool($config, $maxConnections, connector());
+    int $maxConnections = Pool::DEFAULT_MAX_CONNECTIONS,
+    int $idleTimeout = Pool::DEFAULT_IDLE_TIMEOUT
+): Pool {
+    return new Pool($config, $maxConnections, $idleTimeout, connector());
 }

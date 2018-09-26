@@ -5,14 +5,14 @@ namespace Amp\Mysql;
 use Amp\Promise;
 use Amp\Sql\PooledResultSet as SqlPooledResultSet;
 
-final class PooledResultSet extends SqlPooledResultSet
+final class PooledResultSet extends SqlPooledResultSet implements ResultSet
 {
-    /** @var ResultSet */
+    /** @var ConnectionResultSet */
     private $result;
 
     /**
      * @param ResultSet $result
-     * @param callable  $release
+     * @param callable            $release
      */
     public function __construct(ResultSet $result, callable $release)
     {
@@ -23,5 +23,10 @@ final class PooledResultSet extends SqlPooledResultSet
     public function nextResultSet(): Promise
     {
         return $this->result->nextResultSet();
+    }
+
+    public function getFields(): Promise
+    {
+        return $this->result->getFields();
     }
 }

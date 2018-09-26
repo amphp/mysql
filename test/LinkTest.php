@@ -119,7 +119,7 @@ abstract class LinkTest extends TestCase
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test;useCompression=true");
 
             /**
-             * @var \Amp\Mysql\Statement $stmt
+             * @var \Amp\Mysql\Statement           $stmt
              * @var \Amp\Mysql\ResultSet $result
              */
             $stmt = yield $db->prepare("SELECT * FROM main WHERE a = ? OR b = :num");
