@@ -2,15 +2,15 @@
 
 namespace Amp\Mysql;
 
-use Amp\Sql\AbstractPool;
+use Amp\Sql\Common\ConnectionPool;
+use Amp\Sql\Common\StatementPool as SqlStatementPool;
 use Amp\Sql\Connector;
 use Amp\Sql\Pool as SqlPool;
 use Amp\Sql\ResultSet as SqlResultSet;
 use Amp\Sql\Statement as SqlStatement;
-use Amp\Sql\StatementPool as SqlStatementPool;
 use Amp\Sql\Transaction as SqlTransaction;
 
-final class Pool extends AbstractPool
+final class Pool extends ConnectionPool
 {
     protected function createDefaultConnector(): Connector
     {

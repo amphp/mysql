@@ -5,7 +5,8 @@
         "php": "^7.0",
         "amphp/amp": "^2",
         "amphp/socket": "^0.10.9",
-        "amphp/sql": "dev-master"
+        "amphp/sql": "dev-master",
+        "amphp/sql-common": "dev-master"
     },
     "license": "MIT",
     "authors": [

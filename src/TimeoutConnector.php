@@ -3,7 +3,7 @@
 namespace Amp\Mysql;
 
 use Amp\Promise;
-use Amp\Sql\ConnectionConfig;
+use Amp\Sql\ConnectionConfig as SqlConnectionConfig;
 use Amp\Sql\Connector;
 use Amp\TimeoutCancellationToken;
 use function Amp\call;
@@ -28,8 +28,12 @@ final class TimeoutConnector implements Connector
      *
      * @throws \Amp\Sql\FailureException If connecting fails.
      */
-    public function connect(ConnectionConfig $config): Promise
+    public function connect(SqlConnectionConfig $config): Promise
     {
+        if (!$config instanceof ConnectionConfig) {
+            throw new \TypeError(\sprintf("Must provide an instance of %s to MySQL connectors", ConnectionConfig::class));
+        }
+
         return call(function () use ($config) {
             $token = new TimeoutCancellationToken($this->timeout);
 

@@ -3,10 +3,10 @@
 namespace Amp\Mysql;
 
 use Amp\Promise;
+use Amp\Sql\Common\StatementPool as SqlStatementPool;
 use Amp\Sql\Pool;
 use Amp\Sql\ResultSet as SqlResultSet;
 use Amp\Sql\Statement as SqlStatement;
-use Amp\Sql\StatementPool as SqlStatementPool;
 use Amp\Success;
 use function Amp\call;
 

@@ -4,6 +4,7 @@ namespace Amp\Mysql;
 
 use Amp\Loop;
 use Amp\Promise;
+use Amp\Sql\Common\ConnectionPool;
 use Amp\Sql\ConnectionConfig as SqlConnectionConfig;
 use Amp\Sql\Connector;
 
@@ -45,6 +46,7 @@ function connect(SqlConnectionConfig $config): Promise
  *
  * @param SqlConnectionConfig $config
  * @param int $maxConnections
+ * @param int $idleTimeout
  *
  * @return Pool
  *
@@ -52,8 +54,8 @@ function connect(SqlConnectionConfig $config): Promise
  */
 function pool(
     SqlConnectionConfig $config,
-    int $maxConnections = Pool::DEFAULT_MAX_CONNECTIONS,
-    int $idleTimeout = Pool::DEFAULT_IDLE_TIMEOUT
+    int $maxConnections = ConnectionPool::DEFAULT_MAX_CONNECTIONS,
+    int $idleTimeout = ConnectionPool::DEFAULT_IDLE_TIMEOUT
 ): Pool {
     return new Pool($config, $maxConnections, $idleTimeout, connector());
 }

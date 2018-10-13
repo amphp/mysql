@@ -7,7 +7,6 @@ use Amp\Mysql\CommandResult;
 use Amp\Mysql\DataTypes;
 use Amp\Mysql\ResultSet;
 use Amp\Promise;
-use Amp\Sql\ResultSet as SqlResultSet;
 use PHPUnit\Framework\TestCase;
 
 abstract class LinkTest extends TestCase
@@ -49,7 +48,7 @@ abstract class LinkTest extends TestCase
 
             $got = [];
             while (yield $resultset->advance()) {
-                $got[] = $resultset->getCurrent(SqlResultSet::FETCH_ARRAY);
+                $got[] = \array_values($resultset->getCurrent());
             }
 
             $this->assertSame($got, [[1], [2], [3]]);
@@ -82,21 +81,21 @@ abstract class LinkTest extends TestCase
 
             $got = [];
             while (yield $resultset->advance()) {
-                $got[] = $resultset->getCurrent(SqlResultSet::FETCH_ARRAY);
+                $got[] = \array_values($resultset->getCurrent());
             }
             $this->assertSame([[1], [2], [3], [4], [5]], $got);
             $this->assertTrue(yield $resultset->nextResultSet());
 
             $got = [];
             while (yield $resultset->advance()) {
-                $got[] = $resultset->getCurrent(SqlResultSet::FETCH_ARRAY);
+                $got[] = \array_values($resultset->getCurrent());
             }
             $this->assertSame([[6]], $got);
             $this->assertTrue(yield $resultset->nextResultSet());
 
             $got = [];
             while (yield $resultset->advance()) {
-                $got[] = $resultset->getCurrent(SqlResultSet::FETCH_ASSOC);
+                $got[] = $resultset->getCurrent();
             }
             $this->assertSame([["d" => 5, "c" => 5], ["d" => 6, "c" => 6]], $got);
 
@@ -140,7 +139,7 @@ abstract class LinkTest extends TestCase
             $this->assertInstanceOf(ResultSet::class, $result);
             $got = [];
             while (yield $result->advance()) {
-                $got[] = $result->getCurrent(SqlResultSet::FETCH_ARRAY);
+                $got[] = \array_values($result->getCurrent());
             }
             $this->assertCount(2, $got);
 
@@ -149,7 +148,7 @@ abstract class LinkTest extends TestCase
             $this->assertInstanceOf(ResultSet::class, $result);
             $got = [];
             while (yield $result->advance()) {
-                $got[] = $result->getCurrent(SqlResultSet::FETCH_ARRAY);
+                $got[] = \array_values($result->getCurrent());
             }
             $this->assertCount(1, $got);
 
@@ -158,7 +157,7 @@ abstract class LinkTest extends TestCase
             $this->assertInstanceOf(ResultSet::class, $result);
             $got = [];
             while (yield $result->advance()) {
-                $got[] = $result->getCurrent(SqlResultSet::FETCH_ARRAY);
+                $got[] = \array_values($result->getCurrent());
             }
             $this->assertCount(2, $got);
 
@@ -270,7 +269,7 @@ abstract class LinkTest extends TestCase
             $this->assertInstanceOf(ResultSet::class, $result);
             $got = [];
             while (yield $result->advance()) {
-                $got[] = $result->getCurrent(SqlResultSet::FETCH_ARRAY);
+                $got[] = \array_values($result->getCurrent());
             }
             $this->assertCount(2, $got);
             $this->assertSame([[2, 3], [4, 5]], $got);
@@ -328,7 +327,7 @@ abstract class LinkTest extends TestCase
             $result = yield $stmt->execute();
             yield $result->advance();
 
-            $this->assertEquals($result->getCurrent(SqlResultSet::FETCH_ARRAY), [-1]);
+            $this->assertEquals(\array_values($result->getCurrent()), [-1]);
         });
     }
 
@@ -351,7 +350,7 @@ abstract class LinkTest extends TestCase
 
             $got = [];
             while (yield $result->advance()) {
-                $got[] = $result->getCurrent(SqlResultSet::FETCH_ARRAY);
+                $got[] = \array_values($result->getCurrent());
             }
             $this->assertCount(1, $got);
             yield $result->nextResultSet();
@@ -362,7 +361,7 @@ abstract class LinkTest extends TestCase
 
             $got = [];
             while (yield $result->advance()) {
-                $got[] = $result->getCurrent(SqlResultSet::FETCH_ARRAY);
+                $got[] = \array_values($result->getCurrent());
             }
             $this->assertCount(0, $got);
         });

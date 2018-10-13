@@ -72,31 +72,17 @@ final class ConnectionResultSet implements ResultSet
     /**
      * {@inheritdoc}
      */
-    public function getCurrent(int $type = self::FETCH_ASSOC)
+    public function getCurrent(): array
     {
         if ($this->currentRow !== null) {
             return $this->currentRow;
         }
 
-        $row = $this->producer->getCurrent();
-
         if (!$this->columnNames) {
             $this->columnNames = \array_column($this->result->columns, "name");
         }
 
-        switch ($type) {
-            case self::FETCH_ASSOC:
-                return $this->currentRow = \array_combine($this->columnNames, $row);
-
-            case self::FETCH_ARRAY:
-                return $this->currentRow = $row;
-
-            case self::FETCH_OBJECT:
-                return $this->currentRow = (object) \array_combine($this->columnNames, $row);
-
-            default:
-                throw new \Error("Invalid result fetch type");
-        }
+        return $this->currentRow = \array_combine($this->columnNames, $this->producer->getCurrent());
     }
 
     private static function fetchRow(Internal\ResultProxy $result): Promise
