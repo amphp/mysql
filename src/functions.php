@@ -8,7 +8,7 @@ use Amp\Sql\Common\ConnectionPool;
 use Amp\Sql\ConnectionConfig as SqlConnectionConfig;
 use Amp\Sql\Connector;
 
-const LOOP_CONNECTOR_IDENTIFIER = Connector::class;
+const LOOP_CONNECTOR_IDENTIFIER = Connector::class . "\\Mysql";
 
 function connector(Connector $connector = null): Connector
 {
