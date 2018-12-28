@@ -48,8 +48,10 @@ More extensive code examples reside in the [`examples`](examples) directory.
 
 ```php
 \Amp\Loop::run(function() {
+    $config = Amp\Mysql\ConnectionConfig::fromString("host=127.0.0.1 user=username password=password db=test");
+    
     /** @var \Amp\Mysql\Pool $pool */
-    $pool = Amp\Mysql\pool("host=127.0.0.1 user=username password=password db=test");
+    $pool = Amp\Mysql\pool($config);
     
     /** @var \Amp\Mysql\Statement $statement */
     $statement = yield $pool->prepare("SELECT * FROM table_name WHERE id=?");
