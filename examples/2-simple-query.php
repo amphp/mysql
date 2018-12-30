@@ -3,7 +3,6 @@
 require 'support/bootstrap.php';
 
 use Amp\Mysql;
-use Amp\Sql\ResultSet;
 
 Amp\Loop::run(function () {
     $db = Mysql\pool(Mysql\ConnectionConfig::fromString("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME));
@@ -12,8 +11,8 @@ Amp\Loop::run(function () {
     $result = yield $db->query("SELECT 1 AS value");
 
     while (yield $result->advance()) {
-        $row = $result->getCurrent(ResultSet::FETCH_ARRAY);
-        \var_dump($row[0]);
+        $row = $result->getCurrent();
+        \var_dump($row['value']);
     }
 
     $db->close();
