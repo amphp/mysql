@@ -658,19 +658,27 @@ REGEX;
         $this->connInfo->errorMsg = \substr($packet, $off);
 
         $this->parseCallback = null;
-        if ($this->connectionState === self::READY) {
-            // normal error
-            if (($deferred = $this->result) || ($deferred = $this->getDeferred())) {
-                $deferred->fail(new QueryError("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}", $this->query));
-            }
-            $this->result = null;
-            $this->query = null;
-            $this->ready();
-        } elseif ($this->connectionState < self::READY) {
+
+        if ($this->connectionState < self::READY) {
             // connection failure
             $this->close();
-            $this->getDeferred()->fail(new InitializationException("Could not connect to {$this->config->connectionString()}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
+            $this->getDeferred()->fail(new InitializationException("Could not connect to {$this->config->getConnectionString()}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
+            return;
         }
+
+        if ($this->result === null && empty($this->deferreds)) {
+            // connection killed without pending query or active result
+            $this->close();
+            return;
+        }
+
+        $deferred = $this->result ?? $this->getDeferred();
+
+        // normal error
+        $deferred->fail(new QueryError("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}", $this->query));
+        $this->result = null;
+        $this->query = null;
+        $this->ready();
     }
 
     /** @see 14.1.3.1 OK-Packet */
