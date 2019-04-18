@@ -24,6 +24,8 @@ final class ConnectionConfig extends SqlConnectionConfig
 
     /** @var bool */
     private $useCompression = false;
+    /** @var bool */
+    private $useLocalInfile = false;
     /** @var ClientTlsContext|null Null for no ssl   */
     private $ssl;
     /** @var string */
@@ -52,7 +54,8 @@ final class ConnectionConfig extends SqlConnectionConfig
             $tlsContext,
             $parts['charset'] ?? self::DEFAULT_CHARSET,
             self::DEFAULT_COLLATE,
-            $parts['compress'] ?? false
+            $parts['compress'] ?? false,
+            $parts['local_infile'] ?? false
         );
     }
 
@@ -66,7 +69,8 @@ final class ConnectionConfig extends SqlConnectionConfig
         string $charset = self::DEFAULT_CHARSET,
         string $collate = self::DEFAULT_COLLATE,
         bool $useCompression = false,
-        string $key = ''
+        string $key = '',
+        bool $useLocalInfile = false
     ) {
         parent::__construct($host, $port, $user, $password, $database);
 
@@ -75,6 +79,7 @@ final class ConnectionConfig extends SqlConnectionConfig
         $this->collate = $collate;
         $this->useCompression = $useCompression;
         $this->key = $key;
+        $this->useLocalInfile = $useLocalInfile;
     }
 
     public function __clone()
@@ -121,6 +126,25 @@ final class ConnectionConfig extends SqlConnectionConfig
     {
         $new = clone $this;
         $new->useCompression = false;
+        return $new;
+    }
+
+    public function isLocalInfileEnabled(): bool
+    {
+        return $this->useLocalInfile;
+    }
+
+    public function withLocalInfile(): self
+    {
+        $new = clone $this;
+        $new->useLocalInfile = true;
+        return $new;
+    }
+
+    public function withoutLocalInfile(): self
+    {
+        $new = clone $this;
+        $new->useLocalInfile = false;
         return $new;
     }
 

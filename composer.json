@@ -4,6 +4,7 @@
     "require": {
         "php": "^7.0",
         "amphp/amp": "^2",
+        "amphp/file": "^0.3.5",
         "amphp/socket": "^0.10.9",
         "amphp/sql": "^1",
         "amphp/sql-common": "^1"
