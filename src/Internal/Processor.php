@@ -112,6 +112,7 @@ REGEX;
     const CLIENT_LONG_FLAG = 0x00000004;
     const CLIENT_CONNECT_WITH_DB = 0x00000008;
     const CLIENT_COMPRESS = 0x00000020;
+    const CLIENT_LOCAL_INFILE = 0x00000080;
     const CLIENT_PROTOCOL_41 = 0x00000200;
     const CLIENT_SSL = 0x00000800;
     const CLIENT_TRANSACTIONS = 0x00002000;
@@ -635,6 +636,10 @@ REGEX;
         if (\extension_loaded("zlib") && $this->config->isCompressionEnabled()) {
             $this->capabilities |= self::CLIENT_COMPRESS;
         }
+
+        if ($this->config->isLocalInfileEnabled()) {
+            $this->capabilities |=  self::CLIENT_LOCAL_INFILE;
+        }
     }
 
     /** @see 14.1.3.2 ERR-Packet */
@@ -805,12 +810,19 @@ REGEX;
     /** @see 14.6.4.1.2 LOCAL INFILE Request */
     private function handleLocalInfileRequest($packet)
     {
-        // @TODO async file fetch @rdlowrey
-        $file = \file_get_contents($packet);
-        if ($file !== "") {
-            $this->sendPacket($file);
-        }
-        $this->sendPacket("");
+        \Amp\asyncCall(function () use ($packet) {
+            try {
+                $filePath = \substr($packet, 1);
+                /** @var \Amp\File\Handle $fileHandle */
+                $fileHandle = yield \Amp\File\open($filePath, 'r');
+                while ("" != ($chunk = yield $fileHandle->read())) {
+                    $this->sendPacket($chunk);
+                }
+                $this->sendPacket("");
+            } catch (\Throwable $e) {
+                $this->getDeferred()->fail(new ConnectionException("Failed to transfer a file to the server", 0, $e));
+            }
+        });
     }
 
     /** @see 14.6.4.1.1 Text Resultset */
@@ -831,7 +843,11 @@ REGEX;
                 }
                 return;
             case self::LOCAL_INFILE_REQUEST:
-                $this->handleLocalInfileRequest($packet);
+                if ($this->config->isLocalInfileEnabled()) {
+                    $this->handleLocalInfileRequest($packet);
+                } else {
+                    $this->getDeferred()->fail(new ConnectionException("Unexpected LOCAL_INFILE_REQUEST packet"));
+                }
                 return;
             case self::ERR_PACKET:
                 $this->handleError($packet);
@@ -1198,10 +1214,6 @@ REGEX;
 
     private function compilePacket(string $pending): string
     {
-        if ($pending === "") {
-            return $pending;
-        }
-
         $packet = "";
         do {
             $len = \strlen($pending);
