@@ -815,7 +815,7 @@ REGEX;
                 $filePath = \substr($packet, 1);
                 /** @var \Amp\File\Handle $fileHandle */
                 $fileHandle = yield \Amp\File\open($filePath, 'r');
-                while (strlen($chunk = yield $fileHandle->read()) > 0) {
+                while ("" != ($chunk = yield $fileHandle->read())) {
                     $this->sendPacket($chunk);
                 }
                 $this->sendPacket("");
