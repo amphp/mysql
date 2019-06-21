@@ -93,13 +93,14 @@ abstract class LinkTest extends TestCase
             $this->assertSame([[6]], $got);
             $this->assertTrue(yield $resultset->nextResultSet());
 
+            $fields = yield $resultset->getFields();
+
             $got = [];
             while (yield $resultset->advance()) {
                 $got[] = $resultset->getCurrent();
             }
             $this->assertSame([["d" => 5, "c" => 5], ["d" => 6, "c" => 6]], $got);
 
-            $fields = yield $resultset->getFields();
             $this->assertCount(2, $fields);
             $this->assertSame($fields[0]["original_name"], "b");
             $this->assertSame($fields[0]["name"], "d");
