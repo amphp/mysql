@@ -206,7 +206,7 @@ final class DataTypes
 
             case self::MYSQL_TYPE_LONGLONG:
             case self::MYSQL_TYPE_LONG | 0x80:
-                if (PHP_INT_SIZE < 8) {
+                if (\PHP_INT_SIZE < 8) {
                     return $type; // Return BIGINT and UNSIGNED INT as string on 32-bit.
                 }
                 // no break
@@ -304,7 +304,7 @@ final class DataTypes
         if ($int < (1 << 7)) {
             return $int;
         }
-        $shift = PHP_INT_SIZE * 8 - 8;
+        $shift = \PHP_INT_SIZE * 8 - 8;
         return $int << $shift >> $shift;
     }
 
@@ -319,7 +319,7 @@ final class DataTypes
         if ($int < (1 << 15)) {
             return $int;
         }
-        $shift = PHP_INT_SIZE * 8 - 16;
+        $shift = \PHP_INT_SIZE * 8 - 16;
         return $int << $shift >> $shift;
     }
 
@@ -334,7 +334,7 @@ final class DataTypes
         if ($int < (1 << 23)) {
             return $int;
         }
-        $shift = PHP_INT_SIZE * 8 - 24;
+        $shift = \PHP_INT_SIZE * 8 - 24;
         return $int << $shift >> $shift;
     }
 
@@ -345,7 +345,7 @@ final class DataTypes
 
     public static function decodeInt32($str)
     {
-        if (PHP_INT_SIZE > 4) {
+        if (\PHP_INT_SIZE > 4) {
             $int = \unpack("V", $str)[1];
             if ($int < (1 << 31)) {
                 return $int;
@@ -358,7 +358,7 @@ final class DataTypes
 
     public static function decodeUnsigned32(string $str)
     {
-        if (PHP_INT_SIZE > 4) {
+        if (\PHP_INT_SIZE > 4) {
             return \unpack("V", $str)[1];
         }
 
@@ -368,7 +368,7 @@ final class DataTypes
 
     public static function decodeInt64(string $str)
     {
-        if (PHP_INT_SIZE > 4) {
+        if (\PHP_INT_SIZE > 4) {
             return \unpack("P", $str)[1];
         }
 
