@@ -2,7 +2,7 @@
 
 namespace Amp\Mysql;
 
-use Amp\Socket\ClientTlsContext;
+use Amp\Socket\ConnectContext;
 use Amp\Sql\ConnectionConfig as SqlConnectionConfig;
 
 final class ConnectionConfig extends SqlConnectionConfig
@@ -26,8 +26,8 @@ final class ConnectionConfig extends SqlConnectionConfig
     private $useCompression = false;
     /** @var bool */
     private $useLocalInfile = false;
-    /** @var ClientTlsContext|null Null for no ssl   */
-    private $ssl;
+    /** @var ConnectContext */
+    private $context;
     /** @var string */
     private $charset = "utf8mb4";
     /** @var string  */
@@ -37,7 +37,7 @@ final class ConnectionConfig extends SqlConnectionConfig
     /** @var string|null */
     private $string;
 
-    public static function fromString(string $connectionString, ClientTlsContext $tlsContext = null): self
+    public static function fromString(string $connectionString, ConnectContext $context = null): self
     {
         $parts = self::parseConnectionString($connectionString);
 
@@ -51,7 +51,7 @@ final class ConnectionConfig extends SqlConnectionConfig
             $parts["user"] ?? null,
             $parts["password"] ?? null,
             $parts["db"] ?? null,
-            $tlsContext,
+            $context,
             $parts['charset'] ?? self::DEFAULT_CHARSET,
             self::DEFAULT_COLLATE,
             $parts['compress'] ?? false,
@@ -65,7 +65,7 @@ final class ConnectionConfig extends SqlConnectionConfig
         string $user = null,
         string $password = null,
         string $database = null,
-        ClientTlsContext $tlsContext = null,
+        ConnectContext $context = null,
         string $charset = self::DEFAULT_CHARSET,
         string $collate = self::DEFAULT_COLLATE,
         bool $useCompression = false,
@@ -74,7 +74,7 @@ final class ConnectionConfig extends SqlConnectionConfig
     ) {
         parent::__construct($host, $port, $user, $password, $database);
 
-        $this->ssl = $tlsContext;
+        $this->context = $context ?? (new ConnectContext);
         $this->charset = $charset;
         $this->collate = $collate;
         $this->useCompression = $useCompression;
@@ -148,22 +148,15 @@ final class ConnectionConfig extends SqlConnectionConfig
         return $new;
     }
 
-    public function getTlsContext()
+    public function getConnectContext()
     {
-        return $this->ssl;
+        return $this->context;
     }
 
-    public function withTlsContext(ClientTlsContext $context): self
+    public function withConnectContext(ConnectContext $context): self
     {
         $new = clone $this;
-        $new->ssl = $context;
-        return $new;
-    }
-
-    public function withoutTlsContext(): self
-    {
-        $new = clone $this;
-        $new->ssl = null;
+        $new->context = $context;
         return $new;
     }
 

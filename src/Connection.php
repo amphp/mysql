@@ -4,7 +4,6 @@ namespace Amp\Mysql;
 
 use Amp\CancellationToken;
 use Amp\Deferred;
-use Amp\NullCancellationToken;
 use Amp\Promise;
 use Amp\Socket;
 use Amp\Sql\FailureException;
@@ -34,22 +33,13 @@ final class Connection implements Link
     /**
      * @param ConnectionConfig $config
      * @param CancellationToken|null $token
-     * @param Socket\ClientConnectContext|null $context Note that TCP No Delay will be set to on automatically.
      *
      * @return Promise
      */
-    public static function connect(
-        ConnectionConfig $config,
-        CancellationToken $token = null,
-        Socket\ClientConnectContext $context = null
-    ): Promise {
-        $token = $token ?? new NullCancellationToken;
-
-        $context = $context ?? new Socket\ClientConnectContext;
-
-        return call(function () use ($config, $token, $context) {
-            $context = $context->withTcpNoDelay();
-            $socket = yield Socket\connect($config->getConnectionString(), $context, $token);
+    public static function connect(ConnectionConfig $config, ?CancellationToken $token = null): Promise
+    {
+        return call(function () use ($config, $token) {
+            $socket = yield Socket\connect($config->getConnectionString(), $config->getConnectContext(), $token);
 
             $processor = new Internal\Processor($socket, $config);
             yield $processor->connect();

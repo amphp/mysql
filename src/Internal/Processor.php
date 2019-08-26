@@ -11,8 +11,7 @@ use Amp\Mysql\ConnectionStatement;
 use Amp\Mysql\DataTypes;
 use Amp\Mysql\InitializationException;
 use Amp\Promise;
-use Amp\Socket\ClientTlsContext;
-use Amp\Socket\Socket;
+use Amp\Socket\EncryptableSocket;
 use Amp\Sql\ConnectionException;
 use Amp\Sql\FailureException;
 use Amp\Sql\QueryError;
@@ -66,7 +65,7 @@ REGEX;
     private $seqId = -1;
     private $compressionId = -1;
 
-    /** @var \Amp\Socket\ClientSocket */
+    /** @var EncryptableSocket */
     private $socket;
 
     private $authPluginDataLen;
@@ -138,7 +137,7 @@ REGEX;
     const CLOSING = 3;
     const CLOSED = 4;
 
-    public function __construct(Socket $socket, ConnectionConfig $config)
+    public function __construct(EncryptableSocket $socket, ConnectionConfig $config)
     {
         $this->socket = $socket;
         $this->connInfo = new ConnectionState;
@@ -1431,7 +1430,7 @@ REGEX;
             $this->capabilities |= self::CLIENT_CONNECT_WITH_DB;
         }
 
-        if ($this->config->getTlsContext() !== null) {
+        if ($this->config->getConnectContext()->getTlsContext() !== null) {
             $this->capabilities |= self::CLIENT_SSL;
         }
 
@@ -1448,10 +1447,7 @@ REGEX;
                 try {
                     yield $this->write($payload);
 
-                    $context = $this->config->getTlsContext() ?: new ClientTlsContext;
-                    $context = $context->withPeerName($this->config->getHost());
-
-                    yield $this->socket->enableCrypto($context);
+                    yield $this->socket->setupTls();
 
                     $this->sendHandshake(true);
                 } catch (\Throwable $e) {

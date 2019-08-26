@@ -2,10 +2,10 @@
     "name": "amphp/mysql",
     "description": "Asynchronous MySQL client for PHP based on Amp.",
     "require": {
-        "php": "^7.0",
+        "php": "^7.1",
         "amphp/amp": "^2",
         "amphp/file": "^0.3.5",
-        "amphp/socket": "^0.10.9",
+        "amphp/socket": "^1",
         "amphp/sql": "^1",
         "amphp/sql-common": "^1"
     },
@@ -38,11 +38,6 @@
         "psr-4": {
             "Amp\\Mysql\\Test\\": "test",
             "Amp\\Mysql\\Bench\\": "benchmarks"
-        }
-    },
-    "config": {
-        "platform": {
-            "php": "7.0.0"
         }
     },
     "scripts": {
