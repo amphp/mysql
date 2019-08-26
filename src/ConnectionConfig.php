@@ -41,21 +41,21 @@ final class ConnectionConfig extends SqlConnectionConfig
     {
         $parts = self::parseConnectionString($connectionString);
 
-        if (!isset($parts["host"])) {
-            throw new \Error("Host must be provided in connection string");
+        if (!isset($parts['host'])) {
+            throw new \Error('Host must be provided in connection string');
         }
 
         return new self(
-            $parts["host"],
-            $parts["port"] ?? self::DEFAULT_PORT,
-            $parts["user"] ?? null,
-            $parts["password"] ?? null,
-            $parts["db"] ?? null,
+            $parts['host'],
+            $parts['port'] ?? self::DEFAULT_PORT,
+            $parts['user'] ?? null,
+            $parts['password'] ?? null,
+            $parts['db'] ?? null,
             $context,
             $parts['charset'] ?? self::DEFAULT_CHARSET,
-            self::DEFAULT_COLLATE,
-            $parts['compress'] ?? false,
-            $parts['local_infile'] ?? false
+            $parts['collate'] ?? self::DEFAULT_COLLATE,
+            ($parts['compression'] ?? '') === 'on',
+            ($parts['local-infile'] ?? '') === 'on'
         );
     }
 

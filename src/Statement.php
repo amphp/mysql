@@ -13,7 +13,7 @@ interface Statement extends SqlStatement
      *
      * @throws \Error If $paramId is not an int or string, or the position does not exist.
      */
-    public function bind($paramId, $data);
+    public function bind($paramId, $data): void;
 
     /**
      * @return Promise<array>
