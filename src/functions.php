@@ -18,7 +18,7 @@ function connector(?Connector $connector = null): Connector
             return $connector;
         }
 
-        $connector = new TimeoutConnector;
+        $connector = new CancellableConnector;
     }
 
     Loop::setState(LOOP_CONNECTOR_IDENTIFIER, $connector);
