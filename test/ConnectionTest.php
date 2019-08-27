@@ -3,6 +3,7 @@
 namespace Amp\Mysql\Test;
 
 use Amp\Loop;
+use Amp\Mysql\Connection;
 use Amp\Mysql\ConnectionConfig;
 use Amp\Mysql\TimeoutConnector;
 use Amp\Promise;
@@ -19,7 +20,7 @@ class ConnectionTest extends LinkTest
     {
         $complete = false;
         Loop::run(function () use (&$complete) {
-            /** @var \Amp\Mysql\Connection $db */
+            /** @var Connection $db */
             $db = yield connect(ConnectionConfig::fromString("host=".DB_HOST." user=".DB_USER." pass=".DB_PASS." db=test"));
 
             /* use an alternative charset... Default is utf8mb4_general_ci */
@@ -43,7 +44,7 @@ class ConnectionTest extends LinkTest
     public function testDoubleClose()
     {
         Loop::run(function () {
-            /** @var \Amp\Mysql\Connection $db */
+            /** @var Connection $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
 
             $db->close();

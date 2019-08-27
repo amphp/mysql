@@ -6,7 +6,10 @@ use Amp\Loop;
 use Amp\Mysql\CommandResult;
 use Amp\Mysql\DataTypes;
 use Amp\Mysql\ResultSet;
+use Amp\Mysql\Statement;
 use Amp\Promise;
+use Amp\Sql\Link;
+use Amp\Sql\Transaction;
 use PHPUnit\Framework\TestCase;
 
 abstract class LinkTest extends TestCase
@@ -14,17 +17,17 @@ abstract class LinkTest extends TestCase
     /**
      * Returns the Link class to be tested.
      *
-     * @return \Amp\Mysql\Link
+     * @return Promise<Link>
      */
     abstract protected function getLink(string $connectionString): Promise;
 
     public function testQuery()
     {
         Loop::run(function () {
-            /** @var \Amp\Mysql\Link $db */
+            /** @var Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
 
-            /** @var \Amp\Mysql\ResultSet $resultset */
+            /** @var ResultSet $resultset */
             $resultset = yield $db->execute("SELECT ? AS a", [M_PI]);
             $this->assertInstanceOf(ResultSet::class, $resultset);
 
@@ -39,10 +42,10 @@ abstract class LinkTest extends TestCase
     public function testQueryFetchRow()
     {
         Loop::run(function () {
-            /** @var \Amp\Mysql\Link $db */
+            /** @var Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
 
-            /** @var \Amp\Mysql\ResultSet $resultset */
+            /** @var ResultSet $resultset */
             $resultset = yield $db->query('SELECT a FROM main WHERE a < 4');
             $this->assertInstanceOf(ResultSet::class, $resultset);
 
@@ -62,7 +65,7 @@ abstract class LinkTest extends TestCase
     public function testQueryWithInvalidQuery()
     {
         Loop::run(function () {
-            /** @var \Amp\Sql\Link $db */
+            /** @var Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
 
             yield $db->query("SELECT & FROM main WHERE a = 1");
@@ -72,10 +75,10 @@ abstract class LinkTest extends TestCase
     public function testMultiStmt()
     {
         Loop::run(function () {
-            /** @var \Amp\Mysql\Link $db */
+            /** @var Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test;useCompression=true");
 
-            /** @var \Amp\Mysql\ResultSet $resultset */
+            /** @var ResultSet $resultset */
             $resultset = yield $db->query("SELECT a FROM main; SELECT b FROM main WHERE a = 5; SELECT b AS d, a + 1 AS c FROM main WHERE b > 4");
             $this->assertInstanceOf(ResultSet::class, $resultset);
 
@@ -115,12 +118,12 @@ abstract class LinkTest extends TestCase
     public function testPrepared()
     {
         Loop::run(function () {
-            /** @var \Amp\Mysql\Link $db */
+            /** @var Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test;useCompression=true");
 
             /**
-             * @var \Amp\Mysql\Statement           $stmt
-             * @var \Amp\Mysql\ResultSet $result
+             * @var Statement $stmt
+             * @var ResultSet $result
              */
             $stmt = yield $db->prepare("SELECT * FROM main WHERE a = ? OR b = :num");
             $base = [
@@ -193,10 +196,10 @@ abstract class LinkTest extends TestCase
     public function testBindWithInvalidParamId()
     {
         Loop::run(function () {
-            /** @var \Amp\Mysql\Link $db */
+            /** @var Link $db */
             $db = yield $this->getLink("host=" . DB_HOST . ";user=" . DB_USER . ";pass=" . DB_PASS . ";db=test");
 
-            /** @var \Amp\Mysql\Statement $statement */
+            /** @var Statement $statement */
             $statement = yield $db->prepare("SELECT * FROM main WHERE a = ?");
 
             $statement->bind(1, 1);
@@ -212,10 +215,10 @@ abstract class LinkTest extends TestCase
     public function testBindWithInvalidParamName()
     {
         Loop::run(function () {
-            /** @var \Amp\Mysql\Link $db */
+            /** @var Link $db */
             $db = yield $this->getLink("host=" . DB_HOST . ";user=" . DB_USER . ";pass=" . DB_PASS . ";db=test");
 
-            /** @var \Amp\Mysql\Statement $statement */
+            /** @var Statement $statement */
             $statement = yield $db->prepare("SELECT * FROM main WHERE a = :a");
 
             $statement->bind("b", 1);
@@ -231,10 +234,10 @@ abstract class LinkTest extends TestCase
     public function testBindWithInvalidParamType()
     {
         Loop::run(function () {
-            /** @var \Amp\Mysql\Link $db */
+            /** @var Link $db */
             $db = yield $this->getLink("host=" . DB_HOST . ";user=" . DB_USER . ";pass=" . DB_PASS . ";db=test");
 
-            /** @var \Amp\Mysql\Statement $statement */
+            /** @var Statement $statement */
             $statement = yield $db->prepare("SELECT * FROM main WHERE a = :a");
 
             $statement->bind(3.14, 1);
@@ -250,10 +253,10 @@ abstract class LinkTest extends TestCase
     public function testStatementExecuteWithTooFewParams()
     {
         Loop::run(function () {
-            /** @var \Amp\Mysql\Link $db */
+            /** @var Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
 
-            /** @var \Amp\Mysql\Statement $stmt */
+            /** @var Statement $stmt */
             $stmt = yield $db->prepare("SELECT * FROM main WHERE a = ? AND b = ?");
             yield $stmt->execute([1]);
         });
@@ -262,10 +265,10 @@ abstract class LinkTest extends TestCase
     public function testExecute()
     {
         Loop::run(function () {
-            /** @var \Amp\Sql\Link $db */
+            /** @var Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
 
-            /** @var \Amp\Mysql\ResultSet $result */
+            /** @var ResultSet $result */
             $result = yield $db->execute("SELECT * FROM main WHERE a = ? OR b = ?", [2, 5]);
             $this->assertInstanceOf(ResultSet::class, $result);
             $got = [];
@@ -290,7 +293,7 @@ abstract class LinkTest extends TestCase
     public function testExecuteWithInvalidQuery()
     {
         Loop::run(function () {
-            /** @var \Amp\Sql\Link $db */
+            /** @var Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
 
             yield $db->execute("SELECT & FROM main WHERE a = ?", [1]);
@@ -304,7 +307,7 @@ abstract class LinkTest extends TestCase
     public function testExecuteWithTooFewParams()
     {
         Loop::run(function () {
-            /** @var \Amp\Sql\Link $db */
+            /** @var Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
 
             yield $db->execute("SELECT * FROM main WHERE a = ? AND b = ?", [1]);
@@ -314,7 +317,7 @@ abstract class LinkTest extends TestCase
     public function testPreparedWithNegativeValue()
     {
         Loop::run(function () {
-            /** @var \Amp\Sql\Link $db */
+            /** @var Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
 
             yield $db->query("DROP TABLE IF EXISTS tmp");
@@ -335,18 +338,18 @@ abstract class LinkTest extends TestCase
     public function testTransaction()
     {
         Loop::run(function () {
-            /** @var \Amp\Sql\Link $db */
+            /** @var Link $db */
             $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
 
-            /** @var \Amp\Sql\Transaction $transaction */
+            /** @var Transaction $transaction */
             $transaction = yield $db->beginTransaction();
 
-            /** @var \Amp\Sql\Statement $statement */
+            /** @var Statement $statement */
             $statement = yield $transaction->prepare("INSERT INTO main VALUES (?, ?)");
             $result = yield $statement->execute([6, 7]);
             $this->assertInstanceOf(CommandResult::class, $result);
 
-            /** @var \Amp\Mysql\ResultSet $result */
+            /** @var ResultSet $result */
             $result = yield $transaction->execute("SELECT * FROM main WHERE a = ?", [6]);
 
             $got = [];
