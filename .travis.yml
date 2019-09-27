@@ -9,53 +9,59 @@ php:
   - 7.0
   - 7.1
   - 7.2
+  - 7.3
+  - 7.4snapshot
   - nightly
 
 jobs:
   include:
     - stage: test
       addons:
-         mariadb: 10.1
-      php: '7.0'
+        mariadb: '10.1'
+      php: 7.0
     - addons:
-         mariadb: 10.2
-      php: '7.0'
+        mariadb: '10.2'
+      php: 7.0
     - addons:
-         mariadb: 10.3
-      php: '7.0'
+        mariadb: '10.3'
+      php: 7.0
     - addons:
-         mariadb: 10.1
-      php: '7.1'
+        mariadb: '10.1'
+      php: 7.1
     - addons:
-         mariadb: 10.2
-      php: '7.1'
+        mariadb: '10.2'
+      php: 7.1
     - addons:
-         mariadb: 10.3
-      php: '7.1'
+        mariadb: '10.3'
+      php: 7.1
     - addons:
-         mariadb: 10.1
-      php: '7.2'
+        mariadb: '10.1'
+      php: 7.2
     - addons:
-         mariadb: 10.2
-      php: '7.2'
+         mariadb: '10.2'
+      php: 7.2
     - addons:
-         mariadb: 10.3
-      php: '7.2'
+        mariadb: '10.3'
+      php: 7.2
     - addons:
-         mariadb: 10.3
+        mariadb: '10.3'
+      php: 7.3
+    - addons:
+        mariadb: '10.3'
+      php: 7.4snapshot
+    - addons:
+         mariadb: '10.3'
       php: 'nightly'
     - stage: benchmark
-      php: '7.2'
+      php: 7.3
       env:
         - AMP_DEBUG=false
       script:
         - PATH=$PATH:$(pwd)/benchmarks/bin vendor/bin/phpbench run --report=aggregate
   allow_failures:
-    - php: 'nightly'
-    - addons:
-         mariadb: 10.3
-      php: 'nightly'
-  fast_finish: true
+      - php: 7.4snapshot
+      - php: nightly
+    fast_finish: true
 
 env:
   - AMP_DEBUG=true
