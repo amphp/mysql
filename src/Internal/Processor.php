@@ -2,6 +2,7 @@
 
 namespace Amp\Mysql\Internal;
 
+use Amp\CancellationToken;
 use Amp\Coroutine;
 use Amp\Deferred;
 use Amp\Loop;
@@ -194,7 +195,7 @@ REGEX;
         $this->socket->reference();
     }
 
-    public function connect(): Promise
+    public function connect(CancellationToken $token): Promise
     {
         \assert(!$this->processors, self::class."::connect() must not be called twice");
 
@@ -202,7 +203,11 @@ REGEX;
 
         $this->processors = [$this->parseMysql()];
 
-        (new Coroutine($this->read()))->onResolve(function () {
+        $id = $token->subscribe(function (): void {
+            $this->close();
+        });
+
+        (new Coroutine($this->read()))->onResolve(function (): void {
             $this->close();
 
             foreach ($this->deferreds as $deferred) {
@@ -216,8 +221,12 @@ REGEX;
 
         $promise = $deferred->promise();
 
+        $promise->onResolve(static function () use ($id, $token): void {
+            $token->unsubscribe($id);
+        });
+
         if ($this->config->getCharset() !== ConnectionConfig::DEFAULT_CHARSET || $this->config->getCollation() !== ConnectionConfig::DEFAULT_COLLATE) {
-            $promise->onResolve(function ($exception) {
+            $promise->onResolve(function (?\Throwable $exception): void {
                 if ($exception) {
                     return;
                 }
@@ -668,7 +677,7 @@ REGEX;
         } elseif ($this->connectionState < self::READY) {
             // connection failure
             $this->close();
-            $this->getDeferred()->fail(new InitializationException("Could not connect to {$this->config->connectionString()}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
+            $this->getDeferred()->fail(new InitializationException("Could not connect to {$this->config->getConnectionString()}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
         }
     }
 

@@ -4,6 +4,7 @@ namespace Amp\Mysql;
 
 use Amp\CancellationToken;
 use Amp\Deferred;
+use Amp\NullCancellationToken;
 use Amp\Promise;
 use Amp\Socket;
 use Amp\Sql\FailureException;
@@ -33,16 +34,23 @@ final class Connection implements Link
     /**
      * @param ConnectionConfig $config
      * @param CancellationToken|null $token
+     * @param Socket\Connector|null $connector
      *
-     * @return Promise
+     * @return Promise<self>
      */
-    public static function connect(ConnectionConfig $config, ?CancellationToken $token = null): Promise
-    {
-        return call(function () use ($config, $token) {
-            $socket = yield Socket\connect($config->getConnectionString(), $config->getConnectContext(), $token);
+    public static function connect(
+        ConnectionConfig $config,
+        ?CancellationToken $token = null,
+        ?Socket\Connector $connector = null
+    ): Promise {
+        $token = $token ?? new NullCancellationToken;
+
+        return call(function () use ($config, $token, $connector) {
+            $socket = yield ($connector ?? Socket\connector())
+                ->connect($config->getConnectionString(), $config->getConnectContext(), $token);
 
             $processor = new Internal\Processor($socket, $config);
-            yield $processor->connect();
+            yield $processor->connect($token);
             return new self($processor);
         });
     }
