@@ -34,8 +34,6 @@ final class ConnectionConfig extends SqlConnectionConfig
     private $collate = "utf8mb4_general_ci";
     /* @var string private key to use for sha256_password auth method */
     private $key;
-    /** @var string|null */
-    private $string;
 
     public static function fromString(string $connectionString, ConnectContext $context = null): self
     {
@@ -47,7 +45,7 @@ final class ConnectionConfig extends SqlConnectionConfig
 
         return new self(
             $parts['host'],
-            $parts['port'] ?? self::DEFAULT_PORT,
+            (int) ($parts['port'] ?? self::DEFAULT_PORT),
             $parts['user'] ?? null,
             $parts['password'] ?? null,
             $parts['db'] ?? null,
@@ -82,32 +80,9 @@ final class ConnectionConfig extends SqlConnectionConfig
         $this->useLocalInfile = $useLocalInfile;
     }
 
-    public function __clone()
-    {
-        $this->string = null;
-    }
-
     public function getConnectionString(): string
     {
-        if ($this->string !== null) {
-            return $this->string;
-        }
-
-        $host = $this->getHost();
-
-        $index = \strpos($host, ':');
-
-        if ($index === false) {
-            return $this->string = "tcp://$host:3306";
-        }
-
-        if ($index === 0) {
-            return $this->string = "tcp://localhost:" . (int) \substr($host, 1);
-        }
-
-        list($host, $port) = \explode(':', $host, 2);
-
-        return $this->string = "tcp://$host:" . (int) $port;
+        return 'tcp://' . $this->getHost() . ':' . $this->getPort();
     }
 
     public function isCompressionEnabled(): bool
