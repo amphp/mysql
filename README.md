@@ -39,7 +39,7 @@ composer require amphp/mysql
 
 ## Requirements
 
-* PHP 7.0+
+* PHP 7.1+
 * [Amp framework](https://github.com/amphp/amp) (installed via composer)
 
 ## Documentation & Examples
@@ -47,17 +47,19 @@ composer require amphp/mysql
 More extensive code examples reside in the [`examples`](examples) directory.
 
 ```php
-\Amp\Loop::run(function() {
-    $config = Amp\Mysql\ConnectionConfig::fromString("host=127.0.0.1 user=username password=password db=test");
+Amp\Loop::run(function() {
+    $config = Amp\Mysql\ConnectionConfig::fromString(
+        "host=127.0.0.1 user=username password=password db=test"
+    );
     
     /** @var \Amp\Mysql\Pool $pool */
     $pool = Amp\Mysql\pool($config);
     
     /** @var \Amp\Mysql\Statement $statement */
-    $statement = yield $pool->prepare("SELECT * FROM table_name WHERE id=?");
+    $statement = yield $pool->prepare("SELECT * FROM table_name WHERE id = :id");
     
     /** @var \Amp\Mysql\ResultSet $result */
-    $result = yield $statement->execute([1337]);
+    $result = yield $statement->execute(['id' => 1337]);
     while (yield $result->advance()) {
         $row = $result->getCurrent();
         // $row is an associative array of column values. e.g.: $row['column_name']
