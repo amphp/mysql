@@ -70,7 +70,7 @@ final class ConnectionStatement implements Statement
     }
 
     /** {@inheritdoc} */
-    public function bind($paramId, $data)
+    public function bind($paramId, $data): void
     {
         if (\is_int($paramId)) {
             if ($paramId >= $this->numParamCount) {
@@ -103,9 +103,9 @@ final class ConnectionStatement implements Statement
         } while (isset($array) && $i = \next($array));
 
         if (isset($this->prebound[$paramId])) {
-            $this->prebound[$paramId] .= $data;
+            $this->prebound[$paramId] .= (string) $data;
         } else {
-            $this->prebound[$paramId] = $data;
+            $this->prebound[$paramId] = (string) $data;
         }
     }
 
@@ -167,7 +167,7 @@ final class ConnectionStatement implements Statement
         return $this->query;
     }
 
-    private function close()
+    private function close(): void
     {
         if ($this->processor === null) {
             return;

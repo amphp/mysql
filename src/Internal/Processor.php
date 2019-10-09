@@ -2,6 +2,7 @@
 
 namespace Amp\Mysql\Internal;
 
+use Amp\CancellationToken;
 use Amp\Coroutine;
 use Amp\Deferred;
 use Amp\Loop;
@@ -11,8 +12,7 @@ use Amp\Mysql\ConnectionStatement;
 use Amp\Mysql\DataTypes;
 use Amp\Mysql\InitializationException;
 use Amp\Promise;
-use Amp\Socket\ClientTlsContext;
-use Amp\Socket\Socket;
+use Amp\Socket\EncryptableSocket;
 use Amp\Sql\ConnectionException;
 use Amp\Sql\FailureException;
 use Amp\Sql\QueryError;
@@ -66,7 +66,7 @@ REGEX;
     private $seqId = -1;
     private $compressionId = -1;
 
-    /** @var \Amp\Socket\ClientSocket */
+    /** @var EncryptableSocket */
     private $socket;
 
     private $authPluginDataLen;
@@ -138,7 +138,7 @@ REGEX;
     const CLOSING = 3;
     const CLOSED = 4;
 
-    public function __construct(Socket $socket, ConnectionConfig $config)
+    public function __construct(EncryptableSocket $socket, ConnectionConfig $config)
     {
         $this->socket = $socket;
         $this->connInfo = new ConnectionState;
@@ -156,7 +156,7 @@ REGEX;
         return $this->connectionState === self::READY;
     }
 
-    public function unreference()
+    public function unreference(): void
     {
         if (!--$this->refcount) {
             $this->appendTask(function () {
@@ -165,7 +165,7 @@ REGEX;
         }
     }
 
-    private function ready()
+    private function ready(): void
     {
         if (!empty($this->deferreds)) {
             return;
@@ -188,14 +188,14 @@ REGEX;
         }
     }
 
-    private function addDeferred(Deferred $deferred)
+    private function addDeferred(Deferred $deferred): void
     {
         \assert($this->socket, "The connection has been closed");
         $this->deferreds[] = $deferred;
         $this->socket->reference();
     }
 
-    public function connect(): Promise
+    public function connect(CancellationToken $token): Promise
     {
         \assert(!$this->processors, self::class."::connect() must not be called twice");
 
@@ -203,7 +203,11 @@ REGEX;
 
         $this->processors = [$this->parseMysql()];
 
-        (new Coroutine($this->read()))->onResolve(function () {
+        $id = $token->subscribe(function (): void {
+            $this->close();
+        });
+
+        (new Coroutine($this->read()))->onResolve(function (): void {
             $this->close();
 
             foreach ($this->deferreds as $deferred) {
@@ -217,8 +221,12 @@ REGEX;
 
         $promise = $deferred->promise();
 
+        $promise->onResolve(static function () use ($id, $token): void {
+            $token->unsubscribe($id);
+        });
+
         if ($this->config->getCharset() !== ConnectionConfig::DEFAULT_CHARSET || $this->config->getCollation() !== ConnectionConfig::DEFAULT_COLLATE) {
-            $promise->onResolve(function ($exception) {
+            $promise->onResolve(function (?\Throwable $exception): void {
                 if ($exception) {
                     return;
                 }
@@ -264,7 +272,7 @@ REGEX;
         }
     }
 
-    private function processData(string $data)
+    private function processData(string $data): void
     {
         foreach ($this->processors as $processor) {
             if (empty($data = $processor->send($data))) {
@@ -284,7 +292,7 @@ REGEX;
         return \array_shift($this->deferreds);
     }
 
-    private function appendTask(callable $callback)
+    private function appendTask(callable $callback): void
     {
         if ($this->packetCallback || $this->parseCallback || !empty($this->onReady) || !empty($this->deferreds) || $this->connectionState !== self::READY) {
             $this->onReady[] = $callback;
@@ -420,7 +428,7 @@ REGEX;
     }
 
     /** @see 14.7.5 COM_STMT_SEND_LONG_DATA */
-    public function bindParam(int $stmtId, int $paramId, string $data)
+    public function bindParam(int $stmtId, int $paramId, string $data): void
     {
         $payload = "\x18";
         $payload .= DataTypes::encodeInt32($stmtId);
@@ -489,7 +497,7 @@ REGEX;
     }
 
     /** @see 14.7.7 COM_STMT_CLOSE */
-    public function closeStmt(int $stmtId)
+    public function closeStmt(int $stmtId): void
     {
         $payload = "\x19" . DataTypes::encodeInt32($stmtId);
         $this->appendTask(function () use ($payload) {
@@ -534,7 +542,7 @@ REGEX;
     }
 
     /** @see 14.6.6 COM_CREATE_DB */
-    public function createDatabase($db)
+    public function createDatabase(string $db): Promise
     {
         return $this->startCommand(function () use ($db) {
             $this->sendPacket("\x05$db");
@@ -587,7 +595,7 @@ REGEX;
     }
 
     /** @see 14.6.13 COM_PROCESS_KILL */
-    public function killProcess($process): Promise
+    public function killProcess(int $process): Promise
     {
         return $this->startCommand(function () use ($process) {
             $this->sendPacket("\x0c" . DataTypes::encodeInt32($process));
@@ -1150,7 +1158,7 @@ REGEX;
         }
     }
 
-    private function readStatistics($packet)
+    private function readStatistics($packet): void
     {
         $this->getDeferred()->resolve($packet);
         $this->ready();
@@ -1166,7 +1174,7 @@ REGEX;
         });
     }
 
-    public function close()
+    public function close(): void
     {
         if ($this->connectionState === self::CLOSING && $this->deferreds) {
             \array_pop($this->deferreds)->resolve();
@@ -1208,7 +1216,7 @@ REGEX;
         return $this->pendingWrite = $this->socket->write($packet);
     }
 
-    private function resetIds()
+    private function resetIds(): void
     {
         if ($this->pendingWrite) {
             $this->pendingWrite->onResolve(function () {
@@ -1334,7 +1342,7 @@ REGEX;
         }
     }
 
-    private function parsePayload($packet)
+    private function parsePayload($packet): void
     {
         if ($this->connectionState === self::UNCONNECTED) {
             $this->established();
@@ -1396,19 +1404,19 @@ REGEX;
         }
     }
 
-    private function secureAuth($pass, $scramble)
+    private function secureAuth(string $pass, string $scramble): string
     {
         $hash = \sha1($pass, 1);
         return $hash ^ \sha1(\substr($scramble, 0, 20) . \sha1($hash, 1), 1);
     }
 
-    private function sha256Auth($pass, $scramble, $key)
+    private function sha256Auth(string $pass, string $scramble, string $key): string
     {
         \openssl_public_encrypt($pass ^ \str_repeat($scramble, \ceil(\strlen($pass) / \strlen($scramble))), $auth, $key, OPENSSL_PKCS1_OAEP_PADDING);
         return $auth;
     }
 
-    private function authSwitchRequest($packet)
+    private function authSwitchRequest($packet): void
     {
         $this->parseCallback = null;
         switch (\ord($packet)) {
@@ -1433,13 +1441,13 @@ REGEX;
      * @see 14.2.5 Connection Phase Packets
      * @see 14.3 Authentication Method
      */
-    private function sendHandshake($inSSL = false)
+    private function sendHandshake($inSSL = false): void
     {
         if ($this->config->getDatabase() !== null) {
             $this->capabilities |= self::CLIENT_CONNECT_WITH_DB;
         }
 
-        if ($this->config->getTlsContext() !== null) {
+        if ($this->config->getConnectContext()->getTlsContext() !== null) {
             $this->capabilities |= self::CLIENT_SSL;
         }
 
@@ -1456,10 +1464,7 @@ REGEX;
                 try {
                     yield $this->write($payload);
 
-                    $context = $this->config->getTlsContext() ?: new ClientTlsContext;
-                    $context = $context->withPeerName($this->config->getHost());
-
-                    yield $this->socket->enableCrypto($context);
+                    yield $this->socket->setupTls();
 
                     $this->sendHandshake(true);
                 } catch (\Throwable $e) {

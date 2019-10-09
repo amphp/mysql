@@ -2,17 +2,11 @@
 
 namespace Amp\Mysql\Bench;
 
+use Amp\Mysql\CancellableConnector;
 use Amp\Mysql\Connection;
 use Amp\Mysql\ConnectionConfig;
 use Amp\Mysql\Pool as ConnectionPool;
 use Amp\Mysql\ResultSet;
-use Amp\Mysql\TimeoutConnector;
-use PhpBench\Benchmark\Metadata\Annotations\AfterMethods;
-use PhpBench\Benchmark\Metadata\Annotations\BeforeMethods;
-use PhpBench\Benchmark\Metadata\Annotations\Iterations;
-use PhpBench\Benchmark\Metadata\Annotations\OutputTimeUnit;
-use PhpBench\Benchmark\Metadata\Annotations\Revs;
-use PhpBench\Benchmark\Metadata\Annotations\Warmup;
 use function Amp\call;
 use function Amp\Promise\wait;
 
@@ -44,8 +38,8 @@ class QueryBench extends AbstractBench
     public function init()
     {
         $config = ConnectionConfig::fromString("host=$this->host;user=$this->user;pass=$this->pass");
-        $connector = new TimeoutConnector;
-        $this->connectionPool = new ConnectionPool($config, $this->poolLimit, $connector);
+        $connector = new CancellableConnector;
+        $this->connectionPool = new ConnectionPool($config, $this->poolLimit, 10, $connector);
         $connectionPromise = $connector->connect($config);
         $this->connection = wait($connectionPromise);
         $this->pdoConnection = new \PDO("mysql:host=$this->host;port=3306", $this->user, $this->pass);

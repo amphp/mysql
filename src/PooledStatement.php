@@ -22,7 +22,7 @@ final class PooledStatement extends SqlPooledStatement implements Statement
         return new PooledResultSet($resultSet, $release);
     }
 
-    public function bind($paramId, $data)
+    public function bind($paramId, $data): void
     {
         $this->statement->bind($paramId, $data);
     }

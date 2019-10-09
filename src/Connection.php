@@ -34,25 +34,23 @@ final class Connection implements Link
     /**
      * @param ConnectionConfig $config
      * @param CancellationToken|null $token
-     * @param Socket\ClientConnectContext|null $context Note that TCP No Delay will be set to on automatically.
+     * @param Socket\Connector|null $connector
      *
-     * @return Promise
+     * @return Promise<self>
      */
     public static function connect(
         ConnectionConfig $config,
-        CancellationToken $token = null,
-        Socket\ClientConnectContext $context = null
+        ?CancellationToken $token = null,
+        ?Socket\Connector $connector = null
     ): Promise {
         $token = $token ?? new NullCancellationToken;
 
-        $context = $context ?? new Socket\ClientConnectContext;
-
-        return call(function () use ($config, $token, $context) {
-            $context = $context->withTcpNoDelay();
-            $socket = yield Socket\connect($config->getConnectionString(), $context, $token);
+        return call(function () use ($config, $token, $connector) {
+            $socket = yield ($connector ?? Socket\connector())
+                ->connect($config->getConnectionString(), $config->getConnectContext(), $token);
 
             $processor = new Internal\Processor($socket, $config);
-            yield $processor->connect();
+            yield $processor->connect($token);
             return new self($processor);
         });
     }

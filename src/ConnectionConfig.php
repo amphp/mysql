@@ -2,7 +2,7 @@
 
 namespace Amp\Mysql;
 
-use Amp\Socket\ClientTlsContext;
+use Amp\Socket\ConnectContext;
 use Amp\Sql\ConnectionConfig as SqlConnectionConfig;
 
 final class ConnectionConfig extends SqlConnectionConfig
@@ -26,36 +26,34 @@ final class ConnectionConfig extends SqlConnectionConfig
     private $useCompression = false;
     /** @var bool */
     private $useLocalInfile = false;
-    /** @var ClientTlsContext|null Null for no ssl   */
-    private $ssl;
+    /** @var ConnectContext */
+    private $context;
     /** @var string */
     private $charset = "utf8mb4";
     /** @var string  */
     private $collate = "utf8mb4_general_ci";
     /* @var string private key to use for sha256_password auth method */
     private $key;
-    /** @var string|null */
-    private $string;
 
-    public static function fromString(string $connectionString, ClientTlsContext $tlsContext = null): self
+    public static function fromString(string $connectionString, ConnectContext $context = null): self
     {
         $parts = self::parseConnectionString($connectionString);
 
-        if (!isset($parts["host"])) {
-            throw new \Error("Host must be provided in connection string");
+        if (!isset($parts['host'])) {
+            throw new \Error('Host must be provided in connection string');
         }
 
         return new self(
-            $parts["host"],
-            $parts["port"] ?? self::DEFAULT_PORT,
-            $parts["user"] ?? null,
-            $parts["password"] ?? null,
-            $parts["db"] ?? null,
-            $tlsContext,
+            $parts['host'],
+            (int) ($parts['port'] ?? self::DEFAULT_PORT),
+            $parts['user'] ?? null,
+            $parts['password'] ?? null,
+            $parts['db'] ?? null,
+            $context,
             $parts['charset'] ?? self::DEFAULT_CHARSET,
-            self::DEFAULT_COLLATE,
-            $parts['compress'] ?? false,
-            $parts['local_infile'] ?? false
+            $parts['collate'] ?? self::DEFAULT_COLLATE,
+            ($parts['compression'] ?? '') === 'on',
+            ($parts['local-infile'] ?? '') === 'on'
         );
     }
 
@@ -65,7 +63,7 @@ final class ConnectionConfig extends SqlConnectionConfig
         string $user = null,
         string $password = null,
         string $database = null,
-        ClientTlsContext $tlsContext = null,
+        ConnectContext $context = null,
         string $charset = self::DEFAULT_CHARSET,
         string $collate = self::DEFAULT_COLLATE,
         bool $useCompression = false,
@@ -74,7 +72,7 @@ final class ConnectionConfig extends SqlConnectionConfig
     ) {
         parent::__construct($host, $port, $user, $password, $database);
 
-        $this->ssl = $tlsContext;
+        $this->context = $context ?? (new ConnectContext);
         $this->charset = $charset;
         $this->collate = $collate;
         $this->useCompression = $useCompression;
@@ -82,32 +80,9 @@ final class ConnectionConfig extends SqlConnectionConfig
         $this->useLocalInfile = $useLocalInfile;
     }
 
-    public function __clone()
-    {
-        $this->string = null;
-    }
-
     public function getConnectionString(): string
     {
-        if ($this->string !== null) {
-            return $this->string;
-        }
-
-        $host = $this->getHost();
-
-        $index = \strpos($host, ':');
-
-        if ($index === false) {
-            return $this->string = "tcp://$host:3306";
-        }
-
-        if ($index === 0) {
-            return $this->string = "tcp://localhost:" . (int) \substr($host, 1);
-        }
-
-        list($host, $port) = \explode(':', $host, 2);
-
-        return $this->string = "tcp://$host:" . (int) $port;
+        return 'tcp://' . $this->getHost() . ':' . $this->getPort();
     }
 
     public function isCompressionEnabled(): bool
@@ -148,22 +123,15 @@ final class ConnectionConfig extends SqlConnectionConfig
         return $new;
     }
 
-    public function getTlsContext()
+    public function getConnectContext()
     {
-        return $this->ssl;
+        return $this->context;
     }
 
-    public function withTlsContext(ClientTlsContext $context): self
+    public function withConnectContext(ConnectContext $context): self
     {
         $new = clone $this;
-        $new->ssl = $context;
-        return $new;
-    }
-
-    public function withoutTlsContext(): self
-    {
-        $new = clone $this;
-        $new->ssl = null;
+        $new->context = $context;
         return $new;
     }
 

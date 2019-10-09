@@ -43,7 +43,7 @@ final class StatementPool extends SqlStatementPool implements Statement
         return new PooledResultSet($resultSet, $release);
     }
 
-    public function bind($paramId, $data)
+    public function bind($paramId, $data): void
     {
         if (!\is_int($paramId) && !\is_string($paramId)) {
             throw new \TypeError("Invalid parameter ID type");

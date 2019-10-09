@@ -4,9 +4,9 @@ namespace Amp\Mysql\Test;
 
 use Amp\Mysql\ConnectionStatement;
 use Amp\Mysql\Internal\ResultProxy;
-use PHPUnit\Framework\TestCase;
+use Amp\PHPUnit\AsyncTestCase;
 
-class StatementTest extends TestCase
+class StatementTest extends AsyncTestCase
 {
     /** @var \Prophecy\Prophecy\ObjectProphecy */
     protected $processor;
@@ -14,8 +14,10 @@ class StatementTest extends TestCase
     /** @var \Amp\Mysql\Internal\ResultProxy */
     protected $resultProxy;
 
-    public function setUp()
+    public function setUp(): void
     {
+        parent::setUp();
+
         $this->processor = $this->prophesize('Amp\Mysql\Internal\Processor');
         $this->resultProxy = new ResultProxy;
     }

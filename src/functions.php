@@ -10,7 +10,7 @@ use Amp\Sql\Connector;
 
 const LOOP_CONNECTOR_IDENTIFIER = Connector::class . "\\Mysql";
 
-function connector(Connector $connector = null): Connector
+function connector(?Connector $connector = null): Connector
 {
     if ($connector === null) {
         $connector = Loop::getState(LOOP_CONNECTOR_IDENTIFIER);
@@ -18,7 +18,7 @@ function connector(Connector $connector = null): Connector
             return $connector;
         }
 
-        $connector = new TimeoutConnector;
+        $connector = new CancellableConnector;
     }
 
     Loop::setState(LOOP_CONNECTOR_IDENTIFIER, $connector);
@@ -29,7 +29,6 @@ function connector(Connector $connector = null): Connector
  * Create a connection using the global Connector instance.
  *
  * @param SqlConnectionConfig $config
- * @param \Amp\Socket\ClientTlsContext $sslOptions
  *
  * @return Promise<Connection>
  *

@@ -74,7 +74,7 @@ final class ConnectionTransaction implements SqlTransaction
      *
      * Closes and commits all changes in the transaction.
      */
-    public function close()
+    public function close(): void
     {
         if ($this->processor) {
             $this->commit(); // Invokes $this->release callback.

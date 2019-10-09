@@ -3,7 +3,6 @@
 namespace Amp\Mysql\Test;
 
 use Amp\Delayed;
-use Amp\Loop;
 use Amp\Mysql\CommandResult;
 use Amp\Mysql\Connection;
 use Amp\Mysql\ConnectionConfig;
@@ -15,7 +14,6 @@ use Amp\Sql\Connector;
 use Amp\Sql\Transaction as SqlTransaction;
 use Amp\Success;
 use function Amp\call;
-use function Amp\Mysql\pool;
 
 interface StatementOperation extends Statement
 {
@@ -94,10 +92,8 @@ class PoolTest extends LinkTest
 
         $pool = $this->createPool($this->makeConnectionSet($processors));
 
-        Loop::run(function () use ($pool, $result) {
-            $return = yield $pool->prepare('SQL Query');
-            $this->assertInstanceOf(Statement::class, $return);
-        });
+        $return = yield $pool->prepare('SQL Query');
+        $this->assertInstanceOf(Statement::class, $return);
     }
 
     /**
@@ -120,19 +116,17 @@ class PoolTest extends LinkTest
 
         $pool = $this->createPool($this->makeConnectionSet($processors));
 
-        Loop::run(function () use ($count, $rounds, $pool) {
-            $promises = [];
+        $promises = [];
 
-            for ($i = 0; $i < $count; ++$i) {
-                $promises[] = $pool->prepare('SQL Query');
-            }
+        for ($i = 0; $i < $count; ++$i) {
+            $promises[] = $pool->prepare('SQL Query');
+        }
 
-            $results = yield $promises;
+        $results = yield $promises;
 
-            foreach ($results as $result) {
-                $this->assertInstanceOf(Statement::class, $result);
-            }
-        });
+        foreach ($results as $result) {
+            $this->assertInstanceOf(Statement::class, $result);
+        }
     }
 
     /**
@@ -153,11 +147,9 @@ class PoolTest extends LinkTest
 
         $pool = $this->createPool($this->makeConnectionSet($processors));
 
-        Loop::run(function () use ($pool, $result) {
-            $return = yield $pool->beginTransaction(SqlTransaction::ISOLATION_COMMITTED);
-            $this->assertInstanceOf(SqlTransaction::class, $return);
-            yield $return->rollback();
-        });
+        $return = yield $pool->beginTransaction(SqlTransaction::ISOLATION_COMMITTED);
+        $this->assertInstanceOf(SqlTransaction::class, $return);
+        yield $return->rollback();
     }
 
     /**
@@ -181,24 +173,22 @@ class PoolTest extends LinkTest
 
         $pool = $this->createPool($this->makeConnectionSet($processors));
 
-        Loop::run(function () use ($count, $rounds, $pool) {
-            $promises = [];
-            for ($i = 0; $i < $count; ++$i) {
-                $promises[] = $pool->beginTransaction(SqlTransaction::ISOLATION_COMMITTED);
-            }
+        $promises = [];
+        for ($i = 0; $i < $count; ++$i) {
+            $promises[] = $pool->beginTransaction(SqlTransaction::ISOLATION_COMMITTED);
+        }
 
-            $results = yield \array_map(function (Promise $promise): Promise {
-                return call(function () use ($promise) {
-                    $transaction = yield $promise;
-                    $this->assertInstanceOf(SqlTransaction::class, $transaction);
-                    return yield $transaction->rollback();
-                });
-            }, $promises);
+        $results = yield \array_map(function (Promise $promise): Promise {
+            return call(function () use ($promise) {
+                $transaction = yield $promise;
+                $this->assertInstanceOf(SqlTransaction::class, $transaction);
+                return yield $transaction->rollback();
+            });
+        }, $promises);
 
-            foreach ($results as $result) {
-                $this->assertInstanceof(CommandResult::class, $result);
-            }
-        });
+        foreach ($results as $result) {
+            $this->assertInstanceof(CommandResult::class, $result);
+        }
     }
 
     /**
@@ -219,19 +209,17 @@ class PoolTest extends LinkTest
 
         $pool = $this->createPool($this->makeConnectionSet($processors));
 
-        Loop::run(function () use ($pool, $query, $count) {
-            $promises = [];
-            for ($i = 0; $i < $count; ++$i) {
-                $promises[] = $pool->extractConnection();
-            }
+        $promises = [];
+        for ($i = 0; $i < $count; ++$i) {
+            $promises[] = $pool->extractConnection();
+        }
 
-            $results = yield $promises;
+        $results = yield $promises;
 
-            foreach ($results as $result) {
-                $this->assertInstanceof(Connection::class, $result);
-                $result->query($query);
-            }
-        });
+        foreach ($results as $result) {
+            $this->assertInstanceof(Connection::class, $result);
+            $result->query($query);
+        }
     }
 
     /**
@@ -265,34 +253,16 @@ class PoolTest extends LinkTest
         $pool = $this->createPool($this->makeConnectionSet($processors));
         $this->assertSame($count + 1, $pool->getConnectionLimit());
 
-        Loop::run(function () use ($pool, $query, $count) {
-            $promises = [];
-            for ($i = 0; $i < $count + 1; ++$i) {
-                $promises[] = $pool->query($query);
-            }
-            yield $promises;
+        $promises = [];
+        for ($i = 0; $i < $count + 1; ++$i) {
+            $promises[] = $pool->query($query);
+        }
+        yield $promises;
 
-            $promises = [];
-            for ($i = 0; $i < $count; ++$i) {
-                $promises[] = $pool->query($query);
-            }
-            yield $promises;
-        });
-    }
-
-    /**
-     * @expectedException \Amp\Mysql\InitializationException
-     * @expectedExceptionMessage Access denied for user
-     */
-    public function testWrongPassword()
-    {
-        Loop::run(function () {
-            $db = pool(ConnectionConfig::fromString("host=".DB_HOST.";user=".DB_USER.";pass=the_wrong_password;db=test"));
-
-            $promise = $db->query("CREATE TABLE tmp SELECT 1 AS a, 2 AS b");
-
-            /* Try a query */
-            $result = yield $promise;
-        });
+        $promises = [];
+        for ($i = 0; $i < $count; ++$i) {
+            $promises[] = $pool->query($query);
+        }
+        yield $promises;
     }
 }
