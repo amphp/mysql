@@ -6,7 +6,6 @@ services:
   - mysql
 
 php:
-  - 7.0
   - 7.1
   - 7.2
   - 7.3
@@ -17,15 +16,6 @@ jobs:
   include:
     - stage: test
       addons:
-        mariadb: '10.1'
-      php: 7.0
-    - addons:
-        mariadb: '10.2'
-      php: 7.0
-    - addons:
-        mariadb: '10.3'
-      php: 7.0
-    - addons:
         mariadb: '10.1'
       php: 7.1
     - addons:
