@@ -27,6 +27,9 @@ jobs:
         mariadb: 10.3
       php: 7.1
     - addons:
+        mariadb: 10.4
+      php: 7.1
+    - addons:
         mariadb: 10.1
       php: 7.2
     - addons:
@@ -36,6 +39,9 @@ jobs:
         mariadb: 10.3
       php: 7.2
     - addons:
+        mariadb: 10.4
+      php: 7.2
+    - addons:
         mariadb: 10.1
       php: 7.3
     - addons:
@@ -44,11 +50,23 @@ jobs:
     - addons:
         mariadb: 10.3
       php: 7.3
+    - addons:
+        mariadb: 10.4
+      php: 7.3
+    - addons:
+        mariadb: 10.1
+      php: 7.4snapshot
+    - addons:
+        mariadb: 10.2
+      php: 7.4snapshot
     - addons:
         mariadb: 10.3
       php: 7.4snapshot
     - addons:
-        mariadb: 10.3
+        mariadb: 10.4
+      php: 7.4snapshot
+    - addons:
+        mariadb: 10.4
       php: nightly
     - stage: benchmark
       php: 7.3
