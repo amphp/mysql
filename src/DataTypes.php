@@ -39,6 +39,8 @@ final class DataTypes
     const MYSQL_TYPE_STRING = 0xfe;
     const MYSQL_TYPE_GEOMETRY = 0xff;
 
+    private const ENCODED_JSON_PREFIX = "base64:type251:";
+
     /** @see 14.7.3 Binary Value */
     public static function encodeBinary($param): array
     {
@@ -96,12 +98,16 @@ final class DataTypes
             case self::MYSQL_TYPE_TINY_BLOB:
             case self::MYSQL_TYPE_GEOMETRY:
             case self::MYSQL_TYPE_BIT:
-            case self::MYSQL_TYPE_JSON:
             case self::MYSQL_TYPE_DECIMAL:
             case self::MYSQL_TYPE_NEWDECIMAL:
                 $ret = self::decodeString($str, $intlen, $len);
                 $len += $intlen;
                 return $ret;
+
+            case self::MYSQL_TYPE_JSON:
+                $ret = self::decodeString($str, $intlen, $len);
+                $len += $intlen;
+                return self::decodeJson($ret);
 
             case self::MYSQL_TYPE_LONGLONG:
             case self::MYSQL_TYPE_LONGLONG | 0x80:
@@ -224,9 +230,22 @@ final class DataTypes
             case self::MYSQL_TYPE_FLOAT:
                 return (float) $data;
 
+            case self::MYSQL_TYPE_JSON:
+                return self::decodeJson($data);
+
             default:
                 return $data;
         }
+    }
+
+    private static function decodeJson(string $data): string
+    {
+        if (!\strncmp(self::ENCODED_JSON_PREFIX, $data, \strlen(self::ENCODED_JSON_PREFIX))) {
+            return $data; // Data was not base-64 encoded.
+        }
+
+        $data = \substr($data, \strlen(self::ENCODED_JSON_PREFIX));
+        return \base64_decode($data);
     }
 
     public static function decodeUnsignedOff(string $str, int &$off): int
