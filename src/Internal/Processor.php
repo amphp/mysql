@@ -24,30 +24,30 @@ use Amp\Sql\TransientResource;
  */
 
 /** @see 14.1.3.4 Status Flags */
-class StatusFlags
+final class StatusFlags
 {
-    const SERVER_STATUS_IN_TRANS = 0x0001; // a transaction is active
-    const SERVER_STATUS_AUTOCOMMIT = 0x0002; // auto-commit is enabled
-    const SERVER_MORE_RESULTS_EXISTS = 0x0008;
-    const SERVER_STATUS_NO_GOOD_INDEX_USED = 0x0010;
-    const SERVER_STATUS_NO_INDEX_USED = 0x0020;
-    const SERVER_STATUS_CURSOR_EXISTS = 0x0040; // Used by Binary Protocol Resultset to signal that COM_STMT_FETCH has to be used to fetch the row-data.
-    const SERVER_STATUS_LAST_ROW_SENT = 0x0080;
-    const SERVER_STATUS_DB_DROPPED = 0x0100;
-    const SERVER_STATUS_NO_BACKSLASH_ESCAPES = 0x0200;
-    const SERVER_STATUS_METADATA_CHANGED = 0x0400;
-    const SERVER_QUERY_WAS_SLOW = 0x0800;
-    const SERVER_PS_OUT_PARAMS = 0x1000;
-    const SERVER_STATUS_IN_TRANS_READONLY = 0x2000; // in a read-only transaction
-    const SERVER_SESSION_STATE_CHANGED = 0x4000; // connection state information has changed
+    public const SERVER_STATUS_IN_TRANS = 0x0001; // a transaction is active
+    public const SERVER_STATUS_AUTOCOMMIT = 0x0002; // auto-commit is enabled
+    public const SERVER_MORE_RESULTS_EXISTS = 0x0008;
+    public const SERVER_STATUS_NO_GOOD_INDEX_USED = 0x0010;
+    public const SERVER_STATUS_NO_INDEX_USED = 0x0020;
+    public const SERVER_STATUS_CURSOR_EXISTS = 0x0040; // Used by Binary Protocol Resultset to signal that COM_STMT_FETCH has to be used to fetch the row-data.
+    public const SERVER_STATUS_LAST_ROW_SENT = 0x0080;
+    public const SERVER_STATUS_DB_DROPPED = 0x0100;
+    public const SERVER_STATUS_NO_BACKSLASH_ESCAPES = 0x0200;
+    public const SERVER_STATUS_METADATA_CHANGED = 0x0400;
+    public const SERVER_QUERY_WAS_SLOW = 0x0800;
+    public const SERVER_PS_OUT_PARAMS = 0x1000;
+    public const SERVER_STATUS_IN_TRANS_READONLY = 0x2000; // in a read-only transaction
+    public const SERVER_SESSION_STATE_CHANGED = 0x4000; // connection state information has changed
 }
 
 /** @see 13.1.3.1.1 Session State Information */
-class SessionStateTypes
+final class SessionStateTypes
 {
-    const SESSION_TRACK_SYSTEM_VARIABLES = 0x00;
-    const SESSION_TRACK_SCHEMA = 0x01;
-    const SESSION_TRACK_STATE_CHANGE = 0x02;
+    public const SESSION_TRACK_SYSTEM_VARIABLES = 0x00;
+    public const SESSION_TRACK_SCHEMA = 0x01;
+    public const SESSION_TRACK_STATE_CHANGE = 0x02;
 }
 
 /** @internal */
@@ -106,37 +106,37 @@ REGEX;
 
     private $connectionState = self::UNCONNECTED;
 
-    const MAX_PACKET_SIZE = 0xffffff;
-    const MAX_UNCOMPRESSED_BUFLEN = 0xfffffb;
+    private const MAX_PACKET_SIZE = 0xffffff;
+    private const MAX_UNCOMPRESSED_BUFLEN = 0xfffffb;
 
-    const CLIENT_LONG_FLAG = 0x00000004;
-    const CLIENT_CONNECT_WITH_DB = 0x00000008;
-    const CLIENT_COMPRESS = 0x00000020;
-    const CLIENT_LOCAL_INFILE = 0x00000080;
-    const CLIENT_PROTOCOL_41 = 0x00000200;
-    const CLIENT_SSL = 0x00000800;
-    const CLIENT_TRANSACTIONS = 0x00002000;
-    const CLIENT_SECURE_CONNECTION = 0x00008000;
-    const CLIENT_MULTI_STATEMENTS = 0x00010000;
-    const CLIENT_MULTI_RESULTS = 0x00020000;
-    const CLIENT_PS_MULTI_RESULTS = 0x00040000;
-    const CLIENT_PLUGIN_AUTH = 0x00080000;
-    const CLIENT_CONNECT_ATTRS = 0x00100000;
-    const CLIENT_SESSION_TRACK = 0x00800000;
-    const CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA = 0x00200000;
-    const CLIENT_DEPRECATE_EOF = 0x01000000;
+    private const CLIENT_LONG_FLAG = 0x00000004;
+    private const CLIENT_CONNECT_WITH_DB = 0x00000008;
+    private const CLIENT_COMPRESS = 0x00000020;
+    private const CLIENT_LOCAL_INFILE = 0x00000080;
+    private const CLIENT_PROTOCOL_41 = 0x00000200;
+    private const CLIENT_SSL = 0x00000800;
+    private const CLIENT_TRANSACTIONS = 0x00002000;
+    private const CLIENT_SECURE_CONNECTION = 0x00008000;
+    private const CLIENT_MULTI_STATEMENTS = 0x00010000;
+    private const CLIENT_MULTI_RESULTS = 0x00020000;
+    private const CLIENT_PS_MULTI_RESULTS = 0x00040000;
+    private const CLIENT_PLUGIN_AUTH = 0x00080000;
+    private const CLIENT_CONNECT_ATTRS = 0x00100000;
+    private const CLIENT_SESSION_TRACK = 0x00800000;
+    private const CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA = 0x00200000;
+    private const CLIENT_DEPRECATE_EOF = 0x01000000;
 
-    const OK_PACKET = 0x00;
-    const EXTRA_AUTH_PACKET = 0x01;
-    const LOCAL_INFILE_REQUEST = 0xfb;
-    const EOF_PACKET = 0xfe;
-    const ERR_PACKET = 0xff;
+    private const OK_PACKET = 0x00;
+    private const EXTRA_AUTH_PACKET = 0x01;
+    private const LOCAL_INFILE_REQUEST = 0xfb;
+    private const EOF_PACKET = 0xfe;
+    private const ERR_PACKET = 0xff;
 
-    const UNCONNECTED = 0;
-    const ESTABLISHED = 1;
-    const READY = 2;
-    const CLOSING = 3;
-    const CLOSED = 4;
+    private const UNCONNECTED = 0;
+    private const ESTABLISHED = 1;
+    private const READY = 2;
+    private const CLOSING = 3;
+    private const CLOSED = 4;
 
     public function __construct(EncryptableSocket $socket, ConnectionConfig $config)
     {
@@ -294,7 +294,12 @@ REGEX;
 
     private function appendTask(callable $callback): void
     {
-        if ($this->packetCallback || $this->parseCallback || !empty($this->onReady) || !empty($this->deferreds) || $this->connectionState !== self::READY) {
+        if ($this->packetCallback
+            || $this->parseCallback
+            || !empty($this->onReady)
+            || !empty($this->deferreds)
+            || $this->connectionState !== self::READY
+        ) {
             $this->onReady[] = $callback;
         } else {
             $callback();
@@ -636,10 +641,17 @@ REGEX;
         return $deferred->promise();
     }
 
-    private function established()
+    private function established(): void
     {
         // @TODO flags to use?
-        $this->capabilities |= self::CLIENT_SESSION_TRACK | self::CLIENT_TRANSACTIONS | self::CLIENT_PROTOCOL_41 | self::CLIENT_SECURE_CONNECTION | self::CLIENT_MULTI_RESULTS | self::CLIENT_PS_MULTI_RESULTS | self::CLIENT_MULTI_STATEMENTS | self::CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA;
+        $this->capabilities |= self::CLIENT_SESSION_TRACK
+            | self::CLIENT_TRANSACTIONS
+            | self::CLIENT_PROTOCOL_41
+            | self::CLIENT_SECURE_CONNECTION
+            | self::CLIENT_MULTI_RESULTS
+            | self::CLIENT_PS_MULTI_RESULTS
+            | self::CLIENT_MULTI_STATEMENTS
+            | self::CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA;
 
         if (\extension_loaded("zlib") && $this->config->isCompressionEnabled()) {
             $this->capabilities |= self::CLIENT_COMPRESS;
@@ -651,7 +663,7 @@ REGEX;
     }
 
     /** @see 14.1.3.2 ERR-Packet */
-    private function handleError($packet)
+    private function handleError(string $packet): void
     {
         $off = 1;
 
@@ -690,7 +702,7 @@ REGEX;
     }
 
     /** @see 14.1.3.1 OK-Packet */
-    private function parseOk($packet)
+    private function parseOk(string $packet): void
     {
         $off = 1;
 
@@ -745,7 +757,7 @@ REGEX;
         }
     }
 
-    private function handleOk($packet)
+    private function handleOk(string $packet): void
     {
         $this->parseOk($packet);
         $this->getDeferred()->resolve(new CommandResult($this->connInfo->affectedRows, $this->connInfo->insertId));
@@ -753,7 +765,7 @@ REGEX;
     }
 
     /** @see 14.1.3.3 EOF-Packet */
-    private function parseEof($packet)
+    private function parseEof(string $packet): void
     {
         if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
             $this->connInfo->warnings = DataTypes::decodeUnsigned16(\substr($packet, 1));
@@ -762,7 +774,7 @@ REGEX;
         }
     }
 
-    private function handleEof($packet)
+    private function handleEof(string $packet): void
     {
         $this->parseEof($packet);
         $exception = new FailureException($this->connInfo->errorMsg, $this->connInfo->errorCode);
@@ -771,7 +783,7 @@ REGEX;
     }
 
     /** @see 14.2.5 Connection Phase Packets */
-    private function handleHandshake($packet)
+    private function handleHandshake(string $packet): void
     {
         $off = 1;
 
@@ -824,7 +836,7 @@ REGEX;
     }
 
     /** @see 14.6.4.1.2 LOCAL INFILE Request */
-    private function handleLocalInfileRequest($packet)
+    private function handleLocalInfileRequest(string $packet): void
     {
         \Amp\asyncCall(function () use ($packet) {
             try {
@@ -842,7 +854,7 @@ REGEX;
     }
 
     /** @see 14.6.4.1.1 Text Resultset */
-    private function handleQuery($packet)
+    private function handleQuery(string $packet): void
     {
         switch (\ord($packet)) {
             case self::OK_PACKET:
@@ -878,7 +890,7 @@ REGEX;
     }
 
     /** @see 14.7.1 Binary Protocol Resultset */
-    private function handleExecute($packet)
+    private function handleExecute(string $packet): void
     {
         $this->parseCallback = [$this, "handleBinaryColumnDefinition"];
         $this->getDeferred()->resolve($result = new ResultProxy);
@@ -887,7 +899,7 @@ REGEX;
         $result->setColumns(\ord($packet));
     }
 
-    private function handleFieldList($packet)
+    private function handleFieldList(string $packet): void
     {
         if (\ord($packet) === self::ERR_PACKET) {
             $this->parseCallback = null;
@@ -903,17 +915,17 @@ REGEX;
         }
     }
 
-    private function handleTextColumnDefinition($packet)
+    private function handleTextColumnDefinition(string $packet): void
     {
-        $this->handleColumnDefinition($packet, "handleTextResultsetRow");
+        $this->handleColumnDefinition($packet, "handleTextResultSetRow");
     }
 
-    private function handleBinaryColumnDefinition($packet)
+    private function handleBinaryColumnDefinition(string $packet): void
     {
-        $this->handleColumnDefinition($packet, "handleBinaryResultsetRow");
+        $this->handleColumnDefinition($packet, "handleBinaryResultSetRow");
     }
 
-    private function handleColumnDefinition($packet, $cbMethod)
+    private function handleColumnDefinition(string $packet, string $cbMethod): void
     {
         if (!$this->result->columnsToFetch--) {
             $this->result->updateState(ResultProxy::COLUMNS_FETCHED);
@@ -935,7 +947,7 @@ REGEX;
         $this->result->columns[] = $this->parseColumnDefinition($packet);
     }
 
-    private function prepareParams($packet)
+    private function prepareParams(string $packet): void
     {
         if (!$this->result->columnsToFetch--) {
             $this->result->columnsToFetch = $this->result->columnCount;
@@ -950,7 +962,7 @@ REGEX;
         $this->result->params[] = $this->parseColumnDefinition($packet);
     }
 
-    private function prepareFields($packet)
+    private function prepareFields(string $packet): void
     {
         if (!$this->result->columnsToFetch--) {
             $this->parseCallback = null;
@@ -967,7 +979,7 @@ REGEX;
     }
 
     /** @see 14.6.4.1.1.2 Column Defintion */
-    private function parseColumnDefinition($packet)
+    private function parseColumnDefinition(string $packet): array
     {
         $off = 0;
 
@@ -1029,7 +1041,7 @@ REGEX;
         return $column;
     }
 
-    private function successfulResultsetFetch()
+    private function successfulResultsetFetch(): void
     {
         $result = $this->result;
         $deferred = &$result->next;
@@ -1050,7 +1062,7 @@ REGEX;
     }
 
     /** @see 14.6.4.1.1.3 Resultset Row */
-    private function handleTextResultsetRow($packet)
+    private function handleTextResultSetRow(string $packet): void
     {
         $packettype = \ord($packet);
         if ($packettype === self::EOF_PACKET) {
@@ -1082,7 +1094,7 @@ REGEX;
     }
 
     /** @see 14.7.2 Binary Protocol Resultset Row */
-    private function handleBinaryResultsetRow($packet)
+    private function handleBinaryResultSetRow(string $packet): void
     {
         $packettype = \ord($packet);
         if ($packettype === self::EOF_PACKET) {
@@ -1119,7 +1131,7 @@ REGEX;
     }
 
     /** @see 14.7.4.1 COM_STMT_PREPARE Response */
-    private function handlePrepare($packet)
+    private function handlePrepare(string $packet): void
     {
         switch (\ord($packet)) {
             case self::OK_PACKET:
@@ -1158,7 +1170,7 @@ REGEX;
         }
     }
 
-    private function readStatistics($packet): void
+    private function readStatistics(string $packet): void
     {
         $this->getDeferred()->resolve($packet);
         $this->ready();
@@ -1342,13 +1354,16 @@ REGEX;
         }
     }
 
-    private function parsePayload($packet): void
+    private function parsePayload(string $packet): void
     {
         if ($this->connectionState === self::UNCONNECTED) {
             $this->established();
             $this->connectionState = self::ESTABLISHED;
             $this->handleHandshake($packet);
-        } elseif ($this->connectionState === self::ESTABLISHED) {
+            return;
+        }
+
+        if ($this->connectionState === self::ESTABLISHED) {
             switch (\ord($packet)) {
                 case self::OK_PACKET:
                     if ($this->capabilities & self::CLIENT_COMPRESS) {
@@ -1373,34 +1388,35 @@ REGEX;
                     }
                     break;
             }
-        } else {
-            if ($this->parseCallback) {
-                ($this->parseCallback)($packet);
-                return;
-            }
+            return;
+        }
 
-            $cb = $this->packetCallback;
-            $this->packetCallback = null;
-            switch (\ord($packet)) {
-                case self::OK_PACKET:
-                    $this->handleOk($packet);
+        if ($this->parseCallback) {
+            ($this->parseCallback)($packet);
+            return;
+        }
+
+        $cb = $this->packetCallback;
+        $this->packetCallback = null;
+        switch (\ord($packet)) {
+            case self::OK_PACKET:
+                $this->handleOk($packet);
+                break;
+            case self::ERR_PACKET:
+                $this->handleError($packet);
+                break;
+            case self::EOF_PACKET:
+                if (\strlen($packet) < 6) {
+                    $this->handleEof($packet);
                     break;
-                case self::ERR_PACKET:
-                    $this->handleError($packet);
-                    break;
-                case self::EOF_PACKET:
-                    if (\strlen($packet) < 6) {
-                        $this->handleEof($packet);
-                        break;
-                    }
-                    // no break
-                default:
-                    if ($cb) {
-                        $cb($packet);
-                    } else {
-                        throw new ConnectionException("Unexpected packet type: " . \ord($packet));
-                    }
-            }
+                }
+                // no break
+            default:
+                if (!$cb) {
+                    throw new ConnectionException("Unexpected packet type: " . \ord($packet));
+                }
+
+                $cb($packet);
         }
     }
 
@@ -1416,7 +1432,7 @@ REGEX;
         return $auth;
     }
 
-    private function authSwitchRequest($packet): void
+    private function authSwitchRequest(string $packet): void
     {
         $this->parseCallback = null;
         switch (\ord($packet)) {
@@ -1441,7 +1457,7 @@ REGEX;
      * @see 14.2.5 Connection Phase Packets
      * @see 14.3 Authentication Method
      */
-    private function sendHandshake($inSSL = false): void
+    private function sendHandshake(bool $inSSL = false): void
     {
         if ($this->config->getDatabase() !== null) {
             $this->capabilities |= self::CLIENT_CONNECT_WITH_DB;

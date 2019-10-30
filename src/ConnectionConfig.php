@@ -7,8 +7,8 @@ use Amp\Sql\ConnectionConfig as SqlConnectionConfig;
 
 final class ConnectionConfig extends SqlConnectionConfig
 {
-    const DEFAULT_PORT = 3306;
-    const BIN_CHARSET = 45; // utf8mb4_general_ci
+    public const DEFAULT_PORT = 3306;
+    public const BIN_CHARSET = 45; // utf8mb4_general_ci
 
     const KEY_MAP = [
         'username' => 'user',
@@ -19,8 +19,8 @@ final class ConnectionConfig extends SqlConnectionConfig
         'charset' => 'charset',
     ];
 
-    const DEFAULT_CHARSET = "utf8mb4";
-    const DEFAULT_COLLATE = "utf8mb4_general_ci";
+    public const DEFAULT_CHARSET = "utf8mb4";
+    public const DEFAULT_COLLATE = "utf8mb4_general_ci";
 
     /** @var bool */
     private $useCompression = false;

@@ -13,7 +13,7 @@
         }
     ],
     "require": {
-        "php": "^7.1",
+        "php": ">=7.1",
         "amphp/amp": "^2",
         "amphp/file": "^1 || ^0.3.5",
         "amphp/socket": "^1",
@@ -21,6 +21,7 @@
         "amphp/sql-common": "^1"
     },
     "require-dev": {
+        "ext-openssl": "*",
         "phpunit/phpunit": "^8 || ^7",
         "amphp/phpunit-util": "^1.1.2",
         "amphp/php-cs-fixer-config": "dev-master",

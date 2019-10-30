@@ -17,7 +17,7 @@ final class ResultProxy
     public $fetchedRows = 0;
     public $userFetched = 0;
 
-    public $deferreds = [self::SINGLE_ROW_FETCH => [], self::COLUMNS_FETCHED => [], self::ROWS_FETCHED => []];
+    public $deferreds = [self::UNFETCHED => [], self::COLUMNS_FETCHED => [], self::ROWS_FETCHED => []];
 
     /** @var int */
     public $state = self::UNFETCHED;
@@ -25,18 +25,18 @@ final class ResultProxy
     /** @var \Amp\Deferred|null */
     public $next;
 
-    const UNFETCHED = 0;
-    const COLUMNS_FETCHED = 1;
-    const ROWS_FETCHED = 2;
+    public const UNFETCHED = 0;
+    public const COLUMNS_FETCHED = 1;
+    public const ROWS_FETCHED = 2;
 
-    const SINGLE_ROW_FETCH = 255;
+    public const SINGLE_ROW_FETCH = 255;
 
-    public function setColumns(int $columns)
+    public function setColumns(int $columns): void
     {
         $this->columnCount = $this->columnsToFetch = $columns;
     }
 
-    public function updateState(int $state)
+    public function updateState(int $state): void
     {
         $this->state = $state;
         if ($state === self::ROWS_FETCHED) {
@@ -45,28 +45,28 @@ final class ResultProxy
         if (empty($this->deferreds[$state])) {
             return;
         }
-        foreach ($this->deferreds[$state] as list($deferred, $rows, $cb)) {
+        foreach ($this->deferreds[$state] as [$deferred, $rows, $cb]) {
             $deferred->resolve($cb ? $cb($rows) : $rows);
         }
         $this->deferreds[$state] = [];
     }
 
-    public function rowFetched($row)
+    public function rowFetched(?array $row): void
     {
         if ($row !== null) {
             $this->rows[$this->fetchedRows++] = $row;
         }
-        list($entry, , $cb) = \current($this->deferreds[self::SINGLE_ROW_FETCH]);
+        [$entry, , $cb] = \current($this->deferreds[self::UNFETCHED]);
         if ($entry !== null) {
-            unset($this->deferreds[self::SINGLE_ROW_FETCH][\key($this->deferreds[self::SINGLE_ROW_FETCH])]);
+            unset($this->deferreds[self::UNFETCHED][\key($this->deferreds[self::UNFETCHED])]);
             $entry->resolve($cb && $row ? $cb($row) : $row);
         }
     }
 
-    public function fail(FailureException $e)
+    public function fail(FailureException $e): void
     {
         foreach ($this->deferreds as $state) {
-            foreach ($this->deferreds[$state] as list($deferred)) {
+            foreach ($this->deferreds[$state] as [$deferred]) {
                 $deferred->fail($e);
             }
             $this->deferreds[$state] = [];

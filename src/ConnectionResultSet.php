@@ -108,7 +108,7 @@ final class ConnectionResultSet implements ResultSet
             return $row;
         };
 
-        $result->deferreds[Internal\ResultProxy::SINGLE_ROW_FETCH][] = [$deferred, null, $incRow];
+        $result->deferreds[Internal\ResultProxy::UNFETCHED][] = [$deferred, null, $incRow];
         return $deferred->promise();
     }
 
