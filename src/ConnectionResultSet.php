@@ -2,12 +2,13 @@
 
 namespace Amp\Mysql;
 
-use Amp\Coroutine;
 use Amp\Deferred;
 use Amp\Iterator;
 use Amp\Producer;
 use Amp\Promise;
 use Amp\Success;
+use function Amp\asyncCall;
+use function Amp\call;
 
 final class ConnectionResultSet implements ResultSet
 {
@@ -43,20 +44,18 @@ final class ConnectionResultSet implements ResultSet
 
     public function __destruct()
     {
-        if ($this->result) { // All results were not necessarily consumed.
-            Promise\rethrow(new Coroutine($this->dispose()));
+        if (!$this->result) {
+            return;
         }
-    }
 
-    private function dispose(): \Generator
-    {
-        try {
-            do {
-                while (yield $this->advance()); // Discard unused result rows.
-            } while (yield $this->nextResultSet());
-        } catch (\Throwable $exception) {
-            // Ignore failure while discarding results.
-        }
+        $producer = $this->producer;
+        asyncCall(static function () use ($producer) {
+            try {
+                while (yield $producer->advance());
+            } catch (\Throwable $exception) {
+                // Ignore iterator failure when destroying.
+            }
+        });
     }
 
     /**
@@ -122,7 +121,7 @@ final class ConnectionResultSet implements ResultSet
             return new Success(false);
         }
 
-        return \Amp\call(function () {
+        return call(function () {
             while (yield $this->advance()); // Consume any values left in the current result.
 
             $this->columnNames = null;
