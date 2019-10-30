@@ -11,12 +11,15 @@ final class ConnectionConfig extends SqlConnectionConfig
     const BIN_CHARSET = 45; // utf8mb4_general_ci
 
     const KEY_MAP = [
+        'hostname' => 'host',
         'username' => 'user',
-        'password' => 'pass',
+        'pass' => 'password',
         'database' => 'db',
         'dbname' => 'db',
-        'compress' => 'useCompression',
-        'charset' => 'charset',
+        'compress' => 'compression',
+        'useCompression' => 'compression',
+        'cs' => 'charset',
+        'localInfile' => 'local-infile',
     ];
 
     const DEFAULT_CHARSET = "utf8mb4";
@@ -39,7 +42,7 @@ final class ConnectionConfig extends SqlConnectionConfig
 
     public static function fromString(string $connectionString, ClientTlsContext $tlsContext = null): self
     {
-        $parts = self::parseConnectionString($connectionString);
+        $parts = self::parseConnectionString($connectionString, self::KEY_MAP);
 
         if (!isset($parts["host"])) {
             throw new \Error("Host must be provided in connection string");
