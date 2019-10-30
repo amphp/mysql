@@ -2,6 +2,7 @@
 
 namespace Amp\Mysql\Test;
 
+use Amp\Iterator;
 use Amp\Mysql\CommandResult;
 use Amp\Mysql\DataTypes;
 use Amp\Mysql\ResultSet;
@@ -331,5 +332,36 @@ abstract class LinkTest extends AsyncTestCase
             $got[] = \array_values($result->getCurrent());
         }
         $this->assertCount(0, $got);
+    }
+
+    /**
+     * @depends testTransaction
+     */
+    public function testInsertSelect()
+    {
+        /** @var Link $db */
+        $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
+
+        $a = 1;
+
+        /** @var Transaction $transaction */
+        $transaction = yield $db->beginTransaction();
+
+        try {
+            /** @var Statement $statement */
+            $statement = yield $transaction->prepare("SELECT a, b FROM main WHERE a >= ?");
+
+            $count = \count(yield Iterator\toArray(yield $statement->execute([$a])));
+
+            /** @var Statement $statement */
+            $statement = yield $transaction->prepare("INSERT INTO main (a, b) SELECT a, b FROM main WHERE a >= ?");
+
+            /** @var CommandResult $result */
+            $result = yield $statement->execute([$a]);
+
+            $this->assertSame($count, $result->getAffectedRowCount());
+        } finally {
+            yield $transaction->rollback();
+        }
     }
 }
