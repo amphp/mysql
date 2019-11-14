@@ -695,9 +695,11 @@ REGEX;
         $deferred = $this->result ?? $this->getDeferred();
 
         // normal error
-        $deferred->fail(new QueryError("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}", $this->query));
+        $exception = new QueryError("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}", $this->query);
         $this->result = null;
         $this->query = null;
+        $deferred->fail($exception);
+
         $this->ready();
     }
 
