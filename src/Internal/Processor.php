@@ -207,7 +207,9 @@ REGEX;
             $this->close();
         });
 
-        (new Coroutine($this->read()))->onResolve(function (): void {
+        $coroutine = new Coroutine($this->read());
+        Promise\rethrow($coroutine);
+        $coroutine->onResolve(function (): void {
             $this->close();
 
             foreach ($this->deferreds as $deferred) {
