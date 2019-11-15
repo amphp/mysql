@@ -199,7 +199,7 @@ REGEX;
     {
         \assert(!$this->processors, self::class."::connect() must not be called twice");
 
-        $this->deferreds[] = $deferred = new Deferred; // Will be resolved below or in sendHandshake().
+        $this->deferreds[] = $deferred = new Deferred; // Will be resolved in sendHandshake().
 
         $this->processors = [$this->parseMysql()];
 
@@ -207,17 +207,7 @@ REGEX;
             $this->close();
         });
 
-        (new Coroutine($this->read()))->onResolve(function (): void {
-            $this->close();
-
-            foreach ($this->deferreds as $deferred) {
-                if ($this->query === "") {
-                    $deferred->fail(new InitializationException("Connection went away"));
-                } else {
-                    $deferred->fail(new ConnectionException("Connection went away... unable to fulfil this deferred ... It's unknown whether the query was executed..."));
-                }
-            }
-        });
+        Promise\rethrow(new Coroutine($this->read()));
 
         $promise = $deferred->promise();
 
@@ -243,31 +233,45 @@ REGEX;
 
     private function read(): \Generator
     {
-        while (($bytes = yield $this->socket->read()) !== null) {
-            // @codeCoverageIgnoreStart
-            \assert((function () use ($bytes) {
-                if (\defined("MYSQL_DEBUG")) {
-                    \fwrite(STDERR, "in: ");
-                    for ($i = 0; $i < \min(\strlen($bytes), 200); $i++) {
-                        \fwrite(STDERR, \dechex(\ord($bytes[$i])) . " ");
+        try {
+            while (($bytes = yield $this->socket->read()) !== null) {
+                // @codeCoverageIgnoreStart
+                \assert((function () use ($bytes) {
+                    if (\defined("MYSQL_DEBUG")) {
+                        \fwrite(STDERR, "in: ");
+                        for ($i = 0; $i < \min(\strlen($bytes), 200); $i++) {
+                            \fwrite(STDERR, \dechex(\ord($bytes[$i])) . " ");
+                        }
+                        $r = \range("\0", "\x1f");
+                        unset($r[10], $r[9]);
+                        \fwrite(STDERR, "len: " . \strlen($bytes) . "\n");
+                        \fwrite(STDERR, \str_replace($r, ".", \substr($bytes, 0, 200)) . "\n");
                     }
-                    $r = \range("\0", "\x1f");
-                    unset($r[10], $r[9]);
-                    \fwrite(STDERR, "len: ".\strlen($bytes)."\n");
-                    \fwrite(STDERR, \str_replace($r, ".", \substr($bytes, 0, 200))."\n");
+
+                    return true;
+                })());
+                // @codeCoverageIgnoreEnd
+
+                $this->lastUsedAt = \time();
+
+                $this->processData($bytes);
+                $bytes = null; // Free last data read.
+
+                if (!$this->socket) { // Connection closed.
+                    break;
                 }
+            }
+        } catch (\Throwable $exception) {
+            // $exception used as previous exception below.
+        } finally {
+            $this->close();
+        }
 
-                return true;
-            })());
-            // @codeCoverageIgnoreEnd
+        if (!empty($this->deferreds)) {
+            $exception = new ConnectionException("Connection closed unexpectedly", 0, $exception ?? null);
 
-            $this->lastUsedAt = \time();
-
-            $this->processData($bytes);
-            $bytes = null; // Free last data read.
-
-            if (!$this->socket) { // Connection closed.
-                break;
+            foreach ($this->deferreds as $deferred) {
+                $deferred->fail($exception);
             }
         }
     }
@@ -1047,17 +1051,17 @@ REGEX;
     {
         $result = $this->result;
         $deferred = &$result->next;
+        if (!$deferred) {
+            $deferred = new Deferred;
+        }
         if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
             $this->parseCallback = [$this, "handleQuery"];
-            $this->addDeferred($deferred ?: $deferred = new Deferred);
+            $this->addDeferred($deferred);
         } else {
-            if (!$deferred) {
-                $deferred = new Deferred;
-            }
-            $deferred->resolve();
             $this->parseCallback = null;
             $this->query = null;
             $this->result = null;
+            $deferred->resolve();
             $this->ready();
         }
         $result->updateState(ResultProxy::ROWS_FETCHED);
@@ -1175,8 +1179,8 @@ REGEX;
     private function readStatistics(string $packet): void
     {
         $this->getDeferred()->resolve($packet);
-        $this->ready();
         $this->parseCallback = null;
+        $this->ready();
     }
 
     /** @see 14.6.2 COM_QUIT */
