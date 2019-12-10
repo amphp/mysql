@@ -85,7 +85,7 @@ final class ConnectionConfig extends SqlConnectionConfig
 
     public function getConnectionString(): string
     {
-        return 'tcp://' . $this->getHost() . ':' . $this->getPort();
+        return $this->getHost()[0] == "/" ? 'unix://' . $this->getHost() : 'tcp://' . $this->getHost() . ':' . $this->getPort();
     }
 
     public function isCompressionEnabled(): bool
