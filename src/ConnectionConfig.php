@@ -97,11 +97,12 @@ final class ConnectionConfig extends SqlConnectionConfig
         }
 
         $host = $this->getHost();
+        $port = $this->getPort();
 
         $index = \strpos($host, ':');
 
         if ($index === false) {
-            return $this->string = "tcp://$host:3306";
+            return $this->string = "tcp://$host:$port";
         }
 
         if ($index === 0) {
