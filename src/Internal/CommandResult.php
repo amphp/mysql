@@ -3,8 +3,8 @@
 namespace Amp\Mysql\Internal;
 
 use Amp\Mysql\Result;
-use Amp\Sql\Common\CommandResult as SqlCommandResult;
 use Amp\Promise;
+use Amp\Sql\Common\CommandResult as SqlCommandResult;
 use Amp\Success;
 
 final class CommandResult implements Result

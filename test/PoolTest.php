@@ -3,9 +3,9 @@
 namespace Amp\Mysql\Test;
 
 use Amp\Delayed;
-use Amp\Mysql\Internal\CommandResult;
 use Amp\Mysql\Connection;
 use Amp\Mysql\ConnectionConfig;
+use Amp\Mysql\Internal\CommandResult;
 use Amp\Mysql\Internal\Processor;
 use Amp\Mysql\Pool;
 use Amp\Mysql\Statement;
@@ -242,7 +242,7 @@ class PoolTest extends LinkTest
 
         $processor = $this->createMock(Processor::class);
         $processor->method('isAlive')
-            ->willReturnOnConsecutiveCalls(true, false);
+            ->willReturnOnConsecutiveCalls(true, false, false);
         $processor->expects($this->once())
             ->method('query')
             ->with($query)

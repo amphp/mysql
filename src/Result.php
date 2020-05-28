@@ -19,5 +19,4 @@ interface Result extends SqlResult
      * @psalm-return Promise<array<int, array<int, string>>|null>
      */
     public function getFields(): Promise;
-
 }

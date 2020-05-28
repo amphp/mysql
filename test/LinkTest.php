@@ -2,7 +2,6 @@
 
 namespace Amp\Mysql\Test;
 
-use Amp\Stream;
 use Amp\Mysql\DataTypes;
 use Amp\Mysql\Result;
 use Amp\Mysql\Statement;
@@ -11,6 +10,7 @@ use Amp\Promise;
 use Amp\Sql\Link;
 use Amp\Sql\QueryError;
 use Amp\Sql\Transaction;
+use Amp\Stream;
 
 abstract class LinkTest extends AsyncTestCase
 {
