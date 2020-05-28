@@ -7,8 +7,8 @@ use Amp\Deferred;
 use Amp\NullCancellationToken;
 use Amp\Promise;
 use Amp\Socket;
-use Amp\Sql\FailureException;
 use Amp\Sql\Link;
+use Amp\Sql\Transaction;
 use function Amp\call;
 
 final class Connection implements Link
@@ -130,35 +130,29 @@ final class Connection implements Link
 
             $result = yield $this->processor->query($query);
 
-            if ($result instanceof Internal\ResultProxy) {
-                return new Internal\ConnectionResult($result);
-            }
+            \assert($result instanceof Result);
 
-            if ($result instanceof Internal\CommandResult) {
-                return $result;
-            }
-
-            throw new FailureException("Unrecognized result type");
+            return $result;
         });
     }
 
-    public function beginTransaction(int $isolation = ConnectionTransaction::ISOLATION_COMMITTED): Promise
+    public function beginTransaction(int $isolation = Transaction::ISOLATION_COMMITTED): Promise
     {
         return call(function () use ($isolation) {
             switch ($isolation) {
-                case ConnectionTransaction::ISOLATION_UNCOMMITTED:
+                case Transaction::ISOLATION_UNCOMMITTED:
                     yield $this->query("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
                     break;
 
-                case ConnectionTransaction::ISOLATION_COMMITTED:
+                case Transaction::ISOLATION_COMMITTED:
                     yield $this->query("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
                     break;
 
-                case ConnectionTransaction::ISOLATION_REPEATABLE:
+                case Transaction::ISOLATION_REPEATABLE:
                     yield $this->query("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ");
                     break;
 
-                case ConnectionTransaction::ISOLATION_SERIALIZABLE:
+                case Transaction::ISOLATION_SERIALIZABLE:
                     yield $this->query("SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE");
                     break;
 
@@ -170,7 +164,7 @@ final class Connection implements Link
 
             $this->busy = new Deferred;
 
-            return new ConnectionTransaction($this->processor, $this->release, $isolation);
+            return new Internal\ConnectionTransaction($this->processor, $this->release, $isolation);
         });
     }
 
@@ -196,9 +190,9 @@ final class Connection implements Link
     public function execute(string $sql, array $params = []): Promise
     {
         return call(function () use ($sql, $params) {
-            /** @var Statement $statment */
-            $statment = yield $this->prepare($sql);
-            return yield $statment->execute($params);
+            $statement = yield $this->prepare($sql);
+            \assert($statement instanceof Statement);
+            return yield $statement->execute($params);
         });
     }
 

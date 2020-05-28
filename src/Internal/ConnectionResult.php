@@ -5,7 +5,6 @@ namespace Amp\Mysql\Internal;
 use Amp\AsyncGenerator;
 use Amp\Deferred;
 use Amp\DisposedException;
-use Amp\Mysql\Internal;
 use Amp\Mysql\Result;
 use Amp\Promise;
 use Amp\Stream;
@@ -14,7 +13,7 @@ use function Amp\call;
 
 final class ConnectionResult implements Result
 {
-    /** @var Internal\ResultProxy */
+    /** @var ResultProxy */
     private $result;
 
     /** @var AsyncGenerator */
@@ -23,13 +22,13 @@ final class ConnectionResult implements Result
     /** @var Promise|null */
     private $nextResult;
 
-    public function __construct(Internal\ResultProxy $result)
+    public function __construct(ResultProxy $result)
     {
         $this->result = $result;
         $this->generator = self::makeStream($result);
     }
 
-    private static function makeStream(Internal\ResultProxy $result): Stream
+    private static function makeStream(ResultProxy $result): Stream
     {
         return new AsyncGenerator(static function (callable $emit) use ($result): \Generator {
             $next = self::fetchRow($result);
@@ -63,7 +62,7 @@ final class ConnectionResult implements Result
         $this->generator->dispose();
     }
 
-    private static function fetchRow(Internal\ResultProxy $result): Promise
+    private static function fetchRow(ResultProxy $result): Promise
     {
         if ($result->userFetched < $result->fetchedRows) {
             $row = $result->rows[$result->userFetched];
@@ -72,7 +71,7 @@ final class ConnectionResult implements Result
             return new Success($row);
         }
 
-        if ($result->state === Internal\ResultProxy::ROWS_FETCHED) {
+        if ($result->state === ResultProxy::ROWS_FETCHED) {
             return new Success;
         }
 
@@ -86,7 +85,7 @@ final class ConnectionResult implements Result
             return $row;
         };
 
-        $result->deferreds[Internal\ResultProxy::UNFETCHED][] = [$deferred, null, $incRow];
+        $result->deferreds[ResultProxy::UNFETCHED][] = [$deferred, null, $incRow];
         return $deferred->promise();
     }
 
@@ -104,7 +103,7 @@ final class ConnectionResult implements Result
             $deferred = $this->result->next ?: $this->result->next = new Deferred;
             $result = yield $deferred->promise();
 
-            if ($result instanceof Internal\ResultProxy) {
+            if ($result instanceof ResultProxy) {
                 return new self($result);
             }
 
@@ -131,12 +130,12 @@ final class ConnectionResult implements Result
             throw new \Error("The current result set is empty; call this method before invoking ResultSet::nextResultSet()");
         }
 
-        if ($this->result->state >= Internal\ResultProxy::COLUMNS_FETCHED) {
+        if ($this->result->state >= ResultProxy::COLUMNS_FETCHED) {
             return new Success($this->result->columns);
         }
 
         $deferred = new Deferred;
-        $this->result->deferreds[Internal\ResultProxy::COLUMNS_FETCHED][] = [$deferred, &$this->result->columns, null];
+        $this->result->deferreds[ResultProxy::COLUMNS_FETCHED][] = [$deferred, &$this->result->columns, null];
         return $deferred->promise();
     }
 }

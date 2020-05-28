@@ -1,15 +1,12 @@
 <?php
 
-namespace Amp\Mysql;
+namespace Amp\Mysql\Internal;
 
 use Amp\Deferred;
-use Amp\Mysql\Internal\CommandResult;
-use Amp\Mysql\Internal\ConnectionResult;
+use Amp\Mysql\Statement;
 use Amp\Promise;
 use Amp\Sql\ConnectionException;
-use Amp\Sql\FailureException;
 use Amp\Success;
-use function Amp\call;
 
 final class ConnectionStatement implements Statement
 {
@@ -21,16 +18,16 @@ final class ConnectionStatement implements Statement
     private $stmtId;
     private $prebound = [];
 
-    /** @var Internal\Processor|null */
+    /** @var Processor|null */
     private $processor;
 
-    /** @var Internal\ResultProxy */
+    /** @var ResultProxy */
     private $result;
 
     /** @var int */
     private $lastUsedAt;
 
-    public function __construct(Internal\Processor $processor, string $query, int $stmtId, array $named, Internal\ResultProxy $result)
+    public function __construct(Processor $processor, string $query, int $stmtId, array $named, ResultProxy $result)
     {
         $this->processor = $processor;
         $this->query = $query;
@@ -49,7 +46,7 @@ final class ConnectionStatement implements Statement
         $this->lastUsedAt = \time();
     }
 
-    private function getProcessor(): Internal\Processor
+    private function getProcessor(): Processor
     {
         if ($this->processor === null) {
             throw new \Error("The statement has been closed");
@@ -137,22 +134,7 @@ final class ConnectionStatement implements Statement
             }
         }
 
-        $promise = $this->getProcessor()->execute($this->stmtId, $this->query, $this->result->params, $prebound, $args);
-
-        return call(function () use ($promise) {
-            $result = yield $promise;
-
-            if ($result instanceof Internal\ResultProxy) {
-                $result = new ConnectionResult($result);
-                return $result;
-            }
-
-            if ($result instanceof CommandResult) {
-                return $result;
-            }
-
-            throw new FailureException("Unrecognized result type");
-        });
+        return $this->getProcessor()->execute($this->stmtId, $this->query, $this->result->params, $prebound, $args);
     }
 
     public function getQuery(): string
@@ -178,16 +160,16 @@ final class ConnectionStatement implements Statement
 
     public function getFields(): Promise
     {
-        if ($this->result->state >= Internal\ResultProxy::COLUMNS_FETCHED) {
+        if ($this->result->state >= ResultProxy::COLUMNS_FETCHED) {
             return new Success($this->result->columns);
         }
 
-        if (isset($this->result->deferreds[Internal\ResultProxy::COLUMNS_FETCHED][0])) {
-            return $this->result->deferreds[Internal\ResultProxy::COLUMNS_FETCHED][0][0]->promise();
+        if (isset($this->result->deferreds[ResultProxy::COLUMNS_FETCHED][0])) {
+            return $this->result->deferreds[ResultProxy::COLUMNS_FETCHED][0][0]->promise();
         }
 
         $deferred = new Deferred;
-        $this->result->deferreds[Internal\ResultProxy::COLUMNS_FETCHED][0] = [$deferred, &$this->result->columns, null];
+        $this->result->deferreds[ResultProxy::COLUMNS_FETCHED][0] = [$deferred, &$this->result->columns, null];
         return $deferred->promise();
     }
 

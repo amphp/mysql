@@ -1,7 +1,11 @@
 <?php
 
-namespace Amp\Mysql;
+namespace Amp\Mysql\Internal;
 
+use Amp\Mysql\PooledResult;
+use Amp\Mysql\PooledStatement;
+use Amp\Mysql\Result;
+use Amp\Mysql\Statement;
 use Amp\Promise;
 use Amp\Sql\Transaction as SqlTransaction;
 use Amp\Sql\TransactionError;
@@ -11,7 +15,7 @@ final class ConnectionTransaction implements SqlTransaction
 {
     const SAVEPOINT_PREFIX = "amp_";
 
-    /** @var Internal\Processor|null */
+    /** @var Processor|null */
     private $processor;
 
     /** @var int */
@@ -24,13 +28,13 @@ final class ConnectionTransaction implements SqlTransaction
     private $refCount = 1;
 
     /**
-     * @param Internal\Processor $processor
+     * @param Processor $processor
      * @param callable $release
      * @param int $isolation
      *
      * @throws \Error If the isolation level is invalid.
      */
-    public function __construct(Internal\Processor $processor, callable $release, int $isolation = SqlTransaction::ISOLATION_COMMITTED)
+    public function __construct(Processor $processor, callable $release, int $isolation = SqlTransaction::ISOLATION_COMMITTED)
     {
         switch ($isolation) {
             case SqlTransaction::ISOLATION_UNCOMMITTED:

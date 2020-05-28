@@ -8,6 +8,7 @@ use Amp\Mysql\ConnectionConfig;
 use Amp\Mysql\Internal\CommandResult;
 use Amp\Mysql\Internal\Processor;
 use Amp\Mysql\Pool;
+use Amp\Mysql\Result;
 use Amp\Mysql\Statement;
 use Amp\Promise;
 use Amp\Sql\Connector;
@@ -231,7 +232,7 @@ class PoolTest extends LinkTest
     {
         $processors = $this->makeProcessorSet($count);
         $query = "SELECT * FROM test";
-        $result = new CommandResult(0, 0);
+        $result = $this->createMock(Result::class);
 
         foreach ($processors as $processor) {
             $processor->expects($this->exactly(2))
@@ -242,7 +243,7 @@ class PoolTest extends LinkTest
 
         $processor = $this->createMock(Processor::class);
         $processor->method('isAlive')
-            ->willReturnOnConsecutiveCalls(true, false, false);
+            ->willReturnOnConsecutiveCalls(true, false);
         $processor->expects($this->once())
             ->method('query')
             ->with($query)
