@@ -95,7 +95,7 @@ final class Connection implements Link
         return $this->processor->setCharset($charset, $collate);
     }
 
-    public function close()
+    public function close(): void
     {
         $processor = $this->processor;
         // Send close command if connection is not already in a closed or closing state
@@ -131,10 +131,10 @@ final class Connection implements Link
             $result = yield $this->processor->query($query);
 
             if ($result instanceof Internal\ResultProxy) {
-                return new ConnectionResultSet($result);
+                return new Internal\ConnectionResult($result);
             }
 
-            if ($result instanceof CommandResult) {
+            if ($result instanceof Internal\CommandResult) {
                 return $result;
             }
 

@@ -6,7 +6,7 @@ use Amp\Sql\Common\ConnectionPool;
 use Amp\Sql\Common\StatementPool as SqlStatementPool;
 use Amp\Sql\Connector;
 use Amp\Sql\Pool as SqlPool;
-use Amp\Sql\ResultSet as SqlResultSet;
+use Amp\Sql\Result as SqlResult;
 use Amp\Sql\Statement as SqlStatement;
 use Amp\Sql\Transaction as SqlTransaction;
 
@@ -17,10 +17,12 @@ final class Pool extends ConnectionPool
         return connector();
     }
 
-    protected function createResultSet(SqlResultSet $resultSet, callable $release): SqlResultSet
+    protected function createResult(SqlResult $result, callable $release): SqlResult
     {
-        \assert($resultSet instanceof ResultSet);
-        return new PooledResultSet($resultSet, $release);
+        if (!$result instanceof Result) {
+            throw new \TypeError('Result object must be an instance of ' . Result::class);
+        }
+        return new PooledResult($result, $release);
     }
 
     protected function createStatement(SqlStatement $statement, callable $release): SqlStatement

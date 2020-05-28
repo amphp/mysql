@@ -4,7 +4,7 @@ namespace Amp\Mysql;
 
 use Amp\Promise;
 use Amp\Sql\Common\PooledStatement as SqlPooledStatement;
-use Amp\Sql\ResultSet as SqlResultSet;
+use Amp\Sql\Result as SqlResult;
 
 final class PooledStatement extends SqlPooledStatement implements Statement
 {
@@ -16,10 +16,12 @@ final class PooledStatement extends SqlPooledStatement implements Statement
         $this->statement = $statement;
     }
 
-    protected function createResultSet(SqlResultSet $resultSet, callable $release): SqlResultSet
+    protected function createResult(SqlResult $result, callable $release): SqlResult
     {
-        \assert($resultSet instanceof ResultSet);
-        return new PooledResultSet($resultSet, $release);
+        if (!$result instanceof Result) {
+            throw new \TypeError('Result object must be an instance of ' . Result::class);
+        }
+        return new PooledResult($result, $release);
     }
 
     public function bind($paramId, $data): void

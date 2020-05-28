@@ -3,7 +3,7 @@
 namespace Amp\Mysql\Test;
 
 use Amp\Delayed;
-use Amp\Mysql\CommandResult;
+use Amp\Mysql\Internal\CommandResult;
 use Amp\Mysql\Connection;
 use Amp\Mysql\ConnectionConfig;
 use Amp\Mysql\Internal\Processor;

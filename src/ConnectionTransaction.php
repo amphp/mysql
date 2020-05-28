@@ -118,13 +118,8 @@ final class ConnectionTransaction implements SqlTransaction
 
         return call(function () use ($sql) {
             $result = yield $this->processor->query($sql);
-
-            if ($result instanceof ResultSet) {
-                ++$this->refCount;
-                return new PooledResultSet($result, $this->release);
-            }
-
-            return $result;
+            ++$this->refCount;
+            return new PooledResult($result, $this->release);
         });
     }
 
@@ -161,19 +156,15 @@ final class ConnectionTransaction implements SqlTransaction
             \assert($statement instanceof Statement);
             $result = yield $statement->execute($params);
 
-            if ($result instanceof ResultSet) {
-                ++$this->refCount;
-                return new PooledResultSet($result, $this->release);
-            }
-
-            return $result;
+            ++$this->refCount;
+            return new PooledResult($result, $this->release);
         });
     }
 
     /**
      * Commits the transaction and makes it inactive.
      *
-     * @return Promise<\Amp\Sql\CommandResult>
+     * @return Promise<Result>
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
@@ -193,7 +184,7 @@ final class ConnectionTransaction implements SqlTransaction
     /**
      * Rolls back the transaction and makes it inactive.
      *
-     * @return Promise<\Amp\Sql\CommandResult>
+     * @return Promise<Result>
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
@@ -215,7 +206,7 @@ final class ConnectionTransaction implements SqlTransaction
      *
      * @param string $identifier Savepoint identifier.
      *
-     * @return Promise<\Amp\Sql\CommandResult>
+     * @return Promise<Result>
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
@@ -229,7 +220,7 @@ final class ConnectionTransaction implements SqlTransaction
      *
      * @param string $identifier Savepoint identifier.
      *
-     * @return Promise<\Amp\Sql\CommandResult>
+     * @return Promise<Result>
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
@@ -243,7 +234,7 @@ final class ConnectionTransaction implements SqlTransaction
      *
      * @param string $identifier Savepoint identifier.
      *
-     * @return Promise<\Amp\Sql\CommandResult>
+     * @return Promise<Result>
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */

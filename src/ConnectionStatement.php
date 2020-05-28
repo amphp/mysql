@@ -3,6 +3,8 @@
 namespace Amp\Mysql;
 
 use Amp\Deferred;
+use Amp\Mysql\Internal\CommandResult;
+use Amp\Mysql\Internal\ConnectionResult;
 use Amp\Promise;
 use Amp\Sql\ConnectionException;
 use Amp\Sql\FailureException;
@@ -141,7 +143,7 @@ final class ConnectionStatement implements Statement
             $result = yield $promise;
 
             if ($result instanceof Internal\ResultProxy) {
-                $result = new ConnectionResultSet($result);
+                $result = new ConnectionResult($result);
                 return $result;
             }
 

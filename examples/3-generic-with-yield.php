@@ -26,11 +26,11 @@ Amp\Loop::run(function () {
 
     print "Insertion successful (if it wasn't, an exception would have been thrown by now)" . PHP_EOL;
 
-    /** @var Mysql\ResultSet $result */
+    /** @var Mysql\Result $result */
     $result = yield $db->query("SELECT a, b FROM tmp");
 
-    while (yield $result->advance()) {
-        \var_dump($result->getCurrent());
+    while ($row = yield $result->continue()) {
+        \var_dump($row);
     }
 
     yield $db->query("DROP TABLE tmp");

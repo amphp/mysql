@@ -15,13 +15,13 @@ use Amp\Mysql;
     $result = yield $db->query("SELECT a + b FROM tmp; SELECT a - b FROM tmp;");
 
     $i = 0;
-    /** @var Mysql\ResultSet $result */
+    /** @var Mysql\Result $result */
     do {
         print PHP_EOL . "Query " . ++$i . " Results:" . PHP_EOL;
-        while (yield $result->advance()) {
-            \var_dump($result->getCurrent());
+        while ($row = yield $result->continue()) {
+            \var_dump($row);
         }
-    } while (yield $result->nextResultSet()); // Advances to the next result set.
+    } while ($result = yield $result->getNextResult()); // Advances to the next result set.
 
     yield $db->query("DROP TABLE tmp");
 

@@ -2,6 +2,7 @@
 
 namespace Amp\Mysql\Internal;
 
+use Amp\Deferred;
 use Amp\Sql\FailureException;
 use Amp\Struct;
 
@@ -16,6 +17,12 @@ final class ResultProxy
     public $rows = [];
     public $fetchedRows = 0;
     public $userFetched = 0;
+
+    /** @var int|null */
+    public $insertId;
+
+    /** @var int|null */
+    public $affectedRows;
 
     public $deferreds = [self::UNFETCHED => [], self::COLUMNS_FETCHED => [], self::ROWS_FETCHED => []];
 
@@ -46,6 +53,7 @@ final class ResultProxy
             return;
         }
         foreach ($this->deferreds[$state] as [$deferred, $rows, $cb]) {
+            \assert($deferred instanceof Deferred);
             $deferred->resolve($cb ? $cb($rows) : $rows);
         }
         $this->deferreds[$state] = [];

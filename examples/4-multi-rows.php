@@ -17,19 +17,19 @@ Amp\Loop::run(function () {
     $promises[] = $db->execute("SELECT POW(a, ?) AS power FROM tmp", [2]);
 
     /**
-     * @var Mysql\ResultSet $result1
-     * @var Mysql\ResultSet $result2
+     * @var Mysql\Result $result1
+     * @var Mysql\Result $result2
      */
     list($result1, $result2) = yield $promises; // Both queries execute simultaneously. Wait for both to finish here.
 
     print "Query 1 Results:" . PHP_EOL;
-    while (yield $result1->advance()) {
-        \var_dump($result1->getCurrent());
+    while ($row = yield $result1->continue()) {
+        \var_dump($row);
     }
 
     print  PHP_EOL . "Query 2 Results:" . PHP_EOL;
-    while (yield $result2->advance()) {
-        \var_dump($result2->getCurrent());
+    while ($row = yield $result2->continue()) {
+        \var_dump($row);
     }
 
     yield $db->query("DROP TABLE tmp");

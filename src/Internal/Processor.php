@@ -7,7 +7,6 @@ use Amp\Coroutine;
 use Amp\Deferred;
 use Amp\File;
 use Amp\Loop;
-use Amp\Mysql\CommandResult;
 use Amp\Mysql\ConnectionConfig;
 use Amp\Mysql\ConnectionStatement;
 use Amp\Mysql\DataTypes;
@@ -881,7 +880,10 @@ REGEX;
             case self::OK_PACKET:
                 $this->parseOk($packet);
                 if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
-                    $this->getDeferred()->resolve($result = new ResultProxy);
+                    $result = new ResultProxy;
+                    $result->affectedRows = $this->connInfo->affectedRows;
+                    $result->insertId = $this->connInfo->insertId;
+                    $this->getDeferred()->resolve($result);
                     $this->result = $result;
                     $result->updateState(ResultProxy::COLUMNS_FETCHED);
                     $this->successfulResultsetFetch();

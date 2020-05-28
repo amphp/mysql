@@ -16,11 +16,11 @@ Amp\Loop::run(function () {
 
     yield $transaction->execute("INSERT INTO tmp VALUES (?, ? * 2)", [6, 6]);
 
-    /** @var Mysql\ResultSet $result */
+    /** @var Mysql\Result $result */
     $result = yield $transaction->execute("SELECT * FROM tmp WHERE a >= ?", [5]); // Two rows should be returned.
 
-    while (yield $result->advance()) {
-        \var_dump($result->getCurrent());
+    while ($row = yield $result->continue()) {
+        \var_dump($row);
     }
 
     yield $transaction->rollback();
@@ -28,8 +28,8 @@ Amp\Loop::run(function () {
     // Run same query again, should only return a single row since the other was rolled back.
     $result = yield $db->execute("SELECT * FROM tmp WHERE a >= ?", [5]);
 
-    while (yield $result->advance()) {
-        \var_dump($result->getCurrent());
+    while ($row = yield $result->continue()) {
+        \var_dump($row);
     }
 
     $db->close();
