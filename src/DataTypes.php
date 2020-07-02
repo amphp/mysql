@@ -240,7 +240,7 @@ final class DataTypes
 
     private static function decodeJson(string $data): string
     {
-        if (!\strncmp(self::ENCODED_JSON_PREFIX, $data, \strlen(self::ENCODED_JSON_PREFIX))) {
+        if (0 !== \strncmp(self::ENCODED_JSON_PREFIX, $data, \strlen(self::ENCODED_JSON_PREFIX))) {
             return $data; // Data was not base-64 encoded.
         }
 
