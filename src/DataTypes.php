@@ -68,7 +68,7 @@ final class DataTypes
                 $type = self::MYSQL_TYPE_DOUBLE;
                 break;
             case "string":
-                $type = self::MYSQL_TYPE_LONG_BLOB;
+                $type = self::MYSQL_TYPE_STRING;
                 $value = self::encodeInt(\strlen($param)) . $param;
                 break;
             case "NULL":
