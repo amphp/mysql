@@ -6,8 +6,8 @@ use Amp\AsyncGenerator;
 use Amp\Deferred;
 use Amp\DisposedException;
 use Amp\Mysql\Result;
+use Amp\Pipeline;
 use Amp\Promise;
-use Amp\Stream;
 use Amp\Success;
 use function Amp\call;
 
@@ -25,10 +25,10 @@ final class ConnectionResult implements Result
     public function __construct(ResultProxy $result)
     {
         $this->result = $result;
-        $this->generator = self::makeStream($result);
+        $this->generator = self::makePipeline($result);
     }
 
-    private static function makeStream(ResultProxy $result): Stream
+    private static function makePipeline(ResultProxy $result): Pipeline
     {
         return new AsyncGenerator(static function (callable $emit) use ($result): \Generator {
             $next = self::fetchRow($result);

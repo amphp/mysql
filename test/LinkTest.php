@@ -6,11 +6,11 @@ use Amp\Mysql\DataTypes;
 use Amp\Mysql\Result;
 use Amp\Mysql\Statement;
 use Amp\PHPUnit\AsyncTestCase;
+use Amp\Pipeline;
 use Amp\Promise;
 use Amp\Sql\Link;
 use Amp\Sql\QueryError;
 use Amp\Sql\Transaction;
-use Amp\Stream;
 
 abstract class LinkTest extends AsyncTestCase
 {
@@ -350,7 +350,7 @@ abstract class LinkTest extends AsyncTestCase
             /** @var Statement $statement */
             $statement = yield $transaction->prepare("SELECT a, b FROM main WHERE a >= ?");
 
-            $count = \count(yield Stream\toArray(yield $statement->execute([$a])));
+            $count = \count(yield Pipeline\toArray(yield $statement->execute([$a])));
 
             /** @var Statement $statement */
             $statement = yield $transaction->prepare("INSERT INTO main (a, b) SELECT a, b FROM main WHERE a >= ?");
