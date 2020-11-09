@@ -655,6 +655,7 @@ REGEX;
             | self::CLIENT_MULTI_RESULTS
             | self::CLIENT_PS_MULTI_RESULTS
             | self::CLIENT_MULTI_STATEMENTS
+            | self::CLIENT_PLUGIN_AUTH
             | self::CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA;
 
         if (\extension_loaded("zlib") && $this->config->isCompressionEnabled()) {
@@ -1389,6 +1390,23 @@ REGEX;
                             $this->config = $this->config->withKey($key);
                             $this->sendHandshake();
                             break;
+                        case "caching_sha2_password":
+                            switch (\ord(substr($packet, 1, 1))) {
+                                case 3: // success
+                                    return; // expecting OK afterwards
+                                case 4: // fast auth failure
+                                    if ($this->capabilities & self::CLIENT_SSL || $this->config->getHost()[0] === "/" /* unix domain socket, information not trivially available from $this->socket */) {
+                                        $this->write($this->config->getPassword() . "\0");
+                                    } else {
+                                        $this->write("\x02");
+                                    }
+                                    break;
+                                case 0x2d: // certificate
+                                    $pubkey = substr($packet, 1);
+                                    $this->write($this->sha256Auth($this->config->getPassword(), $this->authPluginData, $pubkey));
+                                    break;
+                            }
+                            break;
                         default:
                             throw new ConnectionException("Unexpected EXTRA_AUTH_PACKET in authentication phase for method {$this->authPluginName}");
                     }
@@ -1434,8 +1452,14 @@ REGEX;
 
     private function sha256Auth(string $pass, string $scramble, string $key): string
     {
-        \openssl_public_encrypt($pass ^ \str_repeat($scramble, \ceil(\strlen($pass) / \strlen($scramble))), $auth, $key, OPENSSL_PKCS1_OAEP_PADDING);
+        \openssl_public_encrypt("$pass\0" ^ \str_repeat($scramble, \ceil(\strlen($pass) / \strlen($scramble))), $auth, $key, OPENSSL_PKCS1_OAEP_PADDING);
         return $auth;
+    }
+
+    private function sha2Auth(string $pass, string $scramble): string
+    {
+        $hash = \hash("sha256", $pass, true);
+        return $hash ^ \hash("sha256", \substr($scramble, 0, 20) . \hash("sha256", $hash, true), true);
     }
 
     private function authSwitchRequest(string $packet): void
@@ -1520,6 +1544,9 @@ REGEX;
                             $auth = "\x01";
                         }
                     }
+		    break;
+                case "caching_sha2_password":
+                    $auth = $this->sha2Auth($this->config->getPassword(), $this->authPluginData);
                     break;
                 case "mysql_old_password":
                     throw new ConnectionException("mysql_old_password is outdated and insecure. Intentionally not implemented!");
@@ -1542,8 +1569,7 @@ REGEX;
             $payload .= "{$this->config->getDatabase()}\0";
         }
         if ($this->capabilities & self::CLIENT_PLUGIN_AUTH) {
-            $payload .= "\0"; // @TODO AUTH
-//            $payload .= "mysql_native_password\0";
+            $payload .= "{$this->authPluginName}\0";
         }
         if ($this->capabilities & self::CLIENT_CONNECT_ATTRS) {
             // connection attributes?! 5.6.6+ only!
