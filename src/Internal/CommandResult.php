@@ -3,17 +3,14 @@
 namespace Amp\Mysql\Internal;
 
 use Amp\Mysql\Result;
-use Amp\Promise;
 use Amp\Sql\Common\CommandResult as SqlCommandResult;
 use Amp\Success;
 
 final class CommandResult implements Result
 {
-    /** @var int */
-    private $lastInsertId;
+    private ?int $lastInsertId;
 
-    /** @var SqlCommandResult */
-    private $delegate;
+    private SqlCommandResult $delegate;
 
     public function __construct(int $affectedRows, int $lastInsertId)
     {
@@ -21,12 +18,12 @@ final class CommandResult implements Result
         $this->lastInsertId = $lastInsertId ?: null; // Convert 0 to null
     }
 
-    public function continue(): Promise
+    public function continue(): ?array
     {
         return $this->delegate->continue();
     }
 
-    public function dispose()
+    public function dispose(): void
     {
         $this->delegate->dispose();
     }
@@ -44,13 +41,13 @@ final class CommandResult implements Result
         return $this->lastInsertId;
     }
 
-    public function getNextResult(): Promise
+    public function getNextResult(): ?Result
     {
         return $this->delegate->getNextResult();
     }
 
-    public function getFields(): Promise
+    public function getFields(): ?array
     {
-        return new Success; // Command results do not have a field list.
+        return null; // Command results do not have a field list.
     }
 }

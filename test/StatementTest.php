@@ -2,7 +2,7 @@
 
 namespace Amp\Mysql\Test;
 
-use Amp\Mysql\ConnectionStatement;
+use Amp\Mysql\Internal\ConnectionStatement;
 use Amp\Mysql\Internal\Processor;
 use Amp\Mysql\Internal\ResultProxy;
 use Amp\PHPUnit\AsyncTestCase;
@@ -11,10 +11,9 @@ use PHPUnit\Framework\MockObject\MockObject;
 class StatementTest extends AsyncTestCase
 {
     /** @var MockObject&Processor */
-    protected $processor;
+    protected Processor $processor;
 
-    /** @var ResultProxy */
-    protected $resultProxy;
+    protected ResultProxy $resultProxy;
 
     public function setUp(): void
     {

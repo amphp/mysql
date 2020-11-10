@@ -3,37 +3,35 @@
 require 'support/bootstrap.php';
 
 use Amp\Mysql;
+use function Amp\async;
+use function Amp\await;
 
-Amp\Loop::run(function () {
-    $db = Mysql\pool(Mysql\ConnectionConfig::fromString("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME));
+$db = Mysql\pool(Mysql\ConnectionConfig::fromString("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME));
 
-    /* Create table and insert a few rows */
-    /* we need to wait until table is finished, so that we can insert. */
-    yield $db->query("CREATE TABLE IF NOT EXISTS tmp (a INT(10), b INT(10))");
+/* Create table and insert a few rows */
+/* we need to wait until table is finished, so that we can insert. */
+$db->query("CREATE TABLE IF NOT EXISTS tmp (a INT(10), b INT(10))");
 
-    print "Table successfully created." . PHP_EOL;
+print "Table successfully created." . PHP_EOL;
 
-    /** @var Mysql\Statement $statement */
-    $statement = yield $db->prepare("INSERT INTO tmp (a, b) VALUES (?, ? * 2)");
+$statement = $db->prepare("INSERT INTO tmp (a, b) VALUES (?, ? * 2)");
 
-    $promises = [];
-    foreach (\range(1, 5) as $num) {
-        $promises[] = $statement->execute([$num, $num]);
-    }
+$promises = [];
+foreach (\range(1, 5) as $num) {
+    $promises[] = async(fn() => $statement->execute([$num, $num]));
+}
 
-    /* wait until everything is inserted */
-    yield $promises;
+/* wait until everything is inserted */
+await($promises);
 
-    print "Insertion successful (if it wasn't, an exception would have been thrown by now)" . PHP_EOL;
+print "Insertion successful (if it wasn't, an exception would have been thrown by now)" . PHP_EOL;
 
-    /** @var Mysql\Result $result */
-    $result = yield $db->query("SELECT a, b FROM tmp");
+$result = $db->query("SELECT a, b FROM tmp");
 
-    while ($row = yield $result->continue()) {
-        \var_dump($row);
-    }
+while ($row = $result->continue()) {
+    \var_dump($row);
+}
 
-    yield $db->query("DROP TABLE tmp");
+$db->query("DROP TABLE tmp");
 
-    $db->close();
-});
+$db->close();

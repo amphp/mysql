@@ -5,25 +5,22 @@ require 'support/generic-table.php';
 
 use Amp\Mysql;
 
-\Amp\Loop::run(function () {
-    $db = Mysql\pool(Mysql\ConnectionConfig::fromString("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME));
+$db = Mysql\pool(Mysql\ConnectionConfig::fromString("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME));
 
-    /* create same table than in 3-generic-with-yield.php */
-    yield from createGenericTable($db);
+/* create same table than in 3-generic-with-yield.php */
+createGenericTable($db);
 
-    /* multi statements are enabled by default, but generally stored procedures also might return multiple resultsets anyway */
-    $result = yield $db->query("SELECT a + b FROM tmp; SELECT a - b FROM tmp;");
+/* multi statements are enabled by default, but generally stored procedures also might return multiple resultsets anyway */
+$result = $db->query("SELECT a + b FROM tmp; SELECT a - b FROM tmp;");
 
-    $i = 0;
-    /** @var Mysql\Result $result */
-    do {
-        print PHP_EOL . "Query " . ++$i . " Results:" . PHP_EOL;
-        while ($row = yield $result->continue()) {
-            \var_dump($row);
-        }
-    } while ($result = yield $result->getNextResult()); // Advances to the next result set.
+$i = 0;
+do {
+    print PHP_EOL . "Query " . ++$i . " Results:" . PHP_EOL;
+    while ($row = $result->continue()) {
+        \var_dump($row);
+    }
+} while ($result = $result->getNextResult()); // Advances to the next result set.
 
-    yield $db->query("DROP TABLE tmp");
+$db->query("DROP TABLE tmp");
 
-    $db->close();
-});
+$db->close();

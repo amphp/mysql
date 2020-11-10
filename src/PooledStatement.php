@@ -2,13 +2,12 @@
 
 namespace Amp\Mysql;
 
-use Amp\Promise;
 use Amp\Sql\Common\PooledStatement as SqlPooledStatement;
 use Amp\Sql\Result as SqlResult;
 
 final class PooledStatement extends SqlPooledStatement implements Statement
 {
-    private $statement;
+    private Statement $statement;
 
     public function __construct(Statement $statement, callable $release)
     {
@@ -16,26 +15,24 @@ final class PooledStatement extends SqlPooledStatement implements Statement
         $this->statement = $statement;
     }
 
-    protected function createResult(SqlResult $result, callable $release): SqlResult
+    protected function createResult(SqlResult $result, callable $release): Result
     {
-        if (!$result instanceof Result) {
-            throw new \TypeError('Result object must be an instance of ' . Result::class);
-        }
+        \assert($result instanceof Result);
         return new PooledResult($result, $release);
     }
 
-    public function bind($paramId, $data): void
+    public function bind(int|string $paramId, mixed $data): void
     {
         $this->statement->bind($paramId, $data);
     }
 
-    public function getFields(): Promise
+    public function getFields(): ?array
     {
         return $this->statement->getFields();
     }
 
-    public function reset(): Promise
+    public function reset(): void
     {
-        return $this->statement->reset();
+        $this->statement->reset();
     }
 }

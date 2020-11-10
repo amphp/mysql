@@ -8,20 +8,17 @@ final class ConnectionState
 {
     use Struct;
 
-    /** @var int|null */
-    public $affectedRows;
-    public $insertId;
-    public $statusFlags;
-    public $warnings;
-    public $statusInfo;
-    public $sessionState = [];
-    public $errorMsg;
-    public $errorCode;
-    public $errorState; // begins with "#"
+    public ?int $affectedRows = null;
+    public ?int $insertId = null;
+    public ?int $statusFlags = null;
+    public ?int $warnings = null;
+    public ?string $statusInfo = null;
+    public array $sessionState = [];
+    public ?string $errorMsg = null;
+    public ?int $errorCode = null;
+    public ?string $errorState = null; // begins with "#"
 
-    /** @var string */
-    public $serverVersion;
+    public string $serverVersion;
 
-    /** @var string */
-    public $charset;
+    public int $charset;
 }

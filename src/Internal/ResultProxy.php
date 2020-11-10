@@ -10,27 +10,23 @@ final class ResultProxy
 {
     use Struct;
 
-    public $columnCount;
-    public $columns = [];
-    public $params = [];
-    public $columnsToFetch;
-    public $rows = [];
-    public $fetchedRows = 0;
-    public $userFetched = 0;
+    public int $columnCount;
+    public array $columns = [];
+    public array $params = [];
+    public int $columnsToFetch;
+    public array $rows = [];
+    public int $fetchedRows = 0;
+    public int $userFetched = 0;
 
-    /** @var int|null */
-    public $insertId;
+    public ?int $insertId = null;
 
-    /** @var int|null */
-    public $affectedRows;
+    public ?int $affectedRows = null;
 
-    public $deferreds = [self::UNFETCHED => [], self::COLUMNS_FETCHED => [], self::ROWS_FETCHED => []];
+    public array $deferreds = [self::UNFETCHED => [], self::COLUMNS_FETCHED => [], self::ROWS_FETCHED => []];
 
-    /** @var int */
-    public $state = self::UNFETCHED;
+    public int $state = self::UNFETCHED;
 
-    /** @var \Amp\Deferred|null */
-    public $next;
+    public ?Deferred $next = null;
 
     public const UNFETCHED = 0;
     public const COLUMNS_FETCHED = 1;

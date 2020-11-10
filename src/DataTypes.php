@@ -42,7 +42,7 @@ final class DataTypes
     private const ENCODED_JSON_PREFIX = "base64:type251:";
 
     /** @see 14.7.3 Binary Value */
-    public static function encodeBinary($param): array
+    public static function encodeBinary(mixed $param): array
     {
         $unsigned = 0;
 

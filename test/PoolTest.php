@@ -12,9 +12,12 @@ use Amp\Mysql\Result;
 use Amp\Mysql\Statement;
 use Amp\Promise;
 use Amp\Sql\Connector;
+use Amp\Sql\Link;
 use Amp\Sql\Transaction as SqlTransaction;
 use Amp\Success;
-use function Amp\call;
+use function Amp\async;
+use function Amp\await;
+use function Amp\delay;
 
 interface StatementOperation extends Statement
 {
@@ -22,18 +25,18 @@ interface StatementOperation extends Statement
 
 class PoolTest extends LinkTest
 {
-    protected function getLink(string $connectionString): Promise
+    protected function getLink(string $connectionString): Link
     {
-        return new Success(new Pool(ConnectionConfig::fromString($connectionString)));
+        return new Pool(ConnectionConfig::fromString($connectionString));
     }
 
     protected function createPool(array $connections): Pool
     {
         $connector = $this->createMock(Connector::class);
         $connector->method('connect')
-            ->will($this->returnCallback(function () use ($connections): Promise {
+            ->will($this->returnCallback(function () use ($connections): Connection {
                 static $count = 0;
-                return new Success($connections[$count++ % \count($connections)]);
+                return $connections[$count++ % \count($connections)];
             }));
 
         $config = ConnectionConfig::fromString('host=host;user=user;password=password');
@@ -46,7 +49,7 @@ class PoolTest extends LinkTest
      *
      * @return \Amp\Mysql\Internal\Processor[]|\PHPUnit\Framework\MockObject\MockObject[]
      */
-    private function makeProcessorSet(int $count)
+    private function makeProcessorSet(int $count): array
     {
         $processors = [];
 
@@ -59,7 +62,7 @@ class PoolTest extends LinkTest
         return $processors;
     }
 
-    private function makeConnectionSet(array $processors)
+    private function makeConnectionSet(array $processors): array
     {
         return \array_map((function (Processor $processor): Connection {
             return new self($processor);
@@ -81,20 +84,22 @@ class PoolTest extends LinkTest
      */
     public function testSingleQuery(int $count)
     {
-        $result = $this->createMock(StatementOperation::class);
+        $result = $this->createMock(Result::class);
 
         $processors = $this->makeProcessorSet($count);
 
         $connection = $processors[0];
         $connection->expects($this->once())
-            ->method('prepare')
+            ->method('query')
             ->with('SQL Query')
             ->will($this->returnValue(new Delayed(10, $result)));
 
         $pool = $this->createPool($this->makeConnectionSet($processors));
 
-        $return = yield $pool->prepare('SQL Query');
-        $this->assertInstanceOf(Statement::class, $return);
+        $return = $pool->query('SQL Query');
+        $this->assertInstanceOf(Result::class, $return);
+
+        $pool->close();
     }
 
     /**
@@ -105,28 +110,32 @@ class PoolTest extends LinkTest
     public function testConsecutiveQueries(int $count)
     {
         $rounds = 3;
-        $result = $this->createMock(StatementOperation::class);
+        $result = $this->createMock(Result::class);
 
         $processors = $this->makeProcessorSet($count);
 
         foreach ($processors as $connection) {
-            $connection->method('prepare')
+            $connection->method('query')
                 ->with('SQL Query')
                 ->will($this->returnValue(new Delayed(10, $result)));
         }
 
         $pool = $this->createPool($this->makeConnectionSet($processors));
 
-        $promises = [];
+        try {
+            $promises = [];
 
-        for ($i = 0; $i < $count; ++$i) {
-            $promises[] = $pool->prepare('SQL Query');
-        }
+            for ($i = 0; $i < $count; ++$i) {
+                $promises[] = async(fn() => $pool->query('SQL Query'));
+            }
 
-        $results = yield $promises;
+            $results = await($promises);
 
-        foreach ($results as $result) {
-            $this->assertInstanceOf(Statement::class, $result);
+            foreach ($results as $result) {
+                $this->assertInstanceOf(Result::class, $result);
+            }
+        } finally {
+            $pool->close();
         }
     }
 
@@ -135,7 +144,7 @@ class PoolTest extends LinkTest
      *
      * @param int $count
      */
-    public function testMutlipleTransactions(int $count)
+    public function testMultipleTransactions(int $count)
     {
         $processors = $this->makeProcessorSet($count);
 
@@ -148,9 +157,13 @@ class PoolTest extends LinkTest
 
         $pool = $this->createPool($this->makeConnectionSet($processors));
 
-        $return = yield $pool->beginTransaction(SqlTransaction::ISOLATION_COMMITTED);
-        $this->assertInstanceOf(SqlTransaction::class, $return);
-        yield $return->rollback();
+        try {
+            $return = $pool->beginTransaction(SqlTransaction::ISOLATION_COMMITTED);
+            $this->assertInstanceOf(SqlTransaction::class, $return);
+            $return->rollback();
+        } finally {
+            $pool->close();
+        }
     }
 
     /**
@@ -167,28 +180,24 @@ class PoolTest extends LinkTest
 
         foreach ($processors as $connection) {
             $connection->method('query')
-                ->will($this->returnCallback(function () use ($result) {
-                    return new Delayed(10, $result);
-                }));
+                ->will($this->returnCallback(fn() => new Delayed(10, $result)));
         }
 
         $pool = $this->createPool($this->makeConnectionSet($processors));
 
         $promises = [];
         for ($i = 0; $i < $count; ++$i) {
-            $promises[] = $pool->beginTransaction(SqlTransaction::ISOLATION_COMMITTED);
+            $promises[] = async(fn() => $pool->beginTransaction(SqlTransaction::ISOLATION_COMMITTED));
         }
 
-        $results = yield \array_map(function (Promise $promise): Promise {
-            return call(function () use ($promise) {
-                $transaction = yield $promise;
+        try {
+            \array_map(function (Promise $promise) {
+                $transaction = await($promise);
                 $this->assertInstanceOf(SqlTransaction::class, $transaction);
-                return yield $transaction->rollback();
-            });
-        }, $promises);
-
-        foreach ($results as $result) {
-            $this->assertInstanceof(CommandResult::class, $result);
+                $transaction->rollback();
+            }, $promises);
+        } finally {
+            $pool->close();
         }
     }
 
@@ -205,21 +214,24 @@ class PoolTest extends LinkTest
         foreach ($processors as $connection) {
             $connection->expects($this->once())
                 ->method('query')
-                ->with($query);
+                ->with($query)
+                ->willReturn(new Success($this->createMock(Result::class)));
         }
 
         $pool = $this->createPool($this->makeConnectionSet($processors));
 
-        $promises = [];
-        for ($i = 0; $i < $count; ++$i) {
-            $promises[] = $pool->extractConnection();
-        }
-
-        $results = yield $promises;
-
-        foreach ($results as $result) {
-            $this->assertInstanceof(Connection::class, $result);
-            $result->query($query);
+        try {
+            $promises = [];
+            for ($i = 0; $i < $count; ++$i) {
+                $promises[] = async(fn() => $pool->extractConnection());
+            }
+            $results = await($promises);
+            foreach ($results as $result) {
+                $this->assertInstanceof(Connection::class, $result);
+                $result->query($query);
+            }
+        } finally {
+            $pool->close();
         }
     }
 
@@ -252,18 +264,21 @@ class PoolTest extends LinkTest
         \array_unshift($processors, $processor);
 
         $pool = $this->createPool($this->makeConnectionSet($processors));
-        $this->assertSame($count + 1, $pool->getConnectionLimit());
 
-        $promises = [];
-        for ($i = 0; $i < $count + 1; ++$i) {
-            $promises[] = $pool->query($query);
+        try {
+            $this->assertSame($count + 1, $pool->getConnectionLimit());
+            $promises = [];
+            for ($i = 0; $i < $count + 1; ++$i) {
+                $promises[] = async(fn() => $pool->query($query));
+            }
+            await($promises);
+            $promises = [];
+            for ($i = 0; $i < $count; ++$i) {
+                $promises[] = async(fn() => $pool->query($query));
+            }
+            await($promises);
+        } finally {
+            $pool->close();
         }
-        yield $promises;
-
-        $promises = [];
-        for ($i = 0; $i < $count; ++$i) {
-            $promises[] = $pool->query($query);
-        }
-        yield $promises;
     }
 }

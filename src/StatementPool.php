@@ -2,39 +2,28 @@
 
 namespace Amp\Mysql;
 
-use Amp\Promise;
 use Amp\Sql\Common\StatementPool as SqlStatementPool;
-use Amp\Sql\Pool;
 use Amp\Sql\Result as SqlResult;
 use Amp\Sql\Statement as SqlStatement;
-use Amp\Success;
-use function Amp\call;
 
 final class StatementPool extends SqlStatementPool implements Statement
 {
-    private $params = [];
+    private array $params = [];
 
-    public function __construct(Pool $pool, Statement $statement, callable $prepare)
-    {
-        parent::__construct($pool, $statement, $prepare);
-    }
-
-    protected function prepare(SqlStatement $statement): Promise
+    protected function prepare(SqlStatement $statement): Statement
     {
         \assert($statement instanceof Statement);
 
-        return call(function () use ($statement) {
-            yield $statement->reset();
+        $statement->reset();
 
-            foreach ($this->params as $paramId => $data) {
-                $statement->bind($paramId, $data);
-            }
+        foreach ($this->params as $paramId => $data) {
+            $statement->bind($paramId, $data);
+        }
 
-            return $statement;
-        });
+        return $statement;
     }
 
-    protected function createResult(SqlResult $result, callable $release): SqlResult
+    protected function createResult(SqlResult $result, callable $release): Result
     {
         if (!$result instanceof Result) {
             throw new \TypeError('Result object must be an instance of ' . Result::class);
@@ -43,7 +32,7 @@ final class StatementPool extends SqlStatementPool implements Statement
         return new PooledResult($result, $release);
     }
 
-    public function bind($paramId, $data): void
+    public function bind(int|string $paramId, mixed $data): void
     {
         if (!\is_int($paramId) && !\is_string($paramId)) {
             throw new \TypeError("Invalid parameter ID type");
@@ -52,23 +41,16 @@ final class StatementPool extends SqlStatementPool implements Statement
         $this->params[$paramId] = $data;
     }
 
-    public function reset(): Promise
+    public function reset(): void
     {
         $this->params = [];
-        return new Success;
     }
 
-    /**
-     * @return Promise<array>
-     */
-    public function getFields(): Promise
+    public function getFields(): ?array
     {
-        return call(function () {
-            $statement = yield from $this->pop();
-            \assert($statement instanceof Statement);
-            $fields = yield $statement->getFields();
-            $this->push($statement);
-            return $fields;
-        });
+        $statement = $this->pop();
+        $fields = $statement->getFields();
+        $this->push($statement);
+        return $fields;
     }
 }

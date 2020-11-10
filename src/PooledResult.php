@@ -2,14 +2,12 @@
 
 namespace Amp\Mysql;
 
-use Amp\Promise;
 use Amp\Sql\Common\PooledResult as SqlPooledResult;
 use Amp\Sql\Result as SqlResult;
 
 final class PooledResult extends SqlPooledResult implements Result
 {
-    /** @var Result */
-    private $result;
+    private Result $result;
 
     /**
      * @param Result $result
@@ -21,12 +19,9 @@ final class PooledResult extends SqlPooledResult implements Result
         $this->result = $result;
     }
 
-    protected function newInstanceFrom(SqlResult $result, callable $release): SqlPooledResult
+    protected function newInstanceFrom(SqlResult $result, callable $release): PooledResult
     {
-        if (!$result instanceof Result) {
-            throw new \TypeError('Result object must be an instance of ' . Result::class);
-        }
-
+        \assert($result instanceof Result);
         return new self($result, $release);
     }
 
@@ -35,7 +30,7 @@ final class PooledResult extends SqlPooledResult implements Result
         return $this->result->getRowCount();
     }
 
-    public function getFields(): Promise
+    public function getFields(): ?array
     {
         return $this->result->getFields();
     }

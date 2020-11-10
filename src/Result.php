@@ -2,7 +2,6 @@
 
 namespace Amp\Mysql;
 
-use Amp\Promise;
 use Amp\Sql\Result as SqlResult;
 
 interface Result extends SqlResult
@@ -14,9 +13,9 @@ interface Result extends SqlResult
     public function getLastInsertId(): ?int;
 
     /**
-     * @return Promise<array|null>
+     * @return array|null
      *
-     * @psalm-return Promise<array<int, array<int, string>>|null>
+     * @psalm-return array<int, array<int, string>>|null
      */
-    public function getFields(): Promise;
+    public function getFields(): ?array;
 }

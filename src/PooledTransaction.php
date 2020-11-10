@@ -8,19 +8,15 @@ use Amp\Sql\Statement as SqlStatement;
 
 final class PooledTransaction extends SqlPooledTransaction
 {
-    protected function createStatement(SqlStatement $statement, callable $release): SqlStatement
+    protected function createStatement(SqlStatement $statement, callable $release): Statement
     {
-        if (!$statement instanceof Statement) {
-            throw new \TypeError('Statement object must be an instance of ' . Statement::class);
-        }
+        \assert($statement instanceof Statement);
         return new PooledStatement($statement, $release);
     }
 
-    protected function createResult(SqlResult $result, callable $release): SqlResult
+    protected function createResult(SqlResult $result, callable $release): Result
     {
-        if (!$result instanceof Result) {
-            throw new \TypeError('Result object must be an instance of ' . Result::class);
-        }
+        \assert($result instanceof Result);
         return new PooledResult($result, $release);
     }
 }

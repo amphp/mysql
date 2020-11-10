@@ -3,7 +3,6 @@
 namespace Amp\Mysql\Internal;
 
 use Amp\CancellationToken;
-use Amp\Coroutine;
 use Amp\Deferred;
 use Amp\File;
 use Amp\Loop;
@@ -16,6 +15,8 @@ use Amp\Sql\ConnectionException;
 use Amp\Sql\FailureException;
 use Amp\Sql\QueryError;
 use Amp\Sql\TransientResource;
+use function Amp\await;
+use function Amp\defer;
 
 /* @TODO
  * 14.2.3 Auth switch request??
@@ -60,53 +61,49 @@ class Processor implements TransientResource
 REGEX;
 
     /** @var \Generator[] */
-    private $processors = [];
+    private array $processors = [];
 
     /** @var int */
-    private $protocol;
+    private int $protocol;
 
-    private $seqId = -1;
-    private $compressionId = -1;
+    private int $seqId = -1;
+    private int $compressionId = -1;
 
-    /** @var EncryptableSocket */
-    private $socket;
+    private ?EncryptableSocket $socket;
 
-    private $authPluginDataLen;
-    private $query;
-    public $named = [];
+    private int $authPluginDataLen;
+    private ?string $query = null;
+    public array $named = [];
 
     /** @var callable|null */
     private $parseCallback = null;
     /** @var callable|null */
     private $packetCallback = null;
 
-    /** @var \Amp\Promise|null */
-    private $pendingWrite;
+    private ?Promise $pendingWrite = null;
 
-    /** @var \Amp\Sql\ConnectionConfig */
-    public $config;
+    public ConnectionConfig $config;
 
-    /** @var \Amp\Deferred[] */
-    private $deferreds = [];
+    /** @var Deferred[] */
+    private array $deferreds = [];
 
     /** @var callable[] */
-    private $onReady = [];
+    private array $onReady = [];
 
-    /** @var ResultProxy|null */
-    private $result;
+    private ?ResultProxy $result = null;
 
     /** @var int */
-    private $lastUsedAt;
+    private int $lastUsedAt;
 
-    private $connectionId;
-    private $authPluginData;
-    private $capabilities = 0;
-    private $serverCapabilities = 0;
-    private $authPluginName;
-    private $connInfo;
-    private $refcount = 1;
+    private int $connectionId;
+    private string $authPluginData;
+    private int $capabilities = 0;
+    private int $serverCapabilities = 0;
+    private string $authPluginName;
+    private ConnectionState $connInfo;
+    private int $refcount = 1;
 
-    private $connectionState = self::UNCONNECTED;
+    private int $connectionState = self::UNCONNECTED;
 
     private const MAX_PACKET_SIZE = 0xffffff;
     private const MAX_UNCOMPRESSED_BUFLEN = 0xfffffb;
@@ -197,7 +194,7 @@ REGEX;
         $this->socket->reference();
     }
 
-    public function connect(CancellationToken $token): Promise
+    public function connect(CancellationToken $token): void
     {
         \assert(!$this->processors, self::class."::connect() must not be called twice");
 
@@ -205,17 +202,13 @@ REGEX;
 
         $this->processors = [$this->parseMysql()];
 
-        $id = $token->subscribe(function (): void {
-            $this->close();
-        });
+        $id = $token->subscribe(fn() => $this->close());
 
-        Promise\rethrow(new Coroutine($this->read()));
+        defer(fn() => $this->read());
 
         $promise = $deferred->promise();
 
-        $promise->onResolve(static function () use ($id, $token): void {
-            $token->unsubscribe($id);
-        });
+        $promise->onResolve(static fn() => $token->unsubscribe($id));
 
         if ($this->config->getCharset() !== ConnectionConfig::DEFAULT_CHARSET || $this->config->getCollation() !== ConnectionConfig::DEFAULT_COLLATE) {
             $promise->onResolve(function (?\Throwable $exception): void {
@@ -230,13 +223,13 @@ REGEX;
             });
         }
 
-        return $promise;
+        await($promise);
     }
 
-    private function read(): \Generator
+    private function read(): void
     {
         try {
-            while (($bytes = yield $this->socket->read()) !== null) {
+            while (($bytes = $this->socket->read()) !== null) {
                 // @codeCoverageIgnoreStart
                 \assert((function () use ($bytes) {
                     if (\defined("MYSQL_DEBUG")) {
@@ -344,26 +337,24 @@ REGEX;
 
     public function setCharset(string $charset, string $collate = ""): Promise
     {
-        return \Amp\call(function () use ($charset, $collate) {
-            if ($collate === "" && false !== $off = \strpos($charset, "_")) {
-                $collate = $charset;
-                $charset = \substr($collate, 0, $off);
-            }
+        if ($collate === "" && false !== $off = \strpos($charset, "_")) {
+            $collate = $charset;
+            $charset = \substr($collate, 0, $off);
+        }
 
-            $query = "SET NAMES '$charset'" . ($collate === "" ? "" : " COLLATE '$collate'");
-            $result = yield $this->query($query);
+        $query = "SET NAMES '$charset'" . ($collate === "" ? "" : " COLLATE '$collate'");
+        $promise = $this->query($query);
 
-            $this->config = $this->config->withCharset($charset, $collate);
+        $this->config = $this->config->withCharset($charset, $collate);
 
-            return $result;
-        });
+        return $promise;
     }
 
 
     /** @see 14.6.3 COM_INIT_DB */
     public function useDb(string $db): Promise
     {
-        return $this->startCommand(function () use ($db) {
+        return $this->startCommand(function () use ($db): void {
             $this->config = $this->config->withDatabase($db);
             $this->sendPacket("\x02$db");
         });
@@ -372,7 +363,7 @@ REGEX;
     /** @see 14.6.4 COM_QUERY */
     public function query(string $query): Promise
     {
-        return $this->startCommand(function () use ($query) {
+        return $this->startCommand(function () use ($query): void {
             $this->query = $query;
             $this->parseCallback = [$this, "handleQuery"];
             $this->sendPacket("\x03$query");
@@ -382,11 +373,11 @@ REGEX;
     /** @see 14.7.4 COM_STMT_PREPARE */
     public function prepare(string $query): Promise
     {
-        return $this->startCommand(function () use ($query) {
+        return $this->startCommand(function () use ($query): void {
             $this->query = $query;
             $this->parseCallback = [$this, "handlePrepare"];
 
-            $query = \preg_replace_callback(self::STATEMENT_PARAM_REGEX, function ($m) {
+            $query = \preg_replace_callback(self::STATEMENT_PARAM_REGEX, function ($m): string {
                 static $index = 0;
                 if ($m[2] !== "?") {
                     $this->named[$m[3]][] = $index;
@@ -425,7 +416,7 @@ REGEX;
     /** @see 14.6.15 COM_PING */
     public function ping(): Promise
     {
-        return $this->startCommand(function () {
+        return $this->startCommand(function (): void {
             $this->sendPacket("\x0e");
         });
     }
@@ -433,7 +424,7 @@ REGEX;
     /** @see 14.6.19 COM_RESET_CONNECTION */
     public function resetConnection(): Promise
     {
-        return $this->startCommand(function () {
+        return $this->startCommand(function (): void {
             $this->sendPacket("\x1f");
         });
     }
@@ -458,7 +449,7 @@ REGEX;
     public function execute(int $stmtId, string $query, array &$params, array $prebound, array $data = []): Promise
     {
         $deferred = new Deferred;
-        $this->appendTask(function () use ($stmtId, $query, &$params, $prebound, $data, $deferred) {
+        $this->appendTask(function () use ($stmtId, $query, &$params, $prebound, $data, $deferred): void {
             $payload = "\x17";
             $payload .= DataTypes::encodeInt32($stmtId);
             $payload .= \chr(0); // cursor flag // @TODO cursor types?!
@@ -511,7 +502,7 @@ REGEX;
     public function closeStmt(int $stmtId): void
     {
         $payload = "\x19" . DataTypes::encodeInt32($stmtId);
-        $this->appendTask(function () use ($payload) {
+        $this->appendTask(function () use ($payload): void {
             if ($this->connectionState === self::READY) {
                 $this->resetIds();
                 $this->sendPacket($payload);
@@ -524,7 +515,7 @@ REGEX;
     /** @see 14.6.5 COM_FIELD_LIST */
     public function listFields(string $table, string $like = "%"): Promise
     {
-        return $this->startCommand(static function () use ($table, $like) {
+        return $this->startCommand(static function () use ($table, $like): void {
             $this->sendPacket("\x04$table\0$like");
             $this->parseCallback = [$this, "handleFieldlist"];
         });
@@ -555,7 +546,7 @@ REGEX;
     /** @see 14.6.6 COM_CREATE_DB */
     public function createDatabase(string $db): Promise
     {
-        return $this->startCommand(function () use ($db) {
+        return $this->startCommand(function () use ($db): void {
             $this->sendPacket("\x05$db");
         });
     }
@@ -563,7 +554,7 @@ REGEX;
     /** @see 14.6.7 COM_DROP_DB */
     public function dropDatabase(string $db): Promise
     {
-        return $this->startCommand(function () use ($db) {
+        return $this->startCommand(function () use ($db): void {
             $this->sendPacket("\x06$db");
         });
     }
@@ -574,7 +565,7 @@ REGEX;
      */
     public function refresh(int $subcommand): Promise
     {
-        return $this->startCommand(function () use ($subcommand) {
+        return $this->startCommand(function () use ($subcommand): void {
             $this->sendPacket("\x07" . \chr($subcommand));
         });
     }
@@ -582,7 +573,7 @@ REGEX;
     /** @see 14.6.9 COM_SHUTDOWN */
     public function shutdown(): Promise
     {
-        return $this->startCommand(function () {
+        return $this->startCommand(function (): void {
             $this->sendPacket("\x08\x00"); /* SHUTDOWN_DEFAULT / SHUTDOWN_WAIT_ALL_BUFFERS, only one in use */
         });
     }
@@ -590,7 +581,7 @@ REGEX;
     /** @see 14.6.10 COM_STATISTICS */
     public function statistics(): Promise
     {
-        return $this->startCommand(function () {
+        return $this->startCommand(function (): void {
             $this->sendPacket("\x09");
             $this->parseCallback = [$this, "readStatistics"];
         });
@@ -599,7 +590,7 @@ REGEX;
     /** @see 14.6.11 COM_PROCESS_INFO */
     public function processInfo(): Promise
     {
-        return $this->startCommand(function () {
+        return $this->startCommand(function (): void {
             $this->sendPacket("\x0a");
             $this->query("SHOW PROCESSLIST");
         });
@@ -608,7 +599,7 @@ REGEX;
     /** @see 14.6.13 COM_PROCESS_KILL */
     public function killProcess(int $process): Promise
     {
-        return $this->startCommand(function () use ($process) {
+        return $this->startCommand(function () use ($process): void {
             $this->sendPacket("\x0c" . DataTypes::encodeInt32($process));
         });
     }
@@ -616,7 +607,7 @@ REGEX;
     /** @see 14.6.14 COM_DEBUG */
     public function debugStdout(): Promise
     {
-        return $this->startCommand(function () {
+        return $this->startCommand(function (): void {
             $this->sendPacket("\x0d");
         });
     }
@@ -626,7 +617,7 @@ REGEX;
     {
         $payload = "\x1a" . DataTypes::encodeInt32($stmtId);
         $deferred = new Deferred;
-        $this->appendTask(function () use ($payload, $deferred) {
+        $this->appendTask(function () use ($payload, $deferred): void {
             $this->resetIds();
             $this->addDeferred($deferred);
             $this->sendPacket($payload);
@@ -639,7 +630,7 @@ REGEX;
     {
         $payload = "\x1c" . DataTypes::encodeInt32($stmtId) . DataTypes::encodeInt32(1);
         $deferred = new Deferred;
-        $this->appendTask(function () use ($payload, $deferred) {
+        $this->appendTask(function () use ($payload, $deferred): void {
             $this->resetIds();
             $this->addDeferred($deferred);
             $this->sendPacket($payload);
@@ -848,21 +839,17 @@ REGEX;
     /** @see 14.6.4.1.2 LOCAL INFILE Request */
     private function handleLocalInfileRequest(string $packet): void
     {
-        \Amp\asyncCall(function () use ($packet) {
+        defer(function () use ($packet): void {
             try {
                 $filePath = \substr($packet, 1);
                 /** @var \Amp\File\File $fileHandle */
-                if (\function_exists("Amp\\File\\openFile")) {
-                    // amphp/file 2.x
-                    $fileHandle = yield File\openFile($filePath, 'r');
-                } elseif (\function_exists("Amp\\File\\open")) {
-                    // amphp/file 1.x or 0.3.x
-                    $fileHandle = yield File\open($filePath, 'r');
-                } else {
+                if (!\function_exists("Amp\\File\\openFile")) {
                     throw new \Error("amphp/file must be installed for LOCAL INFILE queries");
                 }
 
-                while ("" != ($chunk = yield $fileHandle->read())) {
+                $fileHandle = File\openFile($filePath, 'r');
+
+                while ("" != ($chunk = $fileHandle->read())) {
                     $this->sendPacket($chunk);
                 }
                 $this->sendPacket("");
@@ -1222,7 +1209,7 @@ REGEX;
         }
     }
 
-    private function write(string $packet): Promise
+    private function write(string $packet): void
     {
         $packet = $this->compilePacket($packet);
 
@@ -1247,18 +1234,11 @@ REGEX;
             $packet = $this->compressPacket($packet);
         }
 
-        return $this->pendingWrite = $this->socket->write($packet);
+        $this->socket->write($packet);
     }
 
     private function resetIds(): void
     {
-        if ($this->pendingWrite) {
-            $this->pendingWrite->onResolve(function () {
-                $this->seqId = $this->compressionId = -1;
-            });
-            return;
-        }
-
         $this->seqId = $this->compressionId = -1;
     }
 
@@ -1521,11 +1501,11 @@ REGEX;
         $payload .= \str_repeat("\0", 23); // reserved
 
         if (!$inSSL && ($this->capabilities & self::CLIENT_SSL)) {
-            \Amp\asyncCall(function () use ($payload) {
+            defer(function () use ($payload): void {
                 try {
-                    yield $this->write($payload);
+                    $this->write($payload);
 
-                    yield $this->socket->setupTls();
+                    $this->socket->setupTls();
 
                     $this->sendHandshake(true);
                 } catch (\Throwable $e) {
@@ -1593,12 +1573,12 @@ REGEX;
     }
 
     /** @see 14.1.2 MySQL Packet */
-    protected function sendPacket(string $payload): Promise
+    protected function sendPacket(string $payload): void
     {
         if ($this->connectionState !== self::READY) {
             throw new \Error("Connection not ready, cannot send any packets");
         }
 
-        return $this->write($payload);
+        $this->write($payload);
     }
 }

@@ -1,18 +1,22 @@
 <?php
 
+use Amp\Sql\Link;
+use function Amp\async;
+use function Amp\await;
+
 /* Create table and fill in a few rows for examples; for comments see 3-generic-with-yield.php */
-function createGenericTable(\Amp\Sql\Link $db): Generator
+function createGenericTable(Link $db): void
 {
-    yield $db->query("DROP TABLE IF EXISTS tmp");
+    $db->query("DROP TABLE IF EXISTS tmp");
 
-    yield $db->query("CREATE TABLE tmp (a INT(10), b INT(10))");
+    $db->query("CREATE TABLE tmp (a INT(10), b INT(10))");
 
-    $statement = yield $db->prepare("INSERT INTO tmp (a, b) VALUES (?, ? * 2)");
+    $statement = $db->prepare("INSERT INTO tmp (a, b) VALUES (?, ? * 2)");
 
     $promises = [];
     foreach (\range(1, 5) as $num) {
-        $promises[] = $statement->execute([$num, $num]);
+        $promises[] = async(fn() => $statement->execute([$num, $num]));
     }
 
-    return yield $promises;
+    await($promises);
 }

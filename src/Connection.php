@@ -5,11 +5,10 @@ namespace Amp\Mysql;
 use Amp\CancellationToken;
 use Amp\Deferred;
 use Amp\NullCancellationToken;
-use Amp\Promise;
 use Amp\Socket;
 use Amp\Sql\Link;
 use Amp\Sql\Transaction;
-use function Amp\call;
+use function Amp\await;
 
 final class Connection implements Link
 {
@@ -22,11 +21,9 @@ final class Connection implements Link
     public const REFRESH_SLAVE = 0x40;
     public const REFRESH_MASTER = 0x80;
 
-    /** @var Internal\Processor */
-    private $processor;
+    private Internal\Processor $processor;
 
-    /** @var Deferred|null */
-    private $busy;
+    private ?Deferred $busy = null;
 
     /** @var callable Function used to release connection after a transaction has completed. */
     private $release;
@@ -36,23 +33,21 @@ final class Connection implements Link
      * @param CancellationToken|null $token
      * @param Socket\Connector|null $connector
      *
-     * @return Promise<self>
+     * @return self
      */
     public static function connect(
         ConnectionConfig $config,
         ?CancellationToken $token = null,
         ?Socket\Connector $connector = null
-    ): Promise {
+    ): self {
         $token = $token ?? new NullCancellationToken;
 
-        return call(function () use ($config, $token, $connector) {
-            $socket = yield ($connector ?? Socket\connector())
-                ->connect($config->getConnectionString(), $config->getConnectContext(), $token);
+        $socket = ($connector ?? Socket\connector())
+            ->connect($config->getConnectionString(), $config->getConnectContext(), $token);
 
-            $processor = new Internal\Processor($socket, $config);
-            yield $processor->connect($token);
-            return new self($processor);
-        });
+        $processor = new Internal\Processor($socket, $config);
+        $processor->connect($token);
+        return new self($processor);
     }
 
     /**
@@ -61,7 +56,7 @@ final class Connection implements Link
     private function __construct(Internal\Processor $processor)
     {
         $this->processor = $processor;
-        $this->release = function () {
+        $this->release = function (): void {
             \assert($this->busy instanceof Deferred);
             $deferred = $this->busy;
             $this->busy = null;
@@ -90,9 +85,9 @@ final class Connection implements Link
         return $this->processor->isReady();
     }
 
-    public function setCharset(string $charset, string $collate = ""): Promise
+    public function setCharset(string $charset, string $collate = ""): void
     {
-        return $this->processor->setCharset($charset, $collate);
+        await($this->processor->setCharset($charset, $collate));
     }
 
     public function close(): void
@@ -106,94 +101,79 @@ final class Connection implements Link
         }
     }
 
-    public function useDb(string $db): Promise
+    public function useDb(string $db): void
     {
-        return $this->processor->useDb($db);
+        await($this->processor->useDb($db));
     }
 
     /**
      * @param int $subcommand int one of the self::REFRESH_* constants
-     *
-     * @return Promise
      */
-    public function refresh(int $subcommand): Promise
+    public function refresh(int $subcommand): void
     {
-        return $this->processor->refresh($subcommand);
+        $this->processor->refresh($subcommand);
     }
 
-    public function query(string $query): Promise
+    public function query(string $query): Result
     {
-        return call(function () use ($query) {
-            while ($this->busy) {
-                yield $this->busy->promise();
-            }
+        while ($this->busy) {
+            await($this->busy->promise());
+        }
 
-            $result = yield $this->processor->query($query);
-
-            \assert($result instanceof Result);
-
-            return $result;
-        });
+        return await($this->processor->query($query));
     }
 
-    public function beginTransaction(int $isolation = Transaction::ISOLATION_COMMITTED): Promise
+    public function beginTransaction(int $isolation = Transaction::ISOLATION_COMMITTED): Transaction
     {
-        return call(function () use ($isolation) {
-            switch ($isolation) {
-                case Transaction::ISOLATION_UNCOMMITTED:
-                    yield $this->query("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
-                    break;
+        switch ($isolation) {
+            case Transaction::ISOLATION_UNCOMMITTED:
+                $this->query("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
+                break;
 
-                case Transaction::ISOLATION_COMMITTED:
-                    yield $this->query("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
-                    break;
+            case Transaction::ISOLATION_COMMITTED:
+                $this->query("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
+                break;
 
-                case Transaction::ISOLATION_REPEATABLE:
-                    yield $this->query("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ");
-                    break;
+            case Transaction::ISOLATION_REPEATABLE:
+                $this->query("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ");
+                break;
 
-                case Transaction::ISOLATION_SERIALIZABLE:
-                    yield $this->query("SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE");
-                    break;
+            case Transaction::ISOLATION_SERIALIZABLE:
+                $this->query("SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE");
+                break;
 
-                default:
-                    throw new \Error("Invalid transaction type");
-            }
+            default:
+                throw new \Error("Invalid transaction type");
+        }
 
-            yield $this->query("START TRANSACTION");
+        $this->query("START TRANSACTION");
 
-            $this->busy = new Deferred;
+        $this->busy = new Deferred;
 
-            return new Internal\ConnectionTransaction($this->processor, $this->release, $isolation);
-        });
+        return new Internal\ConnectionTransaction($this->processor, $this->release, $isolation);
     }
 
-    public function ping(): Promise
+    public function ping(): void
     {
-        return $this->processor->ping();
+        await($this->processor->ping());
     }
 
-    public function prepare(string $query): Promise
+    public function prepare(string $query): Statement
     {
-        return call(function () use ($query) {
-            while ($this->busy) {
-                yield $this->busy->promise();
-            }
+        while ($this->busy) {
+            await($this->busy->promise());
+        }
 
-            return $this->processor->prepare($query);
-        });
+        return await($this->processor->prepare($query));
     }
 
     /**
      * {@inheritdoc}
      */
-    public function execute(string $sql, array $params = []): Promise
+    public function execute(string $sql, array $params = []): Result
     {
-        return call(function () use ($sql, $params) {
-            $statement = yield $this->prepare($sql);
-            \assert($statement instanceof Statement);
-            return yield $statement->execute($params);
-        });
+        $statement = $this->prepare($sql);
+        return $statement->execute($params);
     }
 
     public function __destruct()

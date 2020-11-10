@@ -3,29 +3,26 @@
 namespace Amp\Mysql\Internal;
 
 use Amp\Deferred;
+use Amp\Mysql\Result;
 use Amp\Mysql\Statement;
-use Amp\Promise;
 use Amp\Sql\ConnectionException;
-use Amp\Success;
+use function Amp\await;
 
 final class ConnectionStatement implements Statement
 {
-    private $paramCount;
-    private $numParamCount;
-    private $named = [];
-    private $byNamed;
-    private $query;
-    private $stmtId;
-    private $prebound = [];
+    private int $paramCount;
+    private int $numParamCount;
+    private array $named = [];
+    private array $byNamed;
+    private string $query;
+    private int $stmtId;
+    private array $prebound = [];
 
-    /** @var Processor|null */
-    private $processor;
+    private ?Processor $processor;
 
-    /** @var ResultProxy */
-    private $result;
+    private ResultProxy $result;
 
-    /** @var int */
-    private $lastUsedAt;
+    private int $lastUsedAt;
 
     public function __construct(Processor $processor, string $query, int $stmtId, array $named, ResultProxy $result)
     {
@@ -69,21 +66,19 @@ final class ConnectionStatement implements Statement
     }
 
     /** {@inheritdoc} */
-    public function bind($paramId, $data): void
+    public function bind(int|string $paramId, mixed $data): void
     {
         if (\is_int($paramId)) {
             if ($paramId >= $this->numParamCount) {
-                throw new \Error("Parameter id $paramId is not defined for this prepared statement");
+                throw new \Error("Parameter $paramId is not defined for this prepared statement");
             }
             $i = $paramId;
-        } elseif (\is_string($paramId)) {
+        } else {
             if (!isset($this->byNamed[$paramId])) {
                 throw new \Error("Parameter :$paramId is not defined for this prepared statement");
             }
             $array = $this->byNamed[$paramId];
             $i = \reset($array);
-        } else {
-            throw new \TypeError("Invalid parameter ID type");
         }
 
         if (!\is_scalar($data) && !(\is_object($data) && \method_exists($data, '__toString'))) {
@@ -109,7 +104,7 @@ final class ConnectionStatement implements Statement
     }
 
     /** {@inheritdoc} */
-    public function execute(array $params = []): Promise
+    public function execute(array $params = []): Result
     {
         $this->lastUsedAt = \time();
 
@@ -134,7 +129,7 @@ final class ConnectionStatement implements Statement
             }
         }
 
-        return $this->getProcessor()->execute($this->stmtId, $this->query, $this->result->params, $prebound, $args);
+        return await($this->getProcessor()->execute($this->stmtId, $this->query, $this->result->params, $prebound, $args));
     }
 
     public function getQuery(): string
@@ -153,15 +148,15 @@ final class ConnectionStatement implements Statement
         $this->processor = null;
     }
 
-    public function reset(): Promise
+    public function reset(): void
     {
-        return $this->getProcessor()->resetStmt($this->stmtId);
+        await($this->getProcessor()->resetStmt($this->stmtId));
     }
 
-    public function getFields(): Promise
+    public function getFields(): ?array
     {
         if ($this->result->state >= ResultProxy::COLUMNS_FETCHED) {
-            return new Success($this->result->columns);
+            return $this->result->columns;
         }
 
         if (isset($this->result->deferreds[ResultProxy::COLUMNS_FETCHED][0])) {
@@ -170,7 +165,7 @@ final class ConnectionStatement implements Statement
 
         $deferred = new Deferred;
         $this->result->deferreds[ResultProxy::COLUMNS_FETCHED][0] = [$deferred, &$this->result->columns, null];
-        return $deferred->promise();
+        return await($deferred->promise());
     }
 
     /** {@inheritdoc} */

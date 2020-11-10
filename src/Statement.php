@@ -2,7 +2,6 @@
 
 namespace Amp\Mysql;
 
-use Amp\Promise;
 use Amp\Sql\Statement as SqlStatement;
 
 interface Statement extends SqlStatement
@@ -13,17 +12,12 @@ interface Statement extends SqlStatement
      *
      * @throws \Error If $paramId is not an int or string, or the position does not exist.
      */
-    public function bind($paramId, $data): void;
+    public function bind(int|string $paramId, mixed $data): void;
 
-    /**
-     * @return Promise<array>
-     */
-    public function getFields(): Promise;
+    public function getFields(): ?array;
 
     /**
      * Reset statement to state just after preparing.
-     *
-     * @return Promise<null>
      */
-    public function reset(): Promise;
+    public function reset(): void;
 }

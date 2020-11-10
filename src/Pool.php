@@ -3,7 +3,6 @@
 namespace Amp\Mysql;
 
 use Amp\Sql\Common\ConnectionPool;
-use Amp\Sql\Common\StatementPool as SqlStatementPool;
 use Amp\Sql\Connector;
 use Amp\Sql\Pool as SqlPool;
 use Amp\Sql\Result as SqlResult;
@@ -17,24 +16,21 @@ final class Pool extends ConnectionPool
         return connector();
     }
 
-    protected function createResult(SqlResult $result, callable $release): SqlResult
+    protected function createResult(SqlResult $result, callable $release): Result
     {
-        if (!$result instanceof Result) {
-            throw new \TypeError('Result object must be an instance of ' . Result::class);
-        }
+        \assert($result instanceof Result);
         return new PooledResult($result, $release);
     }
 
-    protected function createStatement(SqlStatement $statement, callable $release): SqlStatement
+    protected function createStatement(SqlStatement $statement, callable $release): Statement
     {
         \assert($statement instanceof Statement);
         return new PooledStatement($statement, $release);
     }
 
-    protected function createStatementPool(SqlPool $pool, SqlStatement $statement, callable $prepare): SqlStatementPool
+    protected function createStatementPool(SqlPool $pool, string $sql, callable $prepare): StatementPool
     {
-        \assert($statement instanceof Statement);
-        return new StatementPool($pool, $statement, $prepare);
+        return new StatementPool($pool, $sql, $prepare);
     }
 
     protected function createTransaction(SqlTransaction $transaction, callable $release): SqlTransaction

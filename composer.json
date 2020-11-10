@@ -13,21 +13,23 @@
         }
     ],
     "require": {
-        "php": ">=7.1",
-        "amphp/amp": "dev-streams as 2.6",
-        "amphp/socket": "^1",
-        "amphp/sql": "dev-streams as 2",
-        "amphp/sql-common": "dev-streams as 2"
+        "php": ">=8",
+        "amphp/amp": "^3-dev",
+        "amphp/socket": "^2-dev",
+        "amphp/sql": "^2-dev",
+        "amphp/sql-common": "^2-dev"
     },
     "require-dev": {
         "ext-openssl": "*",
-        "amphp/process": "^1",
-        "amphp/file": "^2 || ^1 || ^0.3.5",
-        "phpunit/phpunit": "^9 || ^8 || ^7",
-        "amphp/phpunit-util": "^1.1.2",
+        "amphp/process": "^2-dev",
+        "amphp/file": "^3-dev",
+        "phpunit/phpunit": "^9",
+        "amphp/phpunit-util": "^2-dev",
         "amphp/php-cs-fixer-config": "dev-master",
         "phpbench/phpbench": "^0.13.0"
     },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
     "autoload": {
         "psr-4": {
             "Amp\\Mysql\\": "src"

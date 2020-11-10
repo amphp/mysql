@@ -3,7 +3,6 @@
 namespace Amp\Mysql;
 
 use Amp\Loop;
-use Amp\Promise;
 use Amp\Sql\Common\ConnectionPool;
 use Amp\Sql\ConnectionConfig as SqlConnectionConfig;
 use Amp\Sql\Connector;
@@ -30,12 +29,12 @@ function connector(?Connector $connector = null): Connector
  *
  * @param SqlConnectionConfig $config
  *
- * @return Promise<Connection>
+ * @return Connection
  *
  * @throws \Amp\Sql\FailureException If connecting fails.
  * @throws \Error If the connection string does not contain a host, user, and password.
  */
-function connect(SqlConnectionConfig $config): Promise
+function connect(SqlConnectionConfig $config): Connection
 {
     return connector()->connect($config);
 }

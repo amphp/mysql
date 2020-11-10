@@ -4,45 +4,36 @@ namespace Amp\Mysql\Internal;
 
 use Amp\AsyncGenerator;
 use Amp\Deferred;
-use Amp\DisposedException;
 use Amp\Mysql\Result;
-use Amp\Pipeline;
 use Amp\Promise;
 use Amp\Success;
-use function Amp\call;
+use function Amp\async;
+use function Amp\await;
 
 final class ConnectionResult implements Result
 {
-    /** @var ResultProxy */
-    private $result;
+    private ResultProxy $result;
 
-    /** @var AsyncGenerator */
-    private $generator;
+    private AsyncGenerator $generator;
 
-    /** @var Promise|null */
-    private $nextResult;
+    private ?Promise $nextResult = null;
 
     public function __construct(ResultProxy $result)
     {
         $this->result = $result;
-        $this->generator = self::makePipeline($result);
-    }
-
-    private static function makePipeline(ResultProxy $result): Pipeline
-    {
-        return new AsyncGenerator(static function (callable $emit) use ($result): \Generator {
+        $this->generator = new AsyncGenerator(static function () use ($result): \Generator {
             $next = self::fetchRow($result);
             try {
-                while ($row = yield $next) {
+                while ($row = await($next)) {
                     if (!isset($columnNames)) {
                         $columnNames = \array_column($result->columns, 'name');
                     }
                     $next = self::fetchRow($result);
-                    yield $emit(\array_combine($columnNames, $row));
+                    yield \array_combine($columnNames, $row);
                 }
-            } catch (DisposedException $exception) {
+            } finally {
                 // Discard remaining results if disposed.
-                while ($row = yield $next) {
+                while ($row = await($next)) {
                     $next = self::fetchRow($result);
                 }
             }
@@ -52,7 +43,7 @@ final class ConnectionResult implements Result
     /**
      * @inheritDoc
      */
-    public function continue(): Promise
+    public function continue(): ?array
     {
         return $this->generator->continue();
     }
@@ -90,18 +81,17 @@ final class ConnectionResult implements Result
     }
 
     /**
-     * @return Promise<bool> Resolves with true if another result set exists, false if all result sets have
-     *     been consumed.
+     * @inheritDoc
      */
-    public function getNextResult(): Promise
+    public function getNextResult(): ?Result
     {
         if ($this->nextResult) {
-            return $this->nextResult;
+            return await($this->nextResult);
         }
 
-        return $this->nextResult = call(function (): \Generator {
+        $this->nextResult = async(function (): ?Result {
             $deferred = $this->result->next ?: $this->result->next = new Deferred;
-            $result = yield $deferred->promise();
+            $result = await($deferred->promise());
 
             if ($result instanceof ResultProxy) {
                 return new self($result);
@@ -109,6 +99,8 @@ final class ConnectionResult implements Result
 
             return $result; // Instance of CommandResult or null.
         });
+
+        return await($this->nextResult);
     }
 
     public function getRowCount(): ?int
@@ -122,20 +114,20 @@ final class ConnectionResult implements Result
     }
 
     /**
-     * @return Promise<mixed[][]>
+     * @inheritDoc
      */
-    public function getFields(): Promise
+    public function getFields(): ?array
     {
         if ($this->result === null) {
             throw new \Error("The current result set is empty; call this method before invoking ResultSet::nextResultSet()");
         }
 
         if ($this->result->state >= ResultProxy::COLUMNS_FETCHED) {
-            return new Success($this->result->columns);
+            return $this->result->columns;
         }
 
         $deferred = new Deferred;
         $this->result->deferreds[ResultProxy::COLUMNS_FETCHED][] = [$deferred, &$this->result->columns, null];
-        return $deferred->promise();
+        return await($deferred->promise());
     }
 }

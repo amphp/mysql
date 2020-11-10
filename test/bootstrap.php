@@ -3,7 +3,6 @@
 namespace Amp\Mysql\Test;
 
 use Amp\ByteStream;
-use Amp\Loop;
 use Amp\Process\Process;
 use function Amp\delay;
 
@@ -14,6 +13,8 @@ const DB_USER = 'root';
 const DB_PASS = '';
 const DB_NAME = 'test';
 
+print "\rCleaning up test directory...";
+
 (function (): void {
     /* cleanup in case it wasn't terminated properly... */
     $pidfile = __DIR__ . "/mysql.pid";
@@ -23,11 +24,11 @@ const DB_NAME = 'test';
         } else {
             \shell_exec("kill -9 `cat '$pidfile'` 2>/dev/null");
         }
-        \sleep(1);
+        delay(1000);
     }
 
     if (\file_exists(__DIR__ . "/mysql_db")) {
-        $rm_all = function ($dir) use (&$rm_all) {
+        $rm_all = function ($dir) use (&$rm_all): void {
             $files = \glob("$dir/*");
             if (\is_array($files)) {
                 foreach ($files as $file) {
@@ -46,43 +47,39 @@ const DB_NAME = 'test';
     }
 })();
 
-Loop::run(function () {
-    print "\rCreating mysql server... ";
+print "\rCreating mysql server...     ";
 
-    $dir = __DIR__;
+$dir = __DIR__;
 
-    $process = new Process("mysqld --defaults-file={$dir}/my.cnf --initialize-insecure", __DIR__);
+$process = new Process("mysqld --defaults-file={$dir}/my.cnf --initialize-insecure", __DIR__);
 
-    yield $process->start();
+$process->start();
 
-    $stderr = yield ByteStream\buffer($process->getStderr());
+$stderr = ByteStream\buffer($process->getStderr());
 
-    if (\preg_match("# \[ERROR\] #", $stderr)) {
-        print "\nERROR: Aborting, couldn't start mysql successfully\n{$stderr}";
-        exit(127);
-    }
+if (\preg_match("# \[ERROR\] #", $stderr)) {
+    print "\nERROR: Aborting, couldn't start mysql successfully\n{$stderr}";
+    exit(127);
+}
 
-    yield $process->join();
+$process->join();
 
-    $process = new Process("mysqld --defaults-file={$dir}/my.cnf --user=root", __DIR__);
+$process = new Process("mysqld --defaults-file={$dir}/my.cnf --user=root", __DIR__);
 
-    yield $process->start();
+$process->start();
 
-    print "\rStarting mysqld...       ";
+print "\rStarting mysqld...           ";
 
-    yield delay(1000); // Give mysqld time to start.
+delay(2000); // Give mysqld time to start.
 
-    print "\rCreating test database...";
+print "\rCreating test database...    ";
 
-    $db = new \mysqli(DB_HOST, DB_USER, DB_PASS);
-    $db->query("CREATE DATABASE test");
-    $db->query("CREATE TABLE test.main (a INT(11), b INT(11))");
-    $db->query("INSERT INTO test.main VALUES (1, 2), (2, 3), (3, 4), (4, 5), (5, 6)");
-    $db->close();
+$db = new \mysqli(DB_HOST, DB_USER, DB_PASS);
+$db->query("CREATE DATABASE test");
+$db->query("CREATE TABLE test.main (a INT(11), b INT(11))");
+$db->query("INSERT INTO test.main VALUES (1, 2), (2, 3), (3, 4), (4, 5), (5, 6)");
+$db->close();
 
-    print "\r";
+print "\r";
 
-    \register_shutdown_function(function () use ($process): void {
-        $process->signal(\SIGTERM);
-    });
-});
+\register_shutdown_function(fn() => $process->signal(\SIGTERM));

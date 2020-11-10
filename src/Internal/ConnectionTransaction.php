@@ -6,26 +6,22 @@ use Amp\Mysql\PooledResult;
 use Amp\Mysql\PooledStatement;
 use Amp\Mysql\Result;
 use Amp\Mysql\Statement;
-use Amp\Promise;
 use Amp\Sql\Transaction as SqlTransaction;
 use Amp\Sql\TransactionError;
-use function Amp\call;
+use function Amp\await;
 
 final class ConnectionTransaction implements SqlTransaction
 {
     const SAVEPOINT_PREFIX = "amp_";
 
-    /** @var Processor|null */
-    private $processor;
+    private ?Processor $processor;
 
-    /** @var int */
-    private $isolation;
+    private int $isolation;
 
     /** @var callable */
     private $release;
 
-    /** @var int */
-    private $refCount = 1;
+    private int $refCount = 1;
 
     /**
      * @param Processor $processor
@@ -51,7 +47,7 @@ final class ConnectionTransaction implements SqlTransaction
         $this->processor = $processor;
 
         $refCount =& $this->refCount;
-        $this->release = static function () use (&$refCount, $release) {
+        $this->release = static function () use (&$refCount, $release): void {
             if (--$refCount === 0) {
                 $release();
             }
@@ -114,17 +110,15 @@ final class ConnectionTransaction implements SqlTransaction
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
-    public function query(string $sql): Promise
+    public function query(string $sql): Result
     {
         if ($this->processor === null) {
             throw new TransactionError("The transaction has been committed or rolled back");
         }
 
-        return call(function () use ($sql) {
-            $result = yield $this->processor->query($sql);
-            ++$this->refCount;
-            return new PooledResult($result, $this->release);
-        });
+        $result = await($this->processor->query($sql));
+        ++$this->refCount;
+        return new PooledResult($result, $this->release);
     }
 
     /**
@@ -132,16 +126,14 @@ final class ConnectionTransaction implements SqlTransaction
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
-    public function prepare(string $sql): Promise
+    public function prepare(string $sql): Statement
     {
         if ($this->processor === null) {
             throw new TransactionError("The transaction has been committed or rolled back");
         }
 
-        return call(function () use ($sql) {
-            $statement = yield $this->processor->prepare($sql);
-            return new PooledStatement($statement, $this->release);
-        });
+        $statement = await($this->processor->prepare($sql));
+        return new PooledStatement($statement, $this->release);
     }
 
     /**
@@ -149,30 +141,25 @@ final class ConnectionTransaction implements SqlTransaction
      *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
-    public function execute(string $sql, array $params = []): Promise
+    public function execute(string $sql, array $params = []): Result
     {
         if ($this->processor === null) {
             throw new TransactionError("The transaction has been committed or rolled back");
         }
 
-        return call(function () use ($sql, $params) {
-            $statement = yield $this->processor->prepare($sql);
-            \assert($statement instanceof Statement);
-            $result = yield $statement->execute($params);
+        $statement = await($this->processor->prepare($sql));
+        $result = $statement->execute($params);
 
-            ++$this->refCount;
-            return new PooledResult($result, $this->release);
-        });
+        ++$this->refCount;
+        return new PooledResult($result, $this->release);
     }
 
     /**
      * Commits the transaction and makes it inactive.
      *
-     * @return Promise<Result>
-     *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
-    public function commit(): Promise
+    public function commit(): void
     {
         if ($this->processor === null) {
             throw new TransactionError("The transaction has been committed or rolled back");
@@ -182,17 +169,15 @@ final class ConnectionTransaction implements SqlTransaction
         $this->processor = null;
         $promise->onResolve($this->release);
 
-        return $promise;
+        await($promise);
     }
 
     /**
      * Rolls back the transaction and makes it inactive.
      *
-     * @return Promise<Result>
-     *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
-    public function rollback(): Promise
+    public function rollback(): void
     {
         if ($this->processor === null) {
             throw new TransactionError("The transaction has been committed or rolled back");
@@ -202,7 +187,7 @@ final class ConnectionTransaction implements SqlTransaction
         $this->processor = null;
         $promise->onResolve($this->release);
 
-        return $promise;
+        await($promise);
     }
 
     /**
@@ -210,13 +195,11 @@ final class ConnectionTransaction implements SqlTransaction
      *
      * @param string $identifier Savepoint identifier.
      *
-     * @return Promise<Result>
-     *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
-    public function createSavepoint(string $identifier): Promise
+    public function createSavepoint(string $identifier): void
     {
-        return $this->query(\sprintf("SAVEPOINT `%s%s`", self::SAVEPOINT_PREFIX, \sha1($identifier)));
+        $this->query(\sprintf("SAVEPOINT `%s%s`", self::SAVEPOINT_PREFIX, \sha1($identifier)));
     }
 
     /**
@@ -224,13 +207,11 @@ final class ConnectionTransaction implements SqlTransaction
      *
      * @param string $identifier Savepoint identifier.
      *
-     * @return Promise<Result>
-     *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
-    public function rollbackTo(string $identifier): Promise
+    public function rollbackTo(string $identifier): void
     {
-        return $this->query(\sprintf("ROLLBACK TO `%s%s`", self::SAVEPOINT_PREFIX, \sha1($identifier)));
+        $this->query(\sprintf("ROLLBACK TO `%s%s`", self::SAVEPOINT_PREFIX, \sha1($identifier)));
     }
 
     /**
@@ -238,12 +219,10 @@ final class ConnectionTransaction implements SqlTransaction
      *
      * @param string $identifier Savepoint identifier.
      *
-     * @return Promise<Result>
-     *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
-    public function releaseSavepoint(string $identifier): Promise
+    public function releaseSavepoint(string $identifier): void
     {
-        return $this->query(\sprintf("RELEASE SAVEPOINT `%s%s`", self::SAVEPOINT_PREFIX, \sha1($identifier)));
+        $this->query(\sprintf("RELEASE SAVEPOINT `%s%s`", self::SAVEPOINT_PREFIX, \sha1($identifier)));
     }
 }
