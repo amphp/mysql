@@ -10,7 +10,7 @@ use Amp\Success;
 use function Amp\async;
 use function Amp\await;
 
-final class ConnectionResult implements Result
+final class ConnectionResult implements Result, \IteratorAggregate
 {
     private ResultProxy $result;
 
@@ -51,6 +51,11 @@ final class ConnectionResult implements Result
     public function dispose(): void
     {
         $this->generator->dispose();
+    }
+
+    public function getIterator(): \Iterator
+    {
+        return $this->generator->getIterator();
     }
 
     private static function fetchRow(ResultProxy $result): Promise

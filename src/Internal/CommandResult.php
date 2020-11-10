@@ -6,7 +6,7 @@ use Amp\Mysql\Result;
 use Amp\Sql\Common\CommandResult as SqlCommandResult;
 use Amp\Success;
 
-final class CommandResult implements Result
+final class CommandResult implements Result, \IteratorAggregate
 {
     private ?int $lastInsertId;
 
@@ -26,6 +26,11 @@ final class CommandResult implements Result
     public function dispose(): void
     {
         $this->delegate->dispose();
+    }
+
+    public function getIterator(): \Iterator
+    {
+        return $this->delegate->getIterator();
     }
 
     public function getRowCount(): int
