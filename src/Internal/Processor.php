@@ -48,6 +48,9 @@ final class SessionStateTypes
     public const SESSION_TRACK_SYSTEM_VARIABLES = 0x00;
     public const SESSION_TRACK_SCHEMA = 0x01;
     public const SESSION_TRACK_STATE_CHANGE = 0x02;
+    public const SESSION_TRACK_GTIDS = 0x03;
+    public const SESSION_TRACK_TRANSACTION_CHARACTERISTICS = 0x04;
+    public const SESSION_TRACK_TRANSACTION_STATE = 0x05;
 }
 
 /** @internal */
@@ -741,13 +744,14 @@ REGEX;
                         switch ($type = DataTypes::decodeUnsigned8(\substr($sessionState, $len))) {
                             case SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES:
                                 $var = DataTypes::decodeString($data, $varintlen, $strlen);
-                                $this->connInfo->sessionState[SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES][$var] = DataTypes::decodeString(\substr($data, $varintlen + $strlen));
+                                $this->connInfo->sessionState[$type][$var] = DataTypes::decodeString(\substr($data, $varintlen + $strlen));
                                 break;
                             case SessionStateTypes::SESSION_TRACK_SCHEMA:
-                                $this->connInfo->sessionState[SessionStateTypes::SESSION_TRACK_SCHEMA] = DataTypes::decodeString($data);
-                                break;
                             case SessionStateTypes::SESSION_TRACK_STATE_CHANGE:
-                                $this->connInfo->sessionState[SessionStateTypes::SESSION_TRACK_STATE_CHANGE] = DataTypes::decodeString($data);
+                            case SessionStateTypes::SESSION_TRACK_GTIDS:
+                            case SessionStateTypes::SESSION_TRACK_TRANSACTION_CHARACTERISTICS:
+                            case SessionStateTypes::SESSION_TRACK_TRANSACTION_STATE:
+                                $this->connInfo->sessionState[$type] = DataTypes::decodeString($data);
                                 break;
                             default:
                                 throw new \Error("$type is not a valid mysql session state type");
