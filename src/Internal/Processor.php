@@ -1405,7 +1405,7 @@ REGEX;
                             $this->sendHandshake();
                             break;
                         case "caching_sha2_password":
-                            switch (\ord(substr($packet, 1, 1))) {
+                            switch (\ord(\substr($packet, 1, 1))) {
                                 case 3: // success
                                     return; // expecting OK afterwards
                                 case 4: // fast auth failure
@@ -1416,7 +1416,7 @@ REGEX;
                                     }
                                     break;
                                 case 0x2d: // certificate
-                                    $pubkey = substr($packet, 1);
+                                    $pubkey = \substr($packet, 1);
                                     $this->write($this->sha256Auth($this->config->getPassword(), $this->authPluginData, $pubkey));
                                     break;
                             }
@@ -1558,7 +1558,7 @@ REGEX;
                             $auth = "\x01";
                         }
                     }
-		    break;
+            break;
                 case "caching_sha2_password":
                     $auth = $this->sha2Auth($this->config->getPassword(), $this->authPluginData);
                     break;
