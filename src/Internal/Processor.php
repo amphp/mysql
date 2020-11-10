@@ -5,6 +5,7 @@ namespace Amp\Mysql\Internal;
 use Amp\CancellationToken;
 use Amp\Coroutine;
 use Amp\Deferred;
+use Amp\File;
 use Amp\Loop;
 use Amp\Mysql\CommandResult;
 use Amp\Mysql\ConnectionConfig;
@@ -852,8 +853,17 @@ REGEX;
         \Amp\asyncCall(function () use ($packet) {
             try {
                 $filePath = \substr($packet, 1);
-                /** @var \Amp\File\Handle $fileHandle */
-                $fileHandle = yield \Amp\File\open($filePath, 'r');
+                /** @var \Amp\File\File $fileHandle */
+                if (\function_exists("Amp\\File\\openFile")) {
+                    // amphp/file 2.x
+                    $fileHandle = yield File\openFile($filePath, 'r');
+                } elseif (\function_exists("Amp\\File\\open")) {
+                    // amphp/file 1.x or 0.3.x
+                    $fileHandle = yield File\open($filePath, 'r');
+                } else {
+                    throw new \Error("amphp/file must be installed for LOCAL INFILE queries");
+                }
+
                 while ("" != ($chunk = yield $fileHandle->read())) {
                     $this->sendPacket($chunk);
                 }
