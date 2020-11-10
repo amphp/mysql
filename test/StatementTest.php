@@ -3,22 +3,24 @@
 namespace Amp\Mysql\Test;
 
 use Amp\Mysql\ConnectionStatement;
+use Amp\Mysql\Internal\Processor;
 use Amp\Mysql\Internal\ResultProxy;
 use Amp\PHPUnit\AsyncTestCase;
+use PHPUnit\Framework\MockObject\MockObject;
 
 class StatementTest extends AsyncTestCase
 {
-    /** @var \Prophecy\Prophecy\ObjectProphecy */
+    /** @var MockObject&Processor */
     protected $processor;
 
-    /** @var \Amp\Mysql\Internal\ResultProxy */
+    /** @var ResultProxy */
     protected $resultProxy;
 
     public function setUp(): void
     {
         parent::setUp();
 
-        $this->processor = $this->prophesize('Amp\Mysql\Internal\Processor');
+        $this->processor = $this->createMock(Processor::class);
         $this->resultProxy = new ResultProxy;
     }
 
@@ -33,19 +35,26 @@ class StatementTest extends AsyncTestCase
         $paramId = 0;
         $named = [];
 
-        $this->processor->isAlive()->willReturn(true);
-        $this->processor->unreference()->shouldBeCalled();
-        $this->processor->closeStmt(\Prophecy\Argument::any())->shouldBeCalled();
+        $this->processor->method('isAlive')
+            ->willReturn(true);
+        $this->processor->expects($this->once())
+            ->method('unreference');
+        $this->processor->expects($this->once())
+            ->method('closeStmt');
+
         $this->resultProxy->columnsToFetch = 1;
-        $stmt = new ConnectionStatement($this->processor->reveal(), $query, $stmtId, $named, $this->resultProxy);
+        $stmt = new ConnectionStatement($this->processor, $query, $stmtId, $named, $this->resultProxy);
 
         // assert
         if ($expectedException) {
             $this->expectException($expectedException);
-            $this->processor->bindParam($stmtId, \Prophecy\Argument::any(), $data)->shouldNotBeCalled();
+            $this->processor->expects($this->never())
+                ->method('bindParam')
+                ->with($stmtId, $this->anything(), $data);
         } else {
-            $this->addToAssertionCount(1);
-            $this->processor->bindParam($stmtId, \Prophecy\Argument::any(), $data)->shouldBeCalled();
+            $this->processor->expects($this->once())
+                ->method('bindParam')
+                ->with($stmtId, $this->anything(), $data);
         }
 
         $this->assertSame($query, $stmt->getQuery());

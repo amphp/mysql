@@ -23,7 +23,7 @@
     "require-dev": {
         "ext-openssl": "*",
         "amphp/process": "^1",
-        "phpunit/phpunit": "^8 || ^7",
+        "phpunit/phpunit": "^9 || ^8 || ^7",
         "amphp/phpunit-util": "^1.1.2",
         "amphp/php-cs-fixer-config": "dev-master",
         "phpbench/phpbench": "^0.13.0"
