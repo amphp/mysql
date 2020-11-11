@@ -53,7 +53,7 @@ final class ConnectionResult implements Result, \IteratorAggregate
         $this->generator->dispose();
     }
 
-    public function getIterator(): \Iterator
+    public function getIterator(): \Traversable
     {
         return $this->generator->getIterator();
     }

@@ -28,7 +28,7 @@ final class CommandResult implements Result, \IteratorAggregate
         $this->delegate->dispose();
     }
 
-    public function getIterator(): \Iterator
+    public function getIterator(): \Traversable
     {
         return $this->delegate->getIterator();
     }
