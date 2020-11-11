@@ -8,7 +8,7 @@ $db = Mysql\pool(Mysql\ConnectionConfig::fromString("host=".DB_HOST.";user=".DB_
 
 $result = $db->query("SELECT 1 AS value");
 
-while ($row = $result->continue()) {
+foreach ($result as $row) {
     \var_dump($row['value']);
 }
 

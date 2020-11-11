@@ -28,12 +28,12 @@ try {
 }
 
 print "Query 1 Results:" . PHP_EOL;
-while ($row = $result1->continue()) {
+foreach ($result1 as $row) {
     \var_dump($row);
 }
 
 print  PHP_EOL . "Query 2 Results:" . PHP_EOL;
-while ($row = $result2->continue()) {
+foreach ($result2 as $row) {
     \var_dump($row);
 }
 

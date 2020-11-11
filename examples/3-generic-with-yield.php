@@ -28,7 +28,7 @@ print "Insertion successful (if it wasn't, an exception would have been thrown b
 
 $result = $db->query("SELECT a, b FROM tmp");
 
-while ($row = $result->continue()) {
+foreach ($result as $row) {
     \var_dump($row);
 }
 

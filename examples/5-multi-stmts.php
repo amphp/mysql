@@ -16,7 +16,7 @@ $result = $db->query("SELECT a + b FROM tmp; SELECT a - b FROM tmp;");
 $i = 0;
 do {
     print PHP_EOL . "Query " . ++$i . " Results:" . PHP_EOL;
-    while ($row = $result->continue()) {
+    foreach ($result as $row) {
         \var_dump($row);
     }
 } while ($result = $result->getNextResult()); // Advances to the next result set.

@@ -16,7 +16,7 @@ $transaction->execute("INSERT INTO tmp VALUES (?, ? * 2)", [6, 6]);
 
 $result = $transaction->execute("SELECT * FROM tmp WHERE a >= ?", [5]); // Two rows should be returned.
 
-while ($row = $result->continue()) {
+foreach ($result as $row) {
     \var_dump($row);
 }
 
@@ -25,7 +25,7 @@ $transaction->rollback();
 // Run same query again, should only return a single row since the other was rolled back.
 $result = $db->execute("SELECT * FROM tmp WHERE a >= ?", [5]);
 
-while ($row = $result->continue()) {
+foreach ($result as $row) {
     \var_dump($row);
 }
 
