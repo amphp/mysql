@@ -21,6 +21,16 @@ final class PooledStatement extends SqlPooledStatement implements Statement
         return new PooledResult($result, $release);
     }
 
+    /**
+     * Changes return type to this library's Result type.
+     *
+     * @inheritDoc
+     */
+    public function execute(array $params = []): Result
+    {
+        return $this->statement->execute($params);
+    }
+
     public function bind(int|string $paramId, mixed $data): void
     {
         $this->statement->bind($paramId, $data);

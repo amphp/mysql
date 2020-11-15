@@ -32,6 +32,11 @@ final class StatementPool extends SqlStatementPool implements Statement
         return new PooledResult($result, $release);
     }
 
+    public function execute(array $params = []): Result
+    {
+        return parent::execute($params);
+    }
+
     public function bind(int|string $paramId, mixed $data): void
     {
         if (!\is_int($paramId) && !\is_string($paramId)) {

@@ -9,7 +9,7 @@ use Amp\Sql\Result as SqlResult;
 use Amp\Sql\Statement as SqlStatement;
 use Amp\Sql\Transaction as SqlTransaction;
 
-final class Pool extends ConnectionPool
+final class Pool extends ConnectionPool implements Link
 {
     protected function createDefaultConnector(): Connector
     {
@@ -33,8 +33,48 @@ final class Pool extends ConnectionPool
         return new StatementPool($pool, $sql, $prepare);
     }
 
-    protected function createTransaction(SqlTransaction $transaction, callable $release): SqlTransaction
+    protected function createTransaction(SqlTransaction $transaction, callable $release): Transaction
     {
         return new PooledTransaction($transaction, $release);
+    }
+
+    /**
+     * Changes return type to this library's Result type.
+     *
+     * @inheritDoc
+     */
+    public function query(string $sql): Result
+    {
+        return parent::query($sql);
+    }
+
+    /**
+     * Changes return type to this library's Statement type.
+     *
+     * @inheritDoc
+     */
+    public function prepare(string $sql): Statement
+    {
+        return parent::prepare($sql);
+    }
+
+    /**
+     * Changes return type to this library's Result type.
+     *
+     * @inheritDoc
+     */
+    public function execute(string $sql, array $params = []): Result
+    {
+        return parent::execute($sql, $params);
+    }
+
+    /**
+     * Changes return type to this library's Transaction type.
+     *
+     * @inheritDoc
+     */
+    public function beginTransaction(int $isolation = Transaction::ISOLATION_COMMITTED): Transaction
+    {
+        return parent::beginTransaction($isolation);
     }
 }

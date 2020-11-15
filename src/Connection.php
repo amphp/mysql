@@ -6,8 +6,6 @@ use Amp\CancellationToken;
 use Amp\Deferred;
 use Amp\NullCancellationToken;
 use Amp\Socket;
-use Amp\Sql\Link;
-use Amp\Sql\Transaction;
 use function Amp\await;
 
 final class Connection implements Link

@@ -6,6 +6,8 @@ use Amp\Sql\Statement as SqlStatement;
 
 interface Statement extends SqlStatement
 {
+    public function execute(array $params = []): Result;
+
     /**
      * @param int|string $paramId Parameter ID or name.
      * @param mixed $data Data to bind to parameter.

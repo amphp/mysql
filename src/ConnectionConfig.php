@@ -25,18 +25,18 @@ final class ConnectionConfig extends SqlConnectionConfig
     public const DEFAULT_CHARSET = "utf8mb4";
     public const DEFAULT_COLLATE = "utf8mb4_general_ci";
 
-    /** @var bool */
-    private $useCompression = false;
-    /** @var bool */
-    private $useLocalInfile = false;
-    /** @var ConnectContext */
-    private $context;
-    /** @var string */
-    private $charset = "utf8mb4";
-    /** @var string  */
-    private $collate = "utf8mb4_general_ci";
+    private bool $useCompression;
+
+    private bool $useLocalInfile;
+
+    private ConnectContext $context;
+
+    private string $charset;
+
+    private string $collate;
+
     /* @var string private key to use for sha256_password auth method */
-    private $key;
+    private string $key;
 
     public static function fromString(string $connectionString, ConnectContext $context = null): self
     {

@@ -6,11 +6,11 @@ use Amp\Mysql\PooledResult;
 use Amp\Mysql\PooledStatement;
 use Amp\Mysql\Result;
 use Amp\Mysql\Statement;
-use Amp\Sql\Transaction as SqlTransaction;
+use Amp\Mysql\Transaction;
 use Amp\Sql\TransactionError;
 use function Amp\await;
 
-final class ConnectionTransaction implements SqlTransaction
+final class ConnectionTransaction implements Transaction
 {
     const SAVEPOINT_PREFIX = "amp_";
 
@@ -30,13 +30,13 @@ final class ConnectionTransaction implements SqlTransaction
      *
      * @throws \Error If the isolation level is invalid.
      */
-    public function __construct(Processor $processor, callable $release, int $isolation = SqlTransaction::ISOLATION_COMMITTED)
+    public function __construct(Processor $processor, callable $release, int $isolation = Transaction::ISOLATION_COMMITTED)
     {
         switch ($isolation) {
-            case SqlTransaction::ISOLATION_UNCOMMITTED:
-            case SqlTransaction::ISOLATION_COMMITTED:
-            case SqlTransaction::ISOLATION_REPEATABLE:
-            case SqlTransaction::ISOLATION_SERIALIZABLE:
+            case Transaction::ISOLATION_UNCOMMITTED:
+            case Transaction::ISOLATION_COMMITTED:
+            case Transaction::ISOLATION_REPEATABLE:
+            case Transaction::ISOLATION_SERIALIZABLE:
                 $this->isolation = $isolation;
                 break;
 

@@ -19,7 +19,7 @@ final class PooledResult extends SqlPooledResult implements Result
         $this->result = $result;
     }
 
-    protected function newInstanceFrom(SqlResult $result, callable $release): PooledResult
+    protected function newInstanceFrom(SqlResult $result, callable $release): self
     {
         \assert($result instanceof Result);
         return new self($result, $release);
