@@ -23,8 +23,8 @@ final class Connection implements Link
 
     private ?Deferred $busy = null;
 
-    /** @var callable Function used to release connection after a transaction has completed. */
-    private $release;
+    /** @var \Closure Function used to release connection after a transaction has completed. */
+    private \Closure $release;
 
     /**
      * @param ConnectionConfig $config
@@ -54,10 +54,12 @@ final class Connection implements Link
     private function __construct(Internal\Processor $processor)
     {
         $this->processor = $processor;
-        $this->release = function (): void {
-            \assert($this->busy instanceof Deferred);
-            $deferred = $this->busy;
-            $this->busy = null;
+
+        $busy = &$this->busy;
+        $this->release = static function () use (&$busy): void {
+            \assert($busy instanceof Deferred);
+            $deferred = $busy;
+            $busy = null;
             $deferred->resolve();
         };
     }
@@ -93,9 +95,7 @@ final class Connection implements Link
         $processor = $this->processor;
         // Send close command if connection is not already in a closed or closing state
         if ($processor->isAlive()) {
-            $processor->sendClose()->onResolve(static function () use ($processor) {
-                $processor->close();
-            });
+            $processor->sendClose()->onResolve(static fn() => $processor->close());
         }
     }
 
@@ -123,30 +123,41 @@ final class Connection implements Link
 
     public function beginTransaction(int $isolation = Transaction::ISOLATION_COMMITTED): Transaction
     {
+        while ($this->busy) {
+            await($this->busy->promise());
+        }
+
+        $this->busy = $deferred = new Deferred;
+
         switch ($isolation) {
             case Transaction::ISOLATION_UNCOMMITTED:
-                $this->query("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
+                $promise = $this->processor->query("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
                 break;
 
             case Transaction::ISOLATION_COMMITTED:
-                $this->query("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
+                $promise = $this->processor->query("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
                 break;
 
             case Transaction::ISOLATION_REPEATABLE:
-                $this->query("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ");
+                $promise = $this->processor->query("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ");
                 break;
 
             case Transaction::ISOLATION_SERIALIZABLE:
-                $this->query("SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE");
+                $promise = $this->processor->query("SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE");
                 break;
 
             default:
                 throw new \Error("Invalid transaction type");
         }
 
-        $this->query("START TRANSACTION");
-
-        $this->busy = new Deferred;
+        try {
+            await($promise);
+            await($this->processor->query("START TRANSACTION"));
+        } catch (\Throwable $exception) {
+            $this->busy = null;
+            $deferred->resolve();
+            throw $exception;
+        }
 
         return new Internal\ConnectionTransaction($this->processor, $this->release, $isolation);
     }
