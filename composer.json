@@ -15,14 +15,15 @@
     "require": {
         "php": ">=7.1",
         "amphp/amp": "^2",
-        "amphp/file": "^1 || ^0.3.5",
         "amphp/socket": "^1",
         "amphp/sql": "^1",
         "amphp/sql-common": "^1"
     },
     "require-dev": {
         "ext-openssl": "*",
-        "phpunit/phpunit": "^8 || ^7",
+        "amphp/process": "^1",
+        "amphp/file": "^2 || ^1 || ^0.3.5",
+        "phpunit/phpunit": "^9 || ^8 || ^7",
         "amphp/phpunit-util": "^1.1.2",
         "amphp/php-cs-fixer-config": "dev-master",
         "phpbench/phpbench": "^0.13.0"
