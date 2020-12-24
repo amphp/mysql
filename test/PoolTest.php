@@ -234,7 +234,7 @@ class PoolTest extends LinkTest
         $result = new CommandResult(0, 0);
 
         foreach ($processors as $processor) {
-            $processor->expects($this->exactly(2))
+            $processor->expects($this->atLeastOnce())
                 ->method('query')
                 ->with($query)
                 ->willReturn(new Delayed(10, $result));
