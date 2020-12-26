@@ -247,7 +247,7 @@ class PoolTest extends LinkTest
         $result = $this->createMock(Result::class);
 
         foreach ($processors as $processor) {
-            $processor->expects($this->exactly(2))
+            $processor->expects($this->atLeastOnce())
                 ->method('query')
                 ->with($query)
                 ->willReturn(new Delayed(10, $result));

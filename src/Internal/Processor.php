@@ -1359,6 +1359,10 @@ REGEX;
     private function parsePayload(string $packet): void
     {
         if ($this->connectionState === self::UNCONNECTED) {
+            if (\ord($packet) == self::ERR_PACKET) {
+                $this->handleError($packet);
+                return;
+            }
             $this->established();
             $this->connectionState = self::ESTABLISHED;
             $this->handleHandshake($packet);
