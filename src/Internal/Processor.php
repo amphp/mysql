@@ -133,6 +133,7 @@ REGEX;
     private const OK_PACKET = 0x00;
     private const EXTRA_AUTH_PACKET = 0x01;
     private const LOCAL_INFILE_REQUEST = 0xfb;
+    private const AUTH_SWITCH_PACKET = 0xfe;
     private const EOF_PACKET = 0xfe;
     private const ERR_PACKET = 0xff;
 
@@ -847,6 +848,24 @@ REGEX;
         $this->sendHandshake();
     }
 
+    /** @see 14.2.5 Connection Phase Packets */
+    private function handleAuthSwitch($packet)
+    {
+        $off = 1;
+
+        $this->authPluginName = DataTypes::decodeNullString(\substr($packet, $off));
+        $off += \strlen($this->authPluginName) + 1;
+
+        $this->authPluginData = \substr($packet, $off);
+
+        $this->sendAuthSwitchResponse();
+    }
+
+    private function sendAuthSwitchResponse()
+    {
+        $this->write($this->getAuthData());
+    }
+
     /** @see 14.6.4.1.2 LOCAL INFILE Request */
     private function handleLocalInfileRequest(string $packet): void
     {
@@ -1378,10 +1397,6 @@ REGEX;
     private function parsePayload(string $packet): void
     {
         if ($this->connectionState === self::UNCONNECTED) {
-            if (\ord($packet) == self::ERR_PACKET) {
-                $this->handleError($packet);
-                return;
-            }
             $this->established();
             $this->connectionState = self::ESTABLISHED;
             $this->handleHandshake($packet);
@@ -1399,6 +1414,9 @@ REGEX;
                     break;
                 case self::ERR_PACKET:
                     $this->handleError($packet);
+                    break;
+                case self::AUTH_SWITCH_PACKET:
+                    $this->handleAuthSwitch($packet);
                     break;
                 case self::EXTRA_AUTH_PACKET:
                     /** @see 14.2.5 Connection Phase Packets (AuthMoreData) */
@@ -1541,6 +1559,31 @@ REGEX;
         }
 
         $payload .= $this->config->getUser()."\0";
+
+        $auth = $this->getAuthData();
+        if ($this->capabilities & self::CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA) {
+            $payload .= DataTypes::encodeInt(\strlen($auth));
+            $payload .= $auth;
+        } elseif ($this->capabilities & self::CLIENT_SECURE_CONNECTION) {
+            $payload .= \chr(\strlen($auth));
+            $payload .= $auth;
+        } else {
+            $payload .= "$auth\0";
+        }
+        if ($this->capabilities & self::CLIENT_CONNECT_WITH_DB) {
+            $payload .= "{$this->config->getDatabase()}\0";
+        }
+        if ($this->capabilities & self::CLIENT_PLUGIN_AUTH) {
+            $payload .= "{$this->authPluginName}\0";
+        }
+        if ($this->capabilities & self::CLIENT_CONNECT_ATTRS) {
+            // connection attributes?! 5.6.6+ only!
+        }
+        $this->write($payload);
+    }
+
+    private function getAuthData()
+    {
         if ($this->config->getPassword() == "") {
             $auth = "";
         } elseif ($this->capabilities & self::CLIENT_PLUGIN_AUTH) {
@@ -1574,25 +1617,7 @@ REGEX;
         } else {
             $auth = $this->secureAuth($this->config->getPassword(), $this->authPluginData);
         }
-        if ($this->capabilities & self::CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA) {
-            $payload .= DataTypes::encodeInt(\strlen($auth));
-            $payload .= $auth;
-        } elseif ($this->capabilities & self::CLIENT_SECURE_CONNECTION) {
-            $payload .= \chr(\strlen($auth));
-            $payload .= $auth;
-        } else {
-            $payload .= "$auth\0";
-        }
-        if ($this->capabilities & self::CLIENT_CONNECT_WITH_DB) {
-            $payload .= "{$this->config->getDatabase()}\0";
-        }
-        if ($this->capabilities & self::CLIENT_PLUGIN_AUTH) {
-            $payload .= "{$this->authPluginName}\0";
-        }
-        if ($this->capabilities & self::CLIENT_CONNECT_ATTRS) {
-            // connection attributes?! 5.6.6+ only!
-        }
-        $this->write($payload);
+        return $auth;
     }
 
     /** @see 14.1.2 MySQL Packet */
