@@ -9,6 +9,7 @@ use Amp\Promise;
 use Amp\Success;
 use function Amp\async;
 use function Amp\await;
+use function Amp\defer;
 
 final class ConnectionResult implements Result, \IteratorAggregate
 {
@@ -32,10 +33,20 @@ final class ConnectionResult implements Result, \IteratorAggregate
                     yield \array_combine($columnNames, $row);
                 }
             } finally {
-                // Discard remaining results if disposed.
-                while ($row = await($next)) {
-                    $next = self::fetchRow($result);
+                if ($row === null) {
+                    return; // Result fully consumed.
                 }
+
+                defer(static function () use ($next, $result): void {
+                    try {
+                        // Discard remaining results if disposed.
+                        while ($row = await($next)) {
+                            $next = self::fetchRow($result);
+                        }
+                    } catch (\Throwable $exception) {
+                        // Ignore errors while discarding result.
+                    }
+                });
             }
         });
     }
