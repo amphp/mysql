@@ -7,17 +7,16 @@ use Amp\Mysql\Connection;
 use Amp\Mysql\ConnectionConfig;
 use Amp\Mysql\Internal\CommandResult;
 use Amp\Mysql\Internal\Processor;
+use Amp\Mysql\Link;
 use Amp\Mysql\Pool;
 use Amp\Mysql\Result;
 use Amp\Mysql\Statement;
 use Amp\Promise;
 use Amp\Sql\Connector;
-use Amp\Sql\Link;
 use Amp\Sql\Transaction as SqlTransaction;
 use Amp\Success;
 use function Amp\async;
 use function Amp\await;
-use function Amp\delay;
 
 interface StatementOperation extends Statement
 {

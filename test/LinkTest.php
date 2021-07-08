@@ -6,7 +6,7 @@ use Amp\Mysql\DataTypes;
 use Amp\Mysql\Result;
 use Amp\PHPUnit\AsyncTestCase;
 use Amp\Pipeline;
-use Amp\Sql\Link;
+use Amp\Mysql\Link;
 use Amp\Sql\QueryError;
 
 abstract class LinkTest extends AsyncTestCase
@@ -118,7 +118,11 @@ abstract class LinkTest extends AsyncTestCase
             "flags" => 0,
             "decimals" => 0,
         ];
-        $this->assertEquals($stmt->getFields(), [$base + ["name" => "a", "original_name" => "a"], $base + ["name" => "b", "original_name" => "b"]]);
+        $this->assertEquals($stmt->getFields(), [
+            \array_merge($base, ["name" => "id", "original_name" => "id", "flags" => 16899]),
+            \array_merge($base, ["name" => "a", "original_name" => "a"]),
+            \array_merge($base + ["name" => "b", "original_name" => "b"]),
+        ]);
         $stmt->bind("num", 5);
         $result = $stmt->execute([2]);
         $this->assertInstanceOf(Result::class, $result);
@@ -146,9 +150,10 @@ abstract class LinkTest extends AsyncTestCase
         }
         $this->assertCount(2, $got);
 
-        $stmt = $db->prepare("INSERT INTO main VALUES (:a, :b)");
+        $stmt = $db->prepare("INSERT INTO main (a, b) VALUES (:a, :b)");
         $result = $stmt->execute(["a" => 10, "b" => 11]);
         $this->assertInstanceOf(Result::class, $result);
+        $this->assertGreaterThan(5, $result->getLastInsertId());
 
         $stmt = $db->prepare("DELETE FROM main WHERE a = :a");
         $result = $stmt->execute(["a" => 10]);
@@ -210,17 +215,18 @@ abstract class LinkTest extends AsyncTestCase
     {
         $db = $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
 
-        $result = $db->execute("SELECT * FROM main WHERE a = ? OR b = ?", [2, 5]);
+        $result = $db->execute("SELECT * FROM test.main WHERE a = ? OR b = ?", [2, 5]);
         $this->assertInstanceOf(Result::class, $result);
         $got = [];
         while ($row = $result->continue()) {
             $got[] = \array_values($row);
         }
         $this->assertCount(2, $got);
-        $this->assertSame([[2, 3], [4, 5]], $got);
+        $this->assertSame([[2, 2, 3], [4, 4, 5]], $got);
 
-        $result = $db->execute("INSERT INTO main VALUES (:a, :b)", ["a" => 10, "b" => 11]);
+        $result = $db->execute("INSERT INTO main (a, b) VALUES (:a, :b)", ["a" => 10, "b" => 11]);
         $this->assertInstanceOf(Result::class, $result);
+        $this->assertGreaterThan(5, $result->getLastInsertId());
 
         $result = $db->execute("DELETE FROM main WHERE a = :a", ["a" => 10]);
         $this->assertInstanceOf(Result::class, $result);
@@ -276,9 +282,10 @@ abstract class LinkTest extends AsyncTestCase
 
         $transaction = $db->beginTransaction();
 
-        $statement = $transaction->prepare("INSERT INTO main VALUES (?, ?)");
+        $statement = $transaction->prepare("INSERT INTO main (a, b) VALUES (?, ?)");
         $result = $statement->execute([6, 7]);
         $this->assertInstanceOf(Result::class, $result);
+        $this->assertGreaterThan(5, $result->getLastInsertId());
 
         $result = $transaction->execute("SELECT * FROM main WHERE a = ?", [6]);
 
@@ -323,6 +330,7 @@ abstract class LinkTest extends AsyncTestCase
             $result = $statement->execute([$a]);
 
             $this->assertSame($count, $result->getRowCount());
+            $this->assertGreaterThan(5, $result->getLastInsertId());
         } finally {
             $transaction->rollback();
         }

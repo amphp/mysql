@@ -5,7 +5,7 @@ namespace Amp\Mysql\Test;
 use Amp\Mysql\CancellableConnector;
 use Amp\Mysql\Connection;
 use Amp\Mysql\ConnectionConfig;
-use Amp\Sql\Link;
+use Amp\Mysql\Link;
 
 class ConnectionTest extends LinkTest
 {
