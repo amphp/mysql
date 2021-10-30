@@ -24,7 +24,7 @@ print "\rCleaning up test directory...";
         } else {
             \shell_exec("kill -9 `cat '$pidfile'` 2>/dev/null");
         }
-        delay(1000);
+        delay(1);
     }
 
     if (\file_exists(__DIR__ . "/mysql_db")) {
@@ -70,7 +70,7 @@ $process->start();
 
 print "\rStarting mysqld...           ";
 
-delay(2000); // Give mysqld time to start.
+delay(2); // Give mysqld time to start.
 
 print "\rCreating test database...    ";
 

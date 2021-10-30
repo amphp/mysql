@@ -2,84 +2,73 @@
 
 namespace Amp\Mysql\Internal;
 
-use Amp\AsyncGenerator;
 use Amp\Deferred;
+use Amp\Future;
 use Amp\Mysql\Result;
-use Amp\Promise;
-use Amp\Success;
-use function Amp\async;
-use function Amp\await;
-use function Amp\defer;
+use Revolt\EventLoop;
+use function Amp\coroutine;
 
 final class ConnectionResult implements Result, \IteratorAggregate
 {
     private ResultProxy $result;
 
-    private AsyncGenerator $generator;
+    private \Generator $generator;
 
-    private ?Promise $nextResult = null;
+    private ?Future $nextResult = null;
 
     public function __construct(ResultProxy $result)
     {
         $this->result = $result;
-        $this->generator = new AsyncGenerator(static function () use ($result): \Generator {
-            $next = self::fetchRow($result);
-            try {
-                while ($row = await($next)) {
-                    if (!isset($columnNames)) {
-                        $columnNames = \array_column($result->columns, 'name');
-                    }
-                    $next = self::fetchRow($result);
-                    yield \array_combine($columnNames, $row);
-                }
-            } finally {
-                if ($row === null) {
-                    return; // Result fully consumed.
-                }
-
-                defer(static function () use ($next, $result): void {
-                    try {
-                        // Discard remaining results if disposed.
-                        while ($row = await($next)) {
-                            $next = self::fetchRow($result);
-                        }
-                    } catch (\Throwable $exception) {
-                        // Ignore errors while discarding result.
-                    }
-                });
-            }
-        });
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function continue(): ?array
-    {
-        return $this->generator->continue();
-    }
-
-    public function dispose(): void
-    {
-        $this->generator->dispose();
+        $this->generator = self::iterate($result);
     }
 
     public function getIterator(): \Traversable
     {
-        return $this->generator->getIterator();
+        return $this->generator;
     }
 
-    private static function fetchRow(ResultProxy $result): Promise
+    private static function iterate(ResultProxy $result): \Generator
+    {
+        $next = self::fetchRow($result);
+
+        try {
+            while ($row = $next->await()) {
+                if (!isset($columnNames)) {
+                    $columnNames = \array_column($result->columns, 'name');
+                }
+                $next = self::fetchRow($result);
+                yield \array_combine($columnNames, $row);
+            }
+        } finally {
+            if (($row ?? null) === null) {
+                return; // Result fully consumed.
+            }
+
+            EventLoop::queue(static function () use ($next, $result): void {
+                try {
+                    // Discard remaining results if disposed.
+                    while ($next->await()) {
+                        $next = self::fetchRow($result);
+                    }
+                } catch (\Throwable) {
+                    // Ignore errors while discarding result.
+                }
+            });
+        }
+
+    }
+
+    private static function fetchRow(ResultProxy $result): Future
     {
         if ($result->userFetched < $result->fetchedRows) {
             $row = $result->rows[$result->userFetched];
             unset($result->rows[$result->userFetched]);
             $result->userFetched++;
-            return new Success($row);
+            return Future::complete($row);
         }
 
         if ($result->state === ResultProxy::ROWS_FETCHED) {
-            return new Success;
+            return Future::complete(null);
         }
 
         $deferred = new Deferred;
@@ -93,7 +82,7 @@ final class ConnectionResult implements Result, \IteratorAggregate
         };
 
         $result->deferreds[ResultProxy::UNFETCHED][] = [$deferred, null, $incRow];
-        return $deferred->promise();
+        return $deferred->getFuture();
     }
 
     /**
@@ -102,12 +91,12 @@ final class ConnectionResult implements Result, \IteratorAggregate
     public function getNextResult(): ?Result
     {
         if ($this->nextResult) {
-            return await($this->nextResult);
+            return $this->nextResult->await();
         }
 
-        $this->nextResult = async(function (): ?Result {
+        $this->nextResult = coroutine(function (): ?Result {
             $deferred = $this->result->next ?: $this->result->next = new Deferred;
-            $result = await($deferred->promise());
+            $result = $deferred->getFuture()->await();
 
             if ($result instanceof ResultProxy) {
                 return new self($result);
@@ -116,7 +105,7 @@ final class ConnectionResult implements Result, \IteratorAggregate
             return $result; // Instance of CommandResult or null.
         });
 
-        return await($this->nextResult);
+        return $this->nextResult->await();
     }
 
     public function getRowCount(): ?int
@@ -144,6 +133,6 @@ final class ConnectionResult implements Result, \IteratorAggregate
 
         $deferred = new Deferred;
         $this->result->deferreds[ResultProxy::COLUMNS_FETCHED][] = [$deferred, &$this->result->columns, null];
-        return await($deferred->promise());
+        return $deferred->getFuture()->await();
     }
 }

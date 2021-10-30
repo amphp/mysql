@@ -8,7 +8,7 @@ use Amp\Mysql\Result;
 use Amp\Mysql\Statement;
 use Amp\Mysql\Transaction;
 use Amp\Sql\TransactionError;
-use function Amp\await;
+use Revolt\EventLoop;
 
 final class ConnectionTransaction implements Transaction
 {
@@ -32,17 +32,14 @@ final class ConnectionTransaction implements Transaction
      */
     public function __construct(Processor $processor, callable $release, int $isolation = Transaction::ISOLATION_COMMITTED)
     {
-        switch ($isolation) {
-            case Transaction::ISOLATION_UNCOMMITTED:
-            case Transaction::ISOLATION_COMMITTED:
-            case Transaction::ISOLATION_REPEATABLE:
-            case Transaction::ISOLATION_SERIALIZABLE:
-                $this->isolation = $isolation;
-                break;
-
-            default:
-                throw new \Error("Isolation must be a valid transaction isolation level");
-        }
+        $this->isolation = match ($isolation) {
+            Transaction::ISOLATION_UNCOMMITTED,
+            Transaction::ISOLATION_COMMITTED,
+            Transaction::ISOLATION_REPEATABLE,
+            Transaction::ISOLATION_SERIALIZABLE,
+                => $isolation,
+            default => throw new \Error("Isolation must be a valid transaction isolation level"),
+        };
 
         $this->processor = $processor;
 
@@ -57,7 +54,12 @@ final class ConnectionTransaction implements Transaction
     public function __destruct()
     {
         if ($this->processor && $this->processor->isAlive()) {
-            $this->rollback(); // Invokes $this->release callback.
+            $processor = $this->processor;
+            $release = $this->release;
+            EventLoop::queue(static function () use ($processor, $release): void {
+                $processor->query("ROLLBACK");
+                $release();
+            });
         }
     }
 
@@ -116,7 +118,7 @@ final class ConnectionTransaction implements Transaction
             throw new TransactionError("The transaction has been committed or rolled back");
         }
 
-        $result = await($this->processor->query($sql));
+        $result = $this->processor->query($sql)->await();
         ++$this->refCount;
         return new PooledResult($result, $this->release);
     }
@@ -132,7 +134,7 @@ final class ConnectionTransaction implements Transaction
             throw new TransactionError("The transaction has been committed or rolled back");
         }
 
-        $statement = await($this->processor->prepare($sql));
+        $statement = $this->processor->prepare($sql)->await();
         return new PooledStatement($statement, $this->release);
     }
 
@@ -147,7 +149,7 @@ final class ConnectionTransaction implements Transaction
             throw new TransactionError("The transaction has been committed or rolled back");
         }
 
-        $statement = await($this->processor->prepare($sql));
+        $statement = $this->processor->prepare($sql)->await();
         $result = $statement->execute($params);
 
         ++$this->refCount;
@@ -167,9 +169,7 @@ final class ConnectionTransaction implements Transaction
 
         $promise = $this->processor->query("COMMIT");
         $this->processor = null;
-        $promise->onResolve($this->release);
-
-        await($promise);
+        $promise->finally($this->release)->await();
     }
 
     /**
@@ -185,9 +185,7 @@ final class ConnectionTransaction implements Transaction
 
         $promise = $this->processor->query("ROLLBACK");
         $this->processor = null;
-        $promise->onResolve($this->release);
-
-        await($promise);
+        $promise->finally($this->release)->await();
     }
 
     /**

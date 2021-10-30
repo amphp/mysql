@@ -26,7 +26,7 @@
         "phpunit/phpunit": "^9",
         "amphp/phpunit-util": "^2-dev",
         "amphp/php-cs-fixer-config": "dev-master",
-        "phpbench/phpbench": "^0.13.0"
+        "phpbench/phpbench": "^1.1"
     },
     "minimum-stability": "dev",
     "prefer-stable": true,

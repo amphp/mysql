@@ -5,18 +5,16 @@ namespace Amp\Mysql\Internal;
 use Amp\CancellationToken;
 use Amp\Deferred;
 use Amp\File;
-use Amp\Loop;
+use Amp\Future;
 use Amp\Mysql\ConnectionConfig;
 use Amp\Mysql\DataTypes;
 use Amp\Mysql\InitializationException;
-use Amp\Promise;
 use Amp\Socket\EncryptableSocket;
 use Amp\Sql\ConnectionException;
 use Amp\Sql\FailureException;
 use Amp\Sql\QueryError;
 use Amp\Sql\TransientResource;
-use function Amp\await;
-use function Amp\defer;
+use Revolt\EventLoop;
 
 /* @TODO
  * 14.2.3 Auth switch request??
@@ -80,7 +78,7 @@ REGEX;
     /** @var callable|null */
     private $packetCallback = null;
 
-    private ?Promise $pendingWrite = null;
+    private ?Future $pendingWrite = null;
 
     public ConnectionConfig $config;
 
@@ -181,7 +179,7 @@ REGEX;
         if ($this->socket) {
             try {
                 $this->socket->unreference();
-            } catch (Loop\InvalidWatcherError $exception) {
+            } catch (EventLoop\InvalidCallbackError) {
                 // Undefined destruct order can cause unref of an invalid watcher if the loop is swapped.
                 // Generally this will only happen during tests.
             }
@@ -205,18 +203,13 @@ REGEX;
 
         $id = $token->subscribe(fn() => $this->close());
 
-        defer(fn() => $this->read());
+        EventLoop::queue(fn() => $this->read());
 
-        $promise = $deferred->promise();
-
-        $promise->onResolve(static fn() => $token->unsubscribe($id));
+        $future = $deferred->getFuture();
+        $future = $future->finally(static fn() => $token->unsubscribe($id));
 
         if ($this->config->getCharset() !== ConnectionConfig::DEFAULT_CHARSET || $this->config->getCollation() !== ConnectionConfig::DEFAULT_COLLATE) {
-            $promise->onResolve(function (?\Throwable $exception): void {
-                if ($exception) {
-                    return;
-                }
-
+            $future = $future->apply(function () {
                 $charset = $this->config->getCharset();
                 $collate = $this->config->getCollation();
 
@@ -224,7 +217,7 @@ REGEX;
             });
         }
 
-        await($promise);
+        $future->await();
     }
 
     private function read(): void
@@ -267,8 +260,10 @@ REGEX;
             $exception = new ConnectionException("Connection closed unexpectedly", 0, $exception ?? null);
 
             foreach ($this->deferreds as $deferred) {
-                $deferred->fail($exception);
+                $deferred->error($exception);
             }
+
+            $this->deferreds = [];
         }
     }
 
@@ -321,7 +316,7 @@ REGEX;
         return $this->lastUsedAt;
     }
 
-    protected function startCommand(callable $callback): Promise
+    protected function startCommand(callable $callback): Future
     {
         if ($this->connectionState > self::READY) {
             throw new \Error("The connection has been closed");
@@ -333,10 +328,10 @@ REGEX;
             $this->addDeferred($deferred);
             $callback();
         });
-        return $deferred->promise();
+        return $deferred->getFuture();
     }
 
-    public function setCharset(string $charset, string $collate = ""): Promise
+    public function setCharset(string $charset, string $collate = ""): Future
     {
         if ($collate === "" && false !== $off = \strpos($charset, "_")) {
             $collate = $charset;
@@ -344,16 +339,16 @@ REGEX;
         }
 
         $query = "SET NAMES '$charset'" . ($collate === "" ? "" : " COLLATE '$collate'");
-        $promise = $this->query($query);
+        $future = $this->query($query);
 
         $this->config = $this->config->withCharset($charset, $collate);
 
-        return $promise;
+        return $future;
     }
 
 
     /** @see 14.6.3 COM_INIT_DB */
-    public function useDb(string $db): Promise
+    public function useDb(string $db): Future
     {
         return $this->startCommand(function () use ($db): void {
             $this->config = $this->config->withDatabase($db);
@@ -362,7 +357,7 @@ REGEX;
     }
 
     /** @see 14.6.4 COM_QUERY */
-    public function query(string $query): Promise
+    public function query(string $query): Future
     {
         return $this->startCommand(function () use ($query): void {
             $this->query = $query;
@@ -372,7 +367,7 @@ REGEX;
     }
 
     /** @see 14.7.4 COM_STMT_PREPARE */
-    public function prepare(string $query): Promise
+    public function prepare(string $query): Future
     {
         return $this->startCommand(function () use ($query): void {
             $this->query = $query;
@@ -415,7 +410,7 @@ REGEX;
     */
 
     /** @see 14.6.15 COM_PING */
-    public function ping(): Promise
+    public function ping(): Future
     {
         return $this->startCommand(function (): void {
             $this->sendPacket("\x0e");
@@ -423,7 +418,7 @@ REGEX;
     }
 
     /** @see 14.6.19 COM_RESET_CONNECTION */
-    public function resetConnection(): Promise
+    public function resetConnection(): Future
     {
         return $this->startCommand(function (): void {
             $this->sendPacket("\x1f");
@@ -447,7 +442,7 @@ REGEX;
     /** @see 14.7.6 COM_STMT_EXECUTE */
     // prebound params: null-bit set, type MYSQL_TYPE_LONG_BLOB, no value
     // $params is by-ref, because the actual result object might not yet have been filled completely with data upon call of this method ...
-    public function execute(int $stmtId, string $query, array &$params, array $prebound, array $data = []): Promise
+    public function execute(int $stmtId, string $query, array &$params, array $prebound, array $data = []): Future
     {
         $deferred = new Deferred;
         $this->appendTask(function () use ($stmtId, $query, &$params, $prebound, $data, $deferred): void {
@@ -496,7 +491,7 @@ REGEX;
             // apparently LOAD DATA LOCAL INFILE requests are not supported via prepared statements
             $this->packetCallback = [$this, "handleExecute"];
         });
-        return $deferred->promise(); // do not use $this->startCommand(), that might unexpectedly reset the seqId!
+        return $deferred->getFuture(); // do not use $this->startCommand(), that might unexpectedly reset the seqId!
     }
 
     /** @see 14.7.7 COM_STMT_CLOSE */
@@ -514,7 +509,7 @@ REGEX;
     }
 
     /** @see 14.6.5 COM_FIELD_LIST */
-    public function listFields(string $table, string $like = "%"): Promise
+    public function listFields(string $table, string $like = "%"): Future
     {
         return $this->startCommand(static function () use ($table, $like): void {
             $this->sendPacket("\x04$table\0$like");
@@ -522,30 +517,24 @@ REGEX;
         });
     }
 
-    public function listAllFields(string $table, string $like = "%"): Promise
+    public function listAllFields(string $table, string $like = "%"): Future
     {
-        $deferred = new Deferred;
+        $apply = function (?array $array) use (&$apply): array {
+            static $columns = [];
 
-        $columns = [];
-        $onResolve = function ($error, $array) use (&$columns, &$onResolve, $deferred) {
-            if ($error) {
-                $deferred->fail($error);
-                return;
-            }
             if ($array === null) {
-                $deferred->resolve($columns);
-                return;
+                return $columns;
             }
-            list($columns[], $promise) = $array;
-            $promise->onResolve($onResolve);
-        };
-        $this->listFields($table, $like)->onResolve($onResolve);
 
-        return $deferred->promise();
+            [$columns[], $future] = $array;
+            return $future->apply($apply)->await();
+        };
+
+        return $this->listFields($table, $like)->apply($apply);
     }
 
     /** @see 14.6.6 COM_CREATE_DB */
-    public function createDatabase(string $db): Promise
+    public function createDatabase(string $db): Future
     {
         return $this->startCommand(function () use ($db): void {
             $this->sendPacket("\x05$db");
@@ -553,7 +542,7 @@ REGEX;
     }
 
     /** @see 14.6.7 COM_DROP_DB */
-    public function dropDatabase(string $db): Promise
+    public function dropDatabase(string $db): Future
     {
         return $this->startCommand(function () use ($db): void {
             $this->sendPacket("\x06$db");
@@ -564,7 +553,7 @@ REGEX;
      * @param $subcommand int one of the self::REFRESH_* constants
      * @see 14.6.8 COM_REFRESH
      */
-    public function refresh(int $subcommand): Promise
+    public function refresh(int $subcommand): Future
     {
         return $this->startCommand(function () use ($subcommand): void {
             $this->sendPacket("\x07" . \chr($subcommand));
@@ -572,7 +561,7 @@ REGEX;
     }
 
     /** @see 14.6.9 COM_SHUTDOWN */
-    public function shutdown(): Promise
+    public function shutdown(): Future
     {
         return $this->startCommand(function (): void {
             $this->sendPacket("\x08\x00"); /* SHUTDOWN_DEFAULT / SHUTDOWN_WAIT_ALL_BUFFERS, only one in use */
@@ -580,7 +569,7 @@ REGEX;
     }
 
     /** @see 14.6.10 COM_STATISTICS */
-    public function statistics(): Promise
+    public function statistics(): Future
     {
         return $this->startCommand(function (): void {
             $this->sendPacket("\x09");
@@ -589,7 +578,7 @@ REGEX;
     }
 
     /** @see 14.6.11 COM_PROCESS_INFO */
-    public function processInfo(): Promise
+    public function processInfo(): Future
     {
         return $this->startCommand(function (): void {
             $this->sendPacket("\x0a");
@@ -598,7 +587,7 @@ REGEX;
     }
 
     /** @see 14.6.13 COM_PROCESS_KILL */
-    public function killProcess(int $process): Promise
+    public function killProcess(int $process): Future
     {
         return $this->startCommand(function () use ($process): void {
             $this->sendPacket("\x0c" . DataTypes::encodeInt32($process));
@@ -606,7 +595,7 @@ REGEX;
     }
 
     /** @see 14.6.14 COM_DEBUG */
-    public function debugStdout(): Promise
+    public function debugStdout(): Future
     {
         return $this->startCommand(function (): void {
             $this->sendPacket("\x0d");
@@ -614,7 +603,7 @@ REGEX;
     }
 
     /** @see 14.7.8 COM_STMT_RESET */
-    public function resetStmt(int $stmtId): Promise
+    public function resetStmt(int $stmtId): Future
     {
         $payload = "\x1a" . DataTypes::encodeInt32($stmtId);
         $deferred = new Deferred;
@@ -623,11 +612,11 @@ REGEX;
             $this->addDeferred($deferred);
             $this->sendPacket($payload);
         });
-        return $deferred->promise();
+        return $deferred->getFuture();
     }
 
     /** @see 14.8.4 COM_STMT_FETCH */
-    public function fetchStmt(int $stmtId): Promise
+    public function fetchStmt(int $stmtId): Future
     {
         $payload = "\x1c" . DataTypes::encodeInt32($stmtId) . DataTypes::encodeInt32(1);
         $deferred = new Deferred;
@@ -636,7 +625,7 @@ REGEX;
             $this->addDeferred($deferred);
             $this->sendPacket($payload);
         });
-        return $deferred->promise();
+        return $deferred->getFuture();
     }
 
     private function established(): void
@@ -681,7 +670,7 @@ REGEX;
         if ($this->connectionState < self::READY) {
             // connection failure
             $this->close();
-            $this->getDeferred()->fail(new InitializationException("Could not connect to {$this->config->getConnectionString()}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
+            $this->getDeferred()->error(new InitializationException("Could not connect to {$this->config->getConnectionString()}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
             return;
         }
 
@@ -697,7 +686,7 @@ REGEX;
         $exception = new QueryError("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}", $this->query);
         $this->result = null;
         $this->query = null;
-        $deferred->fail($exception);
+        $deferred->error($exception);
 
         $this->ready();
     }
@@ -762,7 +751,7 @@ REGEX;
     private function handleOk(string $packet): void
     {
         $this->parseOk($packet);
-        $this->getDeferred()->resolve(new CommandResult($this->connInfo->affectedRows, $this->connInfo->insertId));
+        $this->getDeferred()->complete(new CommandResult($this->connInfo->affectedRows, $this->connInfo->insertId));
         $this->ready();
     }
 
@@ -780,7 +769,7 @@ REGEX;
     {
         $this->parseEof($packet);
         $exception = new FailureException($this->connInfo->errorMsg, $this->connInfo->errorCode);
-        $this->getDeferred()->fail($exception);
+        $this->getDeferred()->error($exception);
         $this->ready();
     }
 
@@ -858,7 +847,7 @@ REGEX;
     /** @see 14.6.4.1.2 LOCAL INFILE Request */
     private function handleLocalInfileRequest(string $packet): void
     {
-        defer(function () use ($packet): void {
+        EventLoop::queue(function () use ($packet): void {
             try {
                 $filePath = \substr($packet, 1);
                 /** @var \Amp\File\File $fileHandle */
@@ -873,7 +862,7 @@ REGEX;
                 }
                 $this->sendPacket("");
             } catch (\Throwable $e) {
-                $this->getDeferred()->fail(new ConnectionException("Failed to transfer a file to the server", 0, $e));
+                $this->getDeferred()->error(new ConnectionException("Failed to transfer a file to the server", 0, $e));
             }
         });
     }
@@ -888,13 +877,16 @@ REGEX;
                     $result = new ResultProxy;
                     $result->affectedRows = $this->connInfo->affectedRows;
                     $result->insertId = $this->connInfo->insertId;
-                    $this->getDeferred()->resolve(new ConnectionResult($result));
+                    $this->getDeferred()->complete(new ConnectionResult($result));
                     $this->result = $result;
                     $result->updateState(ResultProxy::COLUMNS_FETCHED);
                     $this->successfulResultsetFetch();
                 } else {
                     $this->parseCallback = null;
-                    $this->getDeferred()->resolve(new CommandResult($this->connInfo->affectedRows, $this->connInfo->insertId));
+                    $this->getDeferred()->complete(new CommandResult(
+                        $this->connInfo->affectedRows,
+                        $this->connInfo->insertId
+                    ));
                     $this->ready();
                 }
                 return;
@@ -902,7 +894,7 @@ REGEX;
                 if ($this->config->isLocalInfileEnabled()) {
                     $this->handleLocalInfileRequest($packet);
                 } else {
-                    $this->getDeferred()->fail(new ConnectionException("Unexpected LOCAL_INFILE_REQUEST packet"));
+                    $this->getDeferred()->error(new ConnectionException("Unexpected LOCAL_INFILE_REQUEST packet"));
                 }
                 return;
             case self::ERR_PACKET:
@@ -911,7 +903,7 @@ REGEX;
         }
 
         $this->parseCallback = [$this, "handleTextColumnDefinition"];
-        $this->getDeferred()->resolve(new ConnectionResult($result = new ResultProxy));
+        $this->getDeferred()->complete(new ConnectionResult($result = new ResultProxy));
         /* we need to resolve before assigning vars, so that a onResolve() handler won't have a partial result available */
         $this->result = $result;
         $result->setColumns(DataTypes::decodeUnsigned($packet));
@@ -921,7 +913,7 @@ REGEX;
     private function handleExecute(string $packet): void
     {
         $this->parseCallback = [$this, "handleBinaryColumnDefinition"];
-        $this->getDeferred()->resolve(new ConnectionResult($result = new ResultProxy));
+        $this->getDeferred()->complete(new ConnectionResult($result = new ResultProxy));
         /* we need to resolve before assigning vars, so that a onResolve() handler won't have a partial result available */
         $this->result = $result;
         $result->setColumns(\ord($packet));
@@ -935,11 +927,11 @@ REGEX;
         } elseif (\ord($packet) === self::EOF_PACKET) {
             $this->parseCallback = null;
             $this->parseEof($packet);
-            $this->getDeferred()->resolve(null);
+            $this->getDeferred()->complete(null);
             $this->ready();
         } else {
             $this->addDeferred($deferred = new Deferred);
-            $this->getDeferred()->resolve([$this->parseColumnDefinition($packet), $deferred]);
+            $this->getDeferred()->complete([$this->parseColumnDefinition($packet), $deferred]);
         }
     }
 
@@ -1083,7 +1075,7 @@ REGEX;
             $this->parseCallback = null;
             $this->query = null;
             $this->result = null;
-            $deferred->resolve();
+            $deferred->complete(null);
             $this->ready();
         }
         $result->updateState(ResultProxy::ROWS_FETCHED);
@@ -1189,7 +1181,7 @@ REGEX;
         $this->result->columnsToFetch = $params;
         $this->result->columnCount = $columns;
         $this->refcount++;
-        $this->getDeferred()->resolve(new ConnectionStatement($this, $this->query, $stmtId, $this->named, $this->result));
+        $this->getDeferred()->complete(new ConnectionStatement($this, $this->query, $stmtId, $this->named, $this->result));
         $this->named = [];
         if ($params) {
             $this->parseCallback = [$this, "prepareParams"];
@@ -1200,13 +1192,13 @@ REGEX;
 
     private function readStatistics(string $packet): void
     {
-        $this->getDeferred()->resolve($packet);
+        $this->getDeferred()->complete($packet);
         $this->parseCallback = null;
         $this->ready();
     }
 
     /** @see 14.6.2 COM_QUIT */
-    public function sendClose(): Promise
+    public function sendClose(): Future
     {
         return $this->startCommand(function () {
             $this->sendPacket("\x01");
@@ -1217,7 +1209,7 @@ REGEX;
     public function close(): void
     {
         if ($this->connectionState === self::CLOSING && $this->deferreds) {
-            \array_pop($this->deferreds)->resolve();
+            \array_pop($this->deferreds)->complete(null);
         }
 
         $this->connectionState = self::CLOSED;
@@ -1253,7 +1245,7 @@ REGEX;
             $packet = $this->compressPacket($packet);
         }
 
-        $this->socket->write($packet);
+        $this->socket->write($packet)->await();
     }
 
     private function resetIds(): void
@@ -1523,7 +1515,7 @@ REGEX;
         $payload .= \str_repeat("\0", 23); // reserved
 
         if (!$inSSL && ($this->capabilities & self::CLIENT_SSL)) {
-            defer(function () use ($payload): void {
+            EventLoop::queue(function () use ($payload): void {
                 try {
                     $this->write($payload);
 
@@ -1532,7 +1524,7 @@ REGEX;
                     $this->sendHandshake(true);
                 } catch (\Throwable $e) {
                     $this->close();
-                    $this->getDeferred()->fail($e);
+                    $this->getDeferred()->error($e);
                 }
             });
 
@@ -1563,42 +1555,34 @@ REGEX;
         $this->write($payload);
     }
 
-    private function getAuthData()
+    private function getAuthData(): ?string
     {
         if ($this->config->getPassword() == "") {
-            $auth = "";
-        } elseif ($this->capabilities & self::CLIENT_PLUGIN_AUTH) {
+            return "";
+        }
+
+        if ($this->capabilities & self::CLIENT_PLUGIN_AUTH) {
             switch ($this->authPluginName) {
                 case "mysql_native_password":
-                    $auth = $this->secureAuth($this->config->getPassword(), $this->authPluginData);
-                    break;
+                    return $this->secureAuth($this->config->getPassword(), $this->authPluginData);
                 case "mysql_clear_password":
-                    $auth = $this->config->getPassword();
-                    break;
+                    return $this->config->getPassword();
                 case "sha256_password":
-                    if ($this->config->getPassword() === "") {
-                        $auth = "";
-                    } else {
-                        $key = $this->config->getKey();
-                        if ($key !== null) {
-                            $auth = $this->sha256Auth($this->config->getPassword(), $this->authPluginData, $key);
-                        } else {
-                            $auth = "\x01";
-                        }
+                    $key = $this->config->getKey();
+                    if ($key !== null) {
+                        return $this->sha256Auth($this->config->getPassword(), $this->authPluginData, $key);
                     }
-            break;
+                    return "\x01";
                 case "caching_sha2_password":
-                    $auth = $this->sha2Auth($this->config->getPassword(), $this->authPluginData);
-                    break;
+                    return $this->sha2Auth($this->config->getPassword(), $this->authPluginData);
                 case "mysql_old_password":
                     throw new ConnectionException("mysql_old_password is outdated and insecure. Intentionally not implemented!");
                 default:
                     throw new ConnectionException("Invalid (or unimplemented?) auth method requested by server: {$this->authPluginName}");
             }
-        } else {
-            $auth = $this->secureAuth($this->config->getPassword(), $this->authPluginData);
         }
-        return $auth;
+
+        return $this->secureAuth($this->config->getPassword(), $this->authPluginData);
     }
 
     /** @see 14.1.2 MySQL Packet */

@@ -1,8 +1,7 @@
 <?php
 
+use Amp\Future;
 use Amp\Sql\Link;
-use function Amp\async;
-use function Amp\await;
 
 /* Create table and fill in a few rows for examples; for comments see 3-generic-with-yield.php */
 function createGenericTable(Link $db): void
@@ -13,10 +12,10 @@ function createGenericTable(Link $db): void
 
     $statement = $db->prepare("INSERT INTO tmp (a, b) VALUES (?, ? * 2)");
 
-    $promises = [];
+    $futures = [];
     foreach (\range(1, 5) as $num) {
-        $promises[] = async(fn() => $statement->execute([$num, $num]));
+        $futures[] = \Amp\coroutine(fn() => $statement->execute([$num, $num]));
     }
 
-    await($promises);
+    Future\all($futures);
 }

@@ -2,9 +2,9 @@
 
 namespace Amp\Mysql\Internal;
 
+use Amp\Future;
 use Amp\Mysql\Result;
 use Amp\Sql\Common\CommandResult as SqlCommandResult;
-use Amp\Success;
 
 final class CommandResult implements Result, \IteratorAggregate
 {
@@ -14,18 +14,8 @@ final class CommandResult implements Result, \IteratorAggregate
 
     public function __construct(int $affectedRows, int $lastInsertId)
     {
-        $this->delegate = new SqlCommandResult($affectedRows, new Success);
+        $this->delegate = new SqlCommandResult($affectedRows, Future::complete(null));
         $this->lastInsertId = $lastInsertId ?: null; // Convert 0 to null
-    }
-
-    public function continue(): ?array
-    {
-        return $this->delegate->continue();
-    }
-
-    public function dispose(): void
-    {
-        $this->delegate->dispose();
     }
 
     public function getIterator(): \Traversable
@@ -39,7 +29,7 @@ final class CommandResult implements Result, \IteratorAggregate
     }
 
     /**
-     * @return int Insert ID of the last auto increment row.
+     * @return int|null Insert ID of the last auto increment row.
      */
     public function getLastInsertId(): ?int
     {

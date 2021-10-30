@@ -6,7 +6,7 @@ use Amp\CancellationToken;
 use Amp\Deferred;
 use Amp\NullCancellationToken;
 use Amp\Socket;
-use function Amp\await;
+use Revolt\EventLoop;
 
 final class Connection implements Link
 {
@@ -58,9 +58,8 @@ final class Connection implements Link
         $busy = &$this->busy;
         $this->release = static function () use (&$busy): void {
             \assert($busy instanceof Deferred);
-            $deferred = $busy;
+            $busy->complete(null);
             $busy = null;
-            $deferred->resolve();
         };
     }
 
@@ -87,7 +86,7 @@ final class Connection implements Link
 
     public function setCharset(string $charset, string $collate = ""): void
     {
-        await($this->processor->setCharset($charset, $collate));
+        $this->processor->setCharset($charset, $collate)->await();
     }
 
     public function close(): void
@@ -95,13 +94,13 @@ final class Connection implements Link
         $processor = $this->processor;
         // Send close command if connection is not already in a closed or closing state
         if ($processor->isAlive()) {
-            $processor->sendClose()->onResolve(static fn() => $processor->close());
+            $processor->sendClose()->finally(static fn() => $processor->close())->ignore();
         }
     }
 
     public function useDb(string $db): void
     {
-        await($this->processor->useDb($db));
+        $this->processor->useDb($db)->await();
     }
 
     /**
@@ -109,22 +108,22 @@ final class Connection implements Link
      */
     public function refresh(int $subcommand): void
     {
-        $this->processor->refresh($subcommand);
+        $this->processor->refresh($subcommand)->await();
     }
 
-    public function query(string $query): Result
+    public function query(string $sql): Result
     {
         while ($this->busy) {
-            await($this->busy->promise());
+            $this->busy->getFuture()->await();
         }
 
-        return await($this->processor->query($query));
+        return $this->processor->query($sql)->await();
     }
 
     public function beginTransaction(int $isolation = Transaction::ISOLATION_COMMITTED): Transaction
     {
         while ($this->busy) {
-            await($this->busy->promise());
+            $this->busy->getFuture()->await();
         }
 
         $this->busy = $deferred = new Deferred;
@@ -151,11 +150,11 @@ final class Connection implements Link
         }
 
         try {
-            await($promise);
-            await($this->processor->query("START TRANSACTION"));
+            $promise->await();
+            $this->processor->query("START TRANSACTION")->await();
         } catch (\Throwable $exception) {
             $this->busy = null;
-            $deferred->resolve();
+            $deferred->complete(null);
             throw $exception;
         }
 
@@ -164,16 +163,16 @@ final class Connection implements Link
 
     public function ping(): void
     {
-        await($this->processor->ping());
+        $this->processor->ping()->await();
     }
 
-    public function prepare(string $query): Statement
+    public function prepare(string $sql): Statement
     {
         while ($this->busy) {
-            await($this->busy->promise());
+            $this->busy->getFuture()->await();
         }
 
-        return await($this->processor->prepare($query));
+        return $this->processor->prepare($sql)->await();
     }
 
     /**
@@ -187,6 +186,7 @@ final class Connection implements Link
 
     public function __destruct()
     {
-        $this->processor->unreference();
+        $processor = $this->processor;
+        EventLoop::queue(static fn () => $processor->unreference());
     }
 }

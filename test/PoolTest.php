@@ -2,7 +2,7 @@
 
 namespace Amp\Mysql\Test;
 
-use Amp\Delayed;
+use Amp\Future;
 use Amp\Mysql\Connection;
 use Amp\Mysql\ConnectionConfig;
 use Amp\Mysql\Internal\CommandResult;
@@ -11,12 +11,11 @@ use Amp\Mysql\Link;
 use Amp\Mysql\Pool;
 use Amp\Mysql\Result;
 use Amp\Mysql\Statement;
-use Amp\Promise;
 use Amp\Sql\Connector;
 use Amp\Sql\Transaction as SqlTransaction;
-use Amp\Success;
-use function Amp\async;
-use function Amp\await;
+use PHPUnit\Framework\MockObject\MockObject;
+use function Amp\coroutine;
+use function Amp\delay;
 
 interface StatementOperation extends Statement
 {
@@ -46,7 +45,7 @@ class PoolTest extends LinkTest
     /**
      * @param int $count
      *
-     * @return \Amp\Mysql\Internal\Processor[]|\PHPUnit\Framework\MockObject\MockObject[]
+     * @return array<int, Processor&MockObject>
      */
     private function makeProcessorSet(int $count): array
     {
@@ -55,6 +54,7 @@ class PoolTest extends LinkTest
         for ($i = 0; $i < $count; ++$i) {
             $processor = $this->createMock(Processor::class);
             $processor->method('isAlive')->willReturn(true);
+            $processor->method('sendClose')->willReturn(Future::complete(null));
             $processors[] = $processor;
         }
 
@@ -91,7 +91,10 @@ class PoolTest extends LinkTest
         $connection->expects($this->once())
             ->method('query')
             ->with('SQL Query')
-            ->will($this->returnValue(new Delayed(10, $result)));
+            ->willReturn(coroutine(function () use ($result): Result {
+                delay(0.01);
+                return $result;
+            }));
 
         $pool = $this->createPool($this->makeConnectionSet($processors));
 
@@ -116,19 +119,22 @@ class PoolTest extends LinkTest
         foreach ($processors as $connection) {
             $connection->method('query')
                 ->with('SQL Query')
-                ->will($this->returnValue(new Delayed(10, $result)));
+                ->willReturn(coroutine(function () use ($result): Result {
+                    delay(0.01);
+                    return $result;
+                }));
         }
 
         $pool = $this->createPool($this->makeConnectionSet($processors));
 
         try {
-            $promises = [];
+            $futures = [];
 
             for ($i = 0; $i < $count; ++$i) {
-                $promises[] = async(fn() => $pool->query('SQL Query'));
+                $futures[] = coroutine(fn() => $pool->query('SQL Query'));
             }
 
-            $results = await($promises);
+            $results = Future\all($futures);
 
             foreach ($results as $result) {
                 $this->assertInstanceOf(Result::class, $result);
@@ -152,7 +158,10 @@ class PoolTest extends LinkTest
 
         $connection->expects($this->exactly(3))
             ->method('query')
-            ->will($this->returnValue(new Delayed(10, $result)));
+            ->willReturn(coroutine(function () use ($result): Result {
+                delay(0.01);
+                return $result;
+            }));
 
         $pool = $this->createPool($this->makeConnectionSet($processors));
 
@@ -179,22 +188,25 @@ class PoolTest extends LinkTest
 
         foreach ($processors as $connection) {
             $connection->method('query')
-                ->will($this->returnCallback(fn() => new Delayed(10, $result)));
+                ->willReturnCallback(fn () => coroutine(function () use ($result): Result {
+                    delay(0.01);
+                    return $result;
+                }));
         }
 
         $pool = $this->createPool($this->makeConnectionSet($processors));
 
-        $promises = [];
+        $futures = [];
         for ($i = 0; $i < $count; ++$i) {
-            $promises[] = async(fn() => $pool->beginTransaction(SqlTransaction::ISOLATION_COMMITTED));
+            $futures[] = coroutine(fn() => $pool->beginTransaction(SqlTransaction::ISOLATION_COMMITTED));
         }
 
         try {
-            \array_map(function (Promise $promise) {
-                $transaction = await($promise);
+            \array_map(function (Future $future) {
+                $transaction = $future->await();
                 $this->assertInstanceOf(SqlTransaction::class, $transaction);
                 $transaction->rollback();
-            }, $promises);
+            }, $futures);
         } finally {
             $pool->close();
         }
@@ -214,17 +226,17 @@ class PoolTest extends LinkTest
             $connection->expects($this->once())
                 ->method('query')
                 ->with($query)
-                ->willReturn(new Success($this->createMock(Result::class)));
+                ->willReturn(Future::complete($this->createMock(Result::class)));
         }
 
         $pool = $this->createPool($this->makeConnectionSet($processors));
 
         try {
-            $promises = [];
+            $futures = [];
             for ($i = 0; $i < $count; ++$i) {
-                $promises[] = async(fn() => $pool->extractConnection());
+                $futures[] = coroutine(fn() => $pool->extractConnection());
             }
-            $results = await($promises);
+            $results = Future\all($futures);
             foreach ($results as $result) {
                 $this->assertInstanceof(Connection::class, $result);
                 $result->query($query);
@@ -249,7 +261,10 @@ class PoolTest extends LinkTest
             $processor->expects($this->atLeastOnce())
                 ->method('query')
                 ->with($query)
-                ->willReturn(new Delayed(10, $result));
+                ->willReturn(coroutine(function () use ($result): Result {
+                    delay(0.01);
+                    return $result;
+                }));
         }
 
         $processor = $this->createMock(Processor::class);
@@ -258,7 +273,10 @@ class PoolTest extends LinkTest
         $processor->expects($this->once())
             ->method('query')
             ->with($query)
-            ->willReturn(new Delayed(10, $result));
+            ->willReturn(coroutine(function () use ($result): Result {
+                delay(0.01);
+                return $result;
+            }));
 
         \array_unshift($processors, $processor);
 
@@ -266,16 +284,16 @@ class PoolTest extends LinkTest
 
         try {
             $this->assertSame($count + 1, $pool->getConnectionLimit());
-            $promises = [];
+            $futures = [];
             for ($i = 0; $i < $count + 1; ++$i) {
-                $promises[] = async(fn() => $pool->query($query));
+                $futures[] = coroutine(fn() => $pool->query($query));
             }
-            await($promises);
-            $promises = [];
+            Future\all($futures);
+            $futures = [];
             for ($i = 0; $i < $count; ++$i) {
-                $promises[] = async(fn() => $pool->query($query));
+                $futures[] = coroutine(fn() => $pool->query($query));
             }
-            await($promises);
+            Future\all($futures);
         } finally {
             $pool->close();
         }

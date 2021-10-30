@@ -2,11 +2,13 @@
 
 require 'support/bootstrap.php';
 
+use Amp\Future;
 use Amp\Mysql;
-use function Amp\async;
-use function Amp\await;
+use function Amp\coroutine;
 
 $db = Mysql\pool(Mysql\ConnectionConfig::fromString("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME));
+
+$db->query("DROP TABLE IF EXISTS tmp");
 
 /* Create table and insert a few rows */
 /* we need to wait until table is finished, so that we can insert. */
@@ -16,13 +18,13 @@ print "Table successfully created." . PHP_EOL;
 
 $statement = $db->prepare("INSERT INTO tmp (a, b) VALUES (?, ? * 2)");
 
-$promises = [];
+$future = [];
 foreach (\range(1, 5) as $num) {
-    $promises[] = async(fn() => $statement->execute([$num, $num]));
+    $future[] = coroutine(fn() => $statement->execute([$num, $num]));
 }
 
 /* wait until everything is inserted */
-await($promises);
+Future\all($future);
 
 print "Insertion successful (if it wasn't, an exception would have been thrown by now)" . PHP_EOL;
 

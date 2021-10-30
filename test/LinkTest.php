@@ -5,7 +5,6 @@ namespace Amp\Mysql\Test;
 use Amp\Mysql\DataTypes;
 use Amp\Mysql\Result;
 use Amp\PHPUnit\AsyncTestCase;
-use Amp\Pipeline;
 use Amp\Mysql\Link;
 use Amp\Sql\QueryError;
 
@@ -18,12 +17,6 @@ abstract class LinkTest extends AsyncTestCase
      */
     abstract protected function getLink(string $connectionString): Link;
 
-    public function setUp(): void
-    {
-        parent::setUp();
-        $this->ignoreLoopWatchers();
-    }
-
     public function testQuery()
     {
         $db = $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
@@ -31,8 +24,10 @@ abstract class LinkTest extends AsyncTestCase
         $resultset = $db->execute("SELECT ? AS a", [M_PI]);
         $this->assertInstanceOf(Result::class, $resultset);
 
-        for ($i = 0; $row = $resultset->continue(); ++$i) {
+        $i = 0;
+        foreach ($resultset as $row) {
             $this->assertSame(["a" => M_PI], $row);
+            ++$i;
         }
 
         $this->assertSame(1, $i);
@@ -46,7 +41,7 @@ abstract class LinkTest extends AsyncTestCase
         $this->assertInstanceOf(Result::class, $resultset);
 
         $got = [];
-        while ($row = $resultset->continue()) {
+        foreach ($resultset as $row) {
             $got[] = \array_values($row);
         }
 
@@ -71,14 +66,14 @@ abstract class LinkTest extends AsyncTestCase
         $this->assertInstanceOf(Result::class, $resultset);
 
         $got = [];
-        while ($row = $resultset->continue()) {
+        foreach ($resultset as $row) {
             $got[] = \array_values($row);
         }
         $this->assertSame([[1], [2], [3], [4], [5]], $got);
         $this->assertInstanceOf(Result::class, $resultset = $resultset->getNextResult());
 
         $got = [];
-        while ($row = $resultset->continue()) {
+        foreach ($resultset as $row) {
             $got[] = \array_values($row);
         }
         $this->assertSame([[6]], $got);
@@ -87,7 +82,7 @@ abstract class LinkTest extends AsyncTestCase
         $fields = $resultset->getFields();
 
         $got = [];
-        while ($row = $resultset->continue()) {
+        foreach ($resultset as $row) {
             $got[] = $row;
         }
         $this->assertSame([["d" => 5, "c" => 5], ["d" => 6, "c" => 6]], $got);
@@ -127,7 +122,7 @@ abstract class LinkTest extends AsyncTestCase
         $result = $stmt->execute([2]);
         $this->assertInstanceOf(Result::class, $result);
         $got = [];
-        while ($row = $result->continue()) {
+        foreach ($result as $row) {
             $got[] = \array_values($row);
         }
         $this->assertCount(2, $got);
@@ -136,7 +131,7 @@ abstract class LinkTest extends AsyncTestCase
         $result = $stmt->execute([1, 8]);
         $this->assertInstanceOf(Result::class, $result);
         $got = [];
-        while ($row = $result->continue()) {
+        foreach ($result as $row) {
             $got[] = \array_values($row);
         }
         $this->assertCount(1, $got);
@@ -145,7 +140,7 @@ abstract class LinkTest extends AsyncTestCase
         $result = $stmt->execute(["a" => 2, 5]);
         $this->assertInstanceOf(Result::class, $result);
         $got = [];
-        while ($row = $result->continue()) {
+        foreach ($result as $row) {
             $got[] = \array_values($row);
         }
         $this->assertCount(2, $got);
@@ -218,7 +213,7 @@ abstract class LinkTest extends AsyncTestCase
         $result = $db->execute("SELECT * FROM test.main WHERE a = ? OR b = ?", [2, 5]);
         $this->assertInstanceOf(Result::class, $result);
         $got = [];
-        while ($row = $result->continue()) {
+        foreach ($result as $row) {
             $got[] = \array_values($row);
         }
         $this->assertCount(2, $got);
@@ -267,11 +262,9 @@ abstract class LinkTest extends AsyncTestCase
 
         $stmt = $db->prepare("SELECT a FROM tmp");
         $result = $stmt->execute();
-        $row = $result->continue();
+        $result = \iterator_to_array($result);
 
-        $this->assertEquals(\array_values($row), [-1]);
-
-        while ($result->continue()); // Consume remaining results.
+        $this->assertEquals(\array_values(\array_shift($result)), [-1]);
 
         $db->close();
     }
@@ -290,7 +283,7 @@ abstract class LinkTest extends AsyncTestCase
         $result = $transaction->execute("SELECT * FROM main WHERE a = ?", [6]);
 
         $got = [];
-        while ($row = $result->continue()) {
+        foreach ($result as $row) {
             $got[] = \array_values($row);
         }
         $this->assertCount(1, $got);
@@ -301,7 +294,7 @@ abstract class LinkTest extends AsyncTestCase
         $result = $db->execute("SELECT * FROM main WHERE a = ?", [6]);
 
         $got = [];
-        while ($row = $result->continue()) {
+        foreach ($result as $row) {
             $got[] = \array_values($row);
         }
         $this->assertCount(0, $got);
@@ -323,7 +316,7 @@ abstract class LinkTest extends AsyncTestCase
         try {
             $statement = $transaction->prepare("SELECT a, b FROM main WHERE a >= ?");
 
-            $count = \count(Pipeline\toArray($statement->execute([$a])));
+            $count = \count(\iterator_to_array($statement->execute([$a])));
 
             $statement = $transaction->prepare("INSERT INTO main (a, b) SELECT a, b FROM main WHERE a >= ?");
 

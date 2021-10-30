@@ -6,7 +6,7 @@ use Amp\Deferred;
 use Amp\Mysql\Result;
 use Amp\Mysql\Statement;
 use Amp\Sql\ConnectionException;
-use function Amp\await;
+use Revolt\EventLoop;
 
 final class ConnectionStatement implements Statement
 {
@@ -129,7 +129,9 @@ final class ConnectionStatement implements Statement
             }
         }
 
-        return await($this->getProcessor()->execute($this->stmtId, $this->query, $this->result->params, $prebound, $args));
+        return $this->getProcessor()
+            ->execute($this->stmtId, $this->query, $this->result->params, $prebound, $args)
+            ->await();
     }
 
     public function getQuery(): string
@@ -137,20 +139,11 @@ final class ConnectionStatement implements Statement
         return $this->query;
     }
 
-    private function close(): void
-    {
-        if ($this->processor === null) {
-            return;
-        }
-
-        $this->processor->closeStmt($this->stmtId);
-        $this->processor->unreference();
-        $this->processor = null;
-    }
-
     public function reset(): void
     {
-        await($this->getProcessor()->resetStmt($this->stmtId));
+        $this->getProcessor()
+            ->resetStmt($this->stmtId)
+            ->await();
     }
 
     public function getFields(): ?array
@@ -165,7 +158,7 @@ final class ConnectionStatement implements Statement
 
         $deferred = new Deferred;
         $this->result->deferreds[ResultProxy::COLUMNS_FETCHED][0] = [$deferred, &$this->result->columns, null];
-        return await($deferred->promise());
+        return $deferred->getFuture()->await();
     }
 
     /** {@inheritdoc} */
@@ -176,6 +169,16 @@ final class ConnectionStatement implements Statement
 
     public function __destruct()
     {
-        $this->close();
+        if ($this->processor) {
+            $processor = $this->processor;
+            $stmtId = $this->stmtId;
+            EventLoop::queue(static fn () => self::close($processor, $stmtId));
+        }
+    }
+
+    private static function close(Processor $processor, int $stmtId): void
+    {
+        $processor->closeStmt($stmtId);
+        $processor->unreference();
     }
 }
