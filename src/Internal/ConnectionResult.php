@@ -113,6 +113,11 @@ final class ConnectionResult implements Result, \IteratorAggregate
         return $this->result->affectedRows;
     }
 
+    public function getColumnCount(): ?int
+    {
+        return $this->result->columnCount;
+    }
+
     public function getLastInsertId(): ?int
     {
         return $this->result->insertId;

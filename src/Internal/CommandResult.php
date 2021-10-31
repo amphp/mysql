@@ -28,6 +28,11 @@ final class CommandResult implements Result, \IteratorAggregate
         return $this->delegate->getRowCount();
     }
 
+    public function getColumnCount(): ?int
+    {
+        return $this->delegate->getColumnCount();
+    }
+
     /**
      * @return int|null Insert ID of the last auto increment row.
      */

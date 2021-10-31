@@ -40,6 +40,8 @@ abstract class LinkTest extends AsyncTestCase
         $resultset = $db->query('SELECT a FROM main WHERE a < 4');
         $this->assertInstanceOf(Result::class, $resultset);
 
+        $this->assertSame(1, $resultset->getColumnCount());
+
         $got = [];
         foreach ($resultset as $row) {
             $got[] = \array_values($row);
@@ -121,6 +123,7 @@ abstract class LinkTest extends AsyncTestCase
         $stmt->bind("num", 5);
         $result = $stmt->execute([2]);
         $this->assertInstanceOf(Result::class, $result);
+        $this->assertSame(3, $result->getColumnCount());
         $got = [];
         foreach ($result as $row) {
             $got[] = \array_values($row);
@@ -130,6 +133,7 @@ abstract class LinkTest extends AsyncTestCase
         $stmt = $db->prepare("SELECT * FROM main WHERE a = ? OR b = ?");
         $result = $stmt->execute([1, 8]);
         $this->assertInstanceOf(Result::class, $result);
+        $this->assertSame(3, $result->getColumnCount());
         $got = [];
         foreach ($result as $row) {
             $got[] = \array_values($row);
@@ -139,6 +143,7 @@ abstract class LinkTest extends AsyncTestCase
         $stmt = $db->prepare("SELECT * FROM main WHERE a = :a OR b = ?");
         $result = $stmt->execute(["a" => 2, 5]);
         $this->assertInstanceOf(Result::class, $result);
+        $this->assertSame(3, $result->getColumnCount());
         $got = [];
         foreach ($result as $row) {
             $got[] = \array_values($row);
@@ -147,11 +152,13 @@ abstract class LinkTest extends AsyncTestCase
 
         $stmt = $db->prepare("INSERT INTO main (a, b) VALUES (:a, :b)");
         $result = $stmt->execute(["a" => 10, "b" => 11]);
+        $this->assertNull($result->getColumnCount());
         $this->assertInstanceOf(Result::class, $result);
         $this->assertGreaterThan(5, $result->getLastInsertId());
 
         $stmt = $db->prepare("DELETE FROM main WHERE a = :a");
         $result = $stmt->execute(["a" => 10]);
+        $this->assertNull($result->getColumnCount());
         $this->assertInstanceOf(Result::class, $result);
     }
 
