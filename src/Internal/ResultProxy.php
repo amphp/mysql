@@ -3,7 +3,6 @@
 namespace Amp\Mysql\Internal;
 
 use Amp\Deferred;
-use Amp\Sql\FailureException;
 
 final class ResultProxy
 {
@@ -19,7 +18,11 @@ final class ResultProxy
 
     public ?int $affectedRows = null;
 
-    public array $deferreds = [self::UNFETCHED => [], self::COLUMNS_FETCHED => [], self::ROWS_FETCHED => []];
+    public array $deferreds = [
+        self::UNFETCHED => [],
+        self::COLUMNS_FETCHED => [],
+        self::ROWS_FETCHED => []
+    ];
 
     public int $state = self::UNFETCHED;
 
@@ -65,7 +68,7 @@ final class ResultProxy
         }
     }
 
-    public function fail(FailureException $e): void
+    public function error(\Throwable $e): void
     {
         foreach ($this->deferreds as $state) {
             foreach ($this->deferreds[$state] as [$deferred]) {

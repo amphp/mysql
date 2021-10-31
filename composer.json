@@ -15,6 +15,7 @@
     "require": {
         "php": ">=8",
         "amphp/amp": "^3-dev",
+        "amphp/pipeline": "^1-dev",
         "amphp/socket": "^2-dev",
         "amphp/sql": "^2-dev",
         "amphp/sql-common": "^2-dev"

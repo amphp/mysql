@@ -5,6 +5,7 @@ namespace Amp\Mysql\Internal;
 use Amp\Deferred;
 use Amp\Future;
 use Amp\Mysql\Result;
+use Amp\Pipeline\AsyncGenerator;
 use Revolt\EventLoop;
 use function Amp\coroutine;
 
@@ -12,14 +13,14 @@ final class ConnectionResult implements Result, \IteratorAggregate
 {
     private ResultProxy $result;
 
-    private \Generator $generator;
+    private AsyncGenerator $generator;
 
     private ?Future $nextResult = null;
 
     public function __construct(ResultProxy $result)
     {
         $this->result = $result;
-        $this->generator = self::iterate($result);
+        $this->generator = new AsyncGenerator(static fn () => self::iterate($result));
     }
 
     public function getIterator(): \Traversable
@@ -32,15 +33,19 @@ final class ConnectionResult implements Result, \IteratorAggregate
         $next = self::fetchRow($result);
 
         try {
-            while ($row = $next->await()) {
-                if (!isset($columnNames)) {
-                    $columnNames = \array_column($result->columns, 'name');
-                }
+            if (!($row = $next->await())) {
+                return;
+            }
+
+            // Column names are only available once a result row has been fetched.
+            $columnNames = \array_column($result->columns, 'name');
+
+            do {
                 $next = self::fetchRow($result);
                 yield \array_combine($columnNames, $row);
-            }
+            } while ($row = $next->await());
         } finally {
-            if (($row ?? null) === null) {
+            if (!isset($row)) {
                 return; // Result fully consumed.
             }
 
@@ -55,9 +60,12 @@ final class ConnectionResult implements Result, \IteratorAggregate
                 }
             });
         }
-
     }
 
+    /**
+     * @param ResultProxy $result
+     * @return Future<array|null>
+     */
     private static function fetchRow(ResultProxy $result): Future
     {
         if ($result->userFetched < $result->fetchedRows) {
@@ -76,7 +84,7 @@ final class ConnectionResult implements Result, \IteratorAggregate
         /* We need to increment the internal counter, else the next time fetch is called,
          * it'll simply return the row we fetch here instead of fetching a new row
          * since callback order on promises isn't defined, we can't do this via onResolve() */
-        $incRow = function ($row) use ($result) {
+        $incRow = static function ($row) use ($result) {
             unset($result->rows[$result->userFetched++]);
             return $row;
         };
@@ -129,7 +137,10 @@ final class ConnectionResult implements Result, \IteratorAggregate
     public function getFields(): ?array
     {
         if ($this->result === null) {
-            throw new \Error("The current result set is empty; call this method before invoking ResultSet::nextResultSet()");
+            throw new \Error(\sprintf(
+                "The current result set is empty; call this method before invoking %s::getNextResult()",
+                Result::class,
+            ));
         }
 
         if ($this->result->state >= ResultProxy::COLUMNS_FETCHED) {
