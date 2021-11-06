@@ -1582,42 +1582,36 @@ REGEX;
         $this->write($payload);
     }
 
-    private function getAuthData()
+    private function getAuthData(): string
     {
-        if ($this->config->getPassword() == "") {
-            $auth = "";
-        } elseif ($this->capabilities & self::CLIENT_PLUGIN_AUTH) {
+        $password = (string) $this->config->getPassword();
+
+        if ($password === "") {
+            return "";
+        }
+
+        if ($this->capabilities & self::CLIENT_PLUGIN_AUTH) {
             switch ($this->authPluginName) {
                 case "mysql_native_password":
-                    $auth = $this->secureAuth($this->config->getPassword(), $this->authPluginData);
-                    break;
+                    return $this->secureAuth($password, $this->authPluginData);
                 case "mysql_clear_password":
-                    $auth = $this->config->getPassword();
-                    break;
+                    return $password;
                 case "sha256_password":
-                    if ($this->config->getPassword() === "") {
-                        $auth = "";
-                    } else {
-                        $key = $this->config->getKey();
-                        if ($key !== null) {
-                            $auth = $this->sha256Auth($this->config->getPassword(), $this->authPluginData, $key);
-                        } else {
-                            $auth = "\x01";
-                        }
+                    $key = $this->config->getKey();
+                    if ($key !== "") {
+                        return $this->sha256Auth($password, $this->authPluginData, $key);
                     }
-            break;
+                    return "\x01";
                 case "caching_sha2_password":
-                    $auth = $this->sha2Auth($this->config->getPassword(), $this->authPluginData);
-                    break;
+                    return $this->sha2Auth($password, $this->authPluginData);
                 case "mysql_old_password":
                     throw new ConnectionException("mysql_old_password is outdated and insecure. Intentionally not implemented!");
                 default:
                     throw new ConnectionException("Invalid (or unimplemented?) auth method requested by server: {$this->authPluginName}");
             }
-        } else {
-            $auth = $this->secureAuth($this->config->getPassword(), $this->authPluginData);
         }
-        return $auth;
+
+        return $this->secureAuth($password, $this->authPluginData);
     }
 
     /** @see 14.1.2 MySQL Packet */
