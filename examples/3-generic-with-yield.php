@@ -4,7 +4,7 @@ require 'support/bootstrap.php';
 
 use Amp\Future;
 use Amp\Mysql;
-use function Amp\coroutine;
+use function Amp\launch;
 
 $db = Mysql\pool(Mysql\ConnectionConfig::fromString("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME));
 
@@ -20,7 +20,7 @@ $statement = $db->prepare("INSERT INTO tmp (a, b) VALUES (?, ? * 2)");
 
 $future = [];
 foreach (\range(1, 5) as $num) {
-    $future[] = coroutine(fn() => $statement->execute([$num, $num]));
+    $future[] = launch(fn() => $statement->execute([$num, $num]));
 }
 
 /* wait until everything is inserted */

@@ -14,7 +14,7 @@ use Amp\Mysql\Statement;
 use Amp\Sql\Connector;
 use Amp\Sql\Transaction as SqlTransaction;
 use PHPUnit\Framework\MockObject\MockObject;
-use function Amp\coroutine;
+use function Amp\launch;
 use function Amp\delay;
 
 interface StatementOperation extends Statement
@@ -91,7 +91,7 @@ class PoolTest extends LinkTest
         $connection->expects($this->once())
             ->method('query')
             ->with('SQL Query')
-            ->willReturn(coroutine(function () use ($result): Result {
+            ->willReturn(launch(function () use ($result): Result {
                 delay(0.01);
                 return $result;
             }));
@@ -119,7 +119,7 @@ class PoolTest extends LinkTest
         foreach ($processors as $connection) {
             $connection->method('query')
                 ->with('SQL Query')
-                ->willReturn(coroutine(function () use ($result): Result {
+                ->willReturn(launch(function () use ($result): Result {
                     delay(0.01);
                     return $result;
                 }));
@@ -131,7 +131,7 @@ class PoolTest extends LinkTest
             $futures = [];
 
             for ($i = 0; $i < $count; ++$i) {
-                $futures[] = coroutine(fn() => $pool->query('SQL Query'));
+                $futures[] = launch(fn() => $pool->query('SQL Query'));
             }
 
             $results = Future\all($futures);
@@ -158,7 +158,7 @@ class PoolTest extends LinkTest
 
         $connection->expects($this->exactly(3))
             ->method('query')
-            ->willReturn(coroutine(function () use ($result): Result {
+            ->willReturn(launch(function () use ($result): Result {
                 delay(0.01);
                 return $result;
             }));
@@ -188,7 +188,7 @@ class PoolTest extends LinkTest
 
         foreach ($processors as $connection) {
             $connection->method('query')
-                ->willReturnCallback(fn () => coroutine(function () use ($result): Result {
+                ->willReturnCallback(fn () => launch(function () use ($result): Result {
                     delay(0.01);
                     return $result;
                 }));
@@ -198,7 +198,7 @@ class PoolTest extends LinkTest
 
         $futures = [];
         for ($i = 0; $i < $count; ++$i) {
-            $futures[] = coroutine(fn() => $pool->beginTransaction(SqlTransaction::ISOLATION_COMMITTED));
+            $futures[] = launch(fn() => $pool->beginTransaction(SqlTransaction::ISOLATION_COMMITTED));
         }
 
         try {
@@ -234,7 +234,7 @@ class PoolTest extends LinkTest
         try {
             $futures = [];
             for ($i = 0; $i < $count; ++$i) {
-                $futures[] = coroutine(fn() => $pool->extractConnection());
+                $futures[] = launch(fn() => $pool->extractConnection());
             }
             $results = Future\all($futures);
             foreach ($results as $result) {
@@ -261,7 +261,7 @@ class PoolTest extends LinkTest
             $processor->expects($this->atLeastOnce())
                 ->method('query')
                 ->with($query)
-                ->willReturn(coroutine(function () use ($result): Result {
+                ->willReturn(launch(function () use ($result): Result {
                     delay(0.01);
                     return $result;
                 }));
@@ -273,7 +273,7 @@ class PoolTest extends LinkTest
         $processor->expects($this->once())
             ->method('query')
             ->with($query)
-            ->willReturn(coroutine(function () use ($result): Result {
+            ->willReturn(launch(function () use ($result): Result {
                 delay(0.01);
                 return $result;
             }));
@@ -286,12 +286,12 @@ class PoolTest extends LinkTest
             $this->assertSame($count + 1, $pool->getConnectionLimit());
             $futures = [];
             for ($i = 0; $i < $count + 1; ++$i) {
-                $futures[] = coroutine(fn() => $pool->query($query));
+                $futures[] = launch(fn() => $pool->query($query));
             }
             Future\all($futures);
             $futures = [];
             for ($i = 0; $i < $count; ++$i) {
-                $futures[] = coroutine(fn() => $pool->query($query));
+                $futures[] = launch(fn() => $pool->query($query));
             }
             Future\all($futures);
         } finally {

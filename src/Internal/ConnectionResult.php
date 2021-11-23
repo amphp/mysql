@@ -7,7 +7,7 @@ use Amp\Future;
 use Amp\Mysql\Result;
 use Amp\Pipeline\AsyncGenerator;
 use Revolt\EventLoop;
-use function Amp\coroutine;
+use function Amp\launch;
 
 final class ConnectionResult implements Result, \IteratorAggregate
 {
@@ -102,7 +102,7 @@ final class ConnectionResult implements Result, \IteratorAggregate
             return $this->nextResult->await();
         }
 
-        $this->nextResult = coroutine(function (): ?Result {
+        $this->nextResult = launch(function (): ?Result {
             $deferred = $this->result->next ?: $this->result->next = new Deferred;
             $result = $deferred->getFuture()->await();
 

@@ -5,7 +5,7 @@ require 'support/generic-table.php';
 
 use Amp\Future;
 use Amp\Mysql;
-use function Amp\coroutine;
+use function Amp\launch;
 
 $db = Mysql\pool(Mysql\ConnectionConfig::fromString("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME));
 
@@ -14,8 +14,8 @@ createGenericTable($db);
 
 $future = [];
 
-$future[] = coroutine(fn() => $db->query("SELECT a * b FROM tmp"));
-$future[] = coroutine(fn() => $db->execute("SELECT POW(a, ?) AS power FROM tmp", [2]));
+$future[] = launch(fn() => $db->query("SELECT a * b FROM tmp"));
+$future[] = launch(fn() => $db->execute("SELECT POW(a, ?) AS power FROM tmp", [2]));
 
 try {
     /**
