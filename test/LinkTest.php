@@ -364,4 +364,17 @@ abstract class LinkTest extends AsyncTestCase
             yield $transaction->rollback();
         }
     }
+
+    public function testJsonDecoding()
+    {
+        /** @var Link $db */
+        $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
+
+        /** @var ResultSet $resultset */
+        $resultset = yield $db->execute("SELECT a FROM test.json");
+        $this->assertInstanceOf(ResultSet::class, $resultset);
+
+        yield $resultset->advance();
+        $this->assertSame(["a" => '{"key": "value"}'], $resultset->getCurrent());
+    }
 }

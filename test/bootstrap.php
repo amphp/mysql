@@ -78,6 +78,8 @@ Loop::run(function () {
     $db->query("CREATE DATABASE test");
     $db->query("CREATE TABLE test.main (a INT(11), b INT(11))");
     $db->query("INSERT INTO test.main VALUES (1, 2), (2, 3), (3, 4), (4, 5), (5, 6)");
+    $db->query("CREATE TABLE test.json (a JSON)");
+    $db->query("INSERT INTO test.json VALUES ('{\"key\": \"value\"}')");
     $db->close();
 
     print "\r";
