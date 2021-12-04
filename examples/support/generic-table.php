@@ -14,7 +14,7 @@ function createGenericTable(Link $db): void
 
     $futures = [];
     foreach (\range(1, 5) as $num) {
-        $futures[] = \Amp\launch(fn() => $statement->execute([$num, $num]));
+        $futures[] = \Amp\async(fn() => $statement->execute([$num, $num]));
     }
 
     Future\all($futures);

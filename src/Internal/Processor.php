@@ -2,8 +2,8 @@
 
 namespace Amp\Mysql\Internal;
 
-use Amp\CancellationToken;
-use Amp\Deferred;
+use Amp\Cancellation;
+use Amp\DeferredFuture;
 use Amp\File;
 use Amp\Future;
 use Amp\Mysql\ConnectionConfig;
@@ -82,7 +82,7 @@ REGEX;
 
     public ConnectionConfig $config;
 
-    /** @var Deferred[] */
+    /** @var DeferredFuture[] */
     private array $deferreds = [];
 
     /** @var callable[] */
@@ -186,18 +186,18 @@ REGEX;
         }
     }
 
-    private function addDeferred(Deferred $deferred): void
+    private function addDeferred(DeferredFuture $deferred): void
     {
         \assert($this->socket, "The connection has been closed");
         $this->deferreds[] = $deferred;
         $this->socket->reference();
     }
 
-    public function connect(CancellationToken $token): void
+    public function connect(Cancellation $token): void
     {
         \assert(!$this->processors, self::class."::connect() must not be called twice");
 
-        $this->deferreds[] = $deferred = new Deferred; // Will be resolved in sendHandshake().
+        $this->deferreds[] = $deferred = new DeferredFuture; // Will be resolved in sendHandshake().
 
         $this->processors = [$this->parseMysql()];
 
@@ -209,7 +209,7 @@ REGEX;
         $future = $future->finally(static fn() => $token->unsubscribe($id));
 
         if ($this->config->getCharset() !== ConnectionConfig::DEFAULT_CHARSET || $this->config->getCollation() !== ConnectionConfig::DEFAULT_COLLATE) {
-            $future = $future->apply(function () {
+            $future = $future->map(function () {
                 $charset = $this->config->getCharset();
                 $collate = $this->config->getCollation();
 
@@ -282,7 +282,7 @@ REGEX;
         }
     }
 
-    private function getDeferred(): Deferred
+    private function getDeferred(): DeferredFuture
     {
         return \array_shift($this->deferreds);
     }
@@ -322,7 +322,7 @@ REGEX;
             throw new \Error("The connection has been closed");
         }
 
-        $deferred = new Deferred;
+        $deferred = new DeferredFuture;
         $this->appendTask(function () use ($callback, $deferred) {
             $this->seqId = $this->compressionId = -1;
             $this->addDeferred($deferred);
@@ -444,7 +444,7 @@ REGEX;
     // $params is by-ref, because the actual result object might not yet have been filled completely with data upon call of this method ...
     public function execute(int $stmtId, string $query, array &$params, array $prebound, array $data = []): Future
     {
-        $deferred = new Deferred;
+        $deferred = new DeferredFuture;
         $this->appendTask(function () use ($stmtId, $query, &$params, $prebound, $data, $deferred): void {
             $payload = "\x17";
             $payload .= DataTypes::encodeInt32($stmtId);
@@ -511,7 +511,7 @@ REGEX;
     /** @see 14.6.5 COM_FIELD_LIST */
     public function listFields(string $table, string $like = "%"): Future
     {
-        return $this->startCommand(static function () use ($table, $like): void {
+        return $this->startCommand(function () use ($table, $like): void {
             $this->sendPacket("\x04$table\0$like");
             $this->parseCallback = [$this, "handleFieldlist"];
         });
@@ -519,7 +519,7 @@ REGEX;
 
     public function listAllFields(string $table, string $like = "%"): Future
     {
-        $apply = function (?array $array) use (&$apply): array {
+        $map = function (?array $array) use (&$map): array {
             static $columns = [];
 
             if ($array === null) {
@@ -527,10 +527,10 @@ REGEX;
             }
 
             [$columns[], $future] = $array;
-            return $future->apply($apply)->await();
+            return $future->map($map)->await();
         };
 
-        return $this->listFields($table, $like)->apply($apply);
+        return $this->listFields($table, $like)->map($map);
     }
 
     /** @see 14.6.6 COM_CREATE_DB */
@@ -606,7 +606,7 @@ REGEX;
     public function resetStmt(int $stmtId): Future
     {
         $payload = "\x1a" . DataTypes::encodeInt32($stmtId);
-        $deferred = new Deferred;
+        $deferred = new DeferredFuture;
         $this->appendTask(function () use ($payload, $deferred): void {
             $this->resetIds();
             $this->addDeferred($deferred);
@@ -619,7 +619,7 @@ REGEX;
     public function fetchStmt(int $stmtId): Future
     {
         $payload = "\x1c" . DataTypes::encodeInt32($stmtId) . DataTypes::encodeInt32(1);
-        $deferred = new Deferred;
+        $deferred = new DeferredFuture;
         $this->appendTask(function () use ($payload, $deferred): void {
             $this->resetIds();
             $this->addDeferred($deferred);
@@ -930,7 +930,7 @@ REGEX;
             $this->getDeferred()->complete(null);
             $this->ready();
         } else {
-            $this->addDeferred($deferred = new Deferred);
+            $this->addDeferred($deferred = new DeferredFuture);
             $this->getDeferred()->complete([$this->parseColumnDefinition($packet), $deferred]);
         }
     }
@@ -1066,7 +1066,7 @@ REGEX;
         $result = $this->result;
         $deferred = &$result->next;
         if (!$deferred) {
-            $deferred = new Deferred;
+            $deferred = new DeferredFuture;
         }
         if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
             $this->parseCallback = [$this, "handleQuery"];

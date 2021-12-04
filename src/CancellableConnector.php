@@ -2,7 +2,7 @@
 
 namespace Amp\Mysql;
 
-use Amp\CancellationToken;
+use Amp\Cancellation;
 use Amp\Socket;
 use Amp\Sql\ConnectionConfig as SqlConnectionConfig;
 use Amp\Sql\Connector;
@@ -16,7 +16,7 @@ final class CancellableConnector implements Connector
         $this->connector = $connector ?? Socket\connector();
     }
 
-    public function connect(SqlConnectionConfig $config, ?CancellationToken $token = null): Connection
+    public function connect(SqlConnectionConfig $config, ?Cancellation $token = null): Connection
     {
         if (!$config instanceof ConnectionConfig) {
             throw new \TypeError(\sprintf("Must provide an instance of %s to MySQL connectors", ConnectionConfig::class));

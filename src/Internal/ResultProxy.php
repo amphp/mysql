@@ -2,7 +2,7 @@
 
 namespace Amp\Mysql\Internal;
 
-use Amp\Deferred;
+use Amp\DeferredFuture;
 
 final class ResultProxy
 {
@@ -26,7 +26,7 @@ final class ResultProxy
 
     public int $state = self::UNFETCHED;
 
-    public ?Deferred $next = null;
+    public ?DeferredFuture $next = null;
 
     public const UNFETCHED = 0;
     public const COLUMNS_FETCHED = 1;
@@ -49,7 +49,7 @@ final class ResultProxy
             return;
         }
         foreach ($this->deferreds[$state] as [$deferred, $rows, $cb]) {
-            \assert($deferred instanceof Deferred);
+            \assert($deferred instanceof DeferredFuture);
             $deferred->complete($cb ? $cb($rows) : $rows);
         }
         $this->deferreds[$state] = [];
@@ -63,7 +63,7 @@ final class ResultProxy
         [$entry, , $cb] = \current($this->deferreds[self::UNFETCHED]);
         if ($entry !== null) {
             unset($this->deferreds[self::UNFETCHED][\key($this->deferreds[self::UNFETCHED])]);
-            \assert($entry instanceof Deferred);
+            \assert($entry instanceof DeferredFuture);
             $entry->complete($cb && $row ? $cb($row) : $row);
         }
     }
@@ -72,7 +72,7 @@ final class ResultProxy
     {
         foreach ($this->deferreds as $state) {
             foreach ($this->deferreds[$state] as [$deferred]) {
-                \assert($deferred instanceof Deferred);
+                \assert($deferred instanceof DeferredFuture);
                 $deferred->error($e);
             }
             $this->deferreds[$state] = [];

@@ -2,9 +2,9 @@
 
 namespace Amp\Mysql;
 
-use Amp\CancellationToken;
-use Amp\Deferred;
-use Amp\NullCancellationToken;
+use Amp\Cancellation;
+use Amp\DeferredFuture;
+use Amp\NullCancellation;
 use Amp\Socket;
 use Revolt\EventLoop;
 
@@ -21,24 +21,24 @@ final class Connection implements Link
 
     private Internal\Processor $processor;
 
-    private ?Deferred $busy = null;
+    private ?DeferredFuture $busy = null;
 
     /** @var \Closure Function used to release connection after a transaction has completed. */
     private \Closure $release;
 
     /**
      * @param ConnectionConfig $config
-     * @param CancellationToken|null $token
+     * @param Cancellation|null $token
      * @param Socket\Connector|null $connector
      *
      * @return self
      */
     public static function connect(
         ConnectionConfig $config,
-        ?CancellationToken $token = null,
+        ?Cancellation $token = null,
         ?Socket\Connector $connector = null
     ): self {
-        $token = $token ?? new NullCancellationToken;
+        $token = $token ?? new NullCancellation;
 
         $socket = ($connector ?? Socket\connector())
             ->connect($config->getConnectionString(), $config->getConnectContext(), $token);
@@ -57,7 +57,7 @@ final class Connection implements Link
 
         $busy = &$this->busy;
         $this->release = static function () use (&$busy): void {
-            \assert($busy instanceof Deferred);
+            \assert($busy instanceof DeferredFuture);
             $busy->complete(null);
             $busy = null;
         };
@@ -126,7 +126,7 @@ final class Connection implements Link
             $this->busy->getFuture()->await();
         }
 
-        $this->busy = $deferred = new Deferred;
+        $this->busy = $deferred = new DeferredFuture;
 
         switch ($isolation) {
             case Transaction::ISOLATION_UNCOMMITTED:

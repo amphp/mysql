@@ -2,12 +2,12 @@
 
 namespace Amp\Mysql\Internal;
 
-use Amp\Deferred;
+use Amp\DeferredFuture;
 use Amp\Future;
 use Amp\Mysql\Result;
 use Amp\Pipeline\AsyncGenerator;
 use Revolt\EventLoop;
-use function Amp\launch;
+use function Amp\async;
 
 final class ConnectionResult implements Result, \IteratorAggregate
 {
@@ -79,7 +79,7 @@ final class ConnectionResult implements Result, \IteratorAggregate
             return Future::complete(null);
         }
 
-        $deferred = new Deferred;
+        $deferred = new DeferredFuture;
 
         /* We need to increment the internal counter, else the next time fetch is called,
          * it'll simply return the row we fetch here instead of fetching a new row
@@ -102,8 +102,8 @@ final class ConnectionResult implements Result, \IteratorAggregate
             return $this->nextResult->await();
         }
 
-        $this->nextResult = launch(function (): ?Result {
-            $deferred = $this->result->next ?: $this->result->next = new Deferred;
+        $this->nextResult = async(function (): ?Result {
+            $deferred = $this->result->next ?: $this->result->next = new DeferredFuture;
             $result = $deferred->getFuture()->await();
 
             if ($result instanceof ResultProxy) {
@@ -147,7 +147,7 @@ final class ConnectionResult implements Result, \IteratorAggregate
             return $this->result->columns;
         }
 
-        $deferred = new Deferred;
+        $deferred = new DeferredFuture;
         $this->result->deferreds[ResultProxy::COLUMNS_FETCHED][] = [$deferred, &$this->result->columns, null];
         return $deferred->getFuture()->await();
     }

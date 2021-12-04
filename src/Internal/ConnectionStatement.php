@@ -2,7 +2,7 @@
 
 namespace Amp\Mysql\Internal;
 
-use Amp\Deferred;
+use Amp\DeferredFuture;
 use Amp\Mysql\Result;
 use Amp\Mysql\Statement;
 use Amp\Sql\ConnectionException;
@@ -156,7 +156,7 @@ final class ConnectionStatement implements Statement
             return $this->result->deferreds[ResultProxy::COLUMNS_FETCHED][0][0]->promise();
         }
 
-        $deferred = new Deferred;
+        $deferred = new DeferredFuture;
         $this->result->deferreds[ResultProxy::COLUMNS_FETCHED][0] = [$deferred, &$this->result->columns, null];
         return $deferred->getFuture()->await();
     }
