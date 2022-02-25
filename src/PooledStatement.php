@@ -7,15 +7,15 @@ use Amp\Sql\Result as SqlResult;
 
 final class PooledStatement extends SqlPooledStatement implements Statement
 {
-    private Statement $statement;
+    private readonly Statement $statement;
 
-    public function __construct(Statement $statement, callable $release)
+    public function __construct(Statement $statement, \Closure $release)
     {
         parent::__construct($statement, $release);
         $this->statement = $statement;
     }
 
-    protected function createResult(SqlResult $result, callable $release): Result
+    protected function createResult(SqlResult $result, \Closure $release): Result
     {
         \assert($result instanceof Result);
         return new PooledResult($result, $release);

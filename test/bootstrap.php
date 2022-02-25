@@ -51,9 +51,7 @@ print "\rCreating mysql server...     ";
 
 $dir = __DIR__;
 
-$process = new Process("mysqld --defaults-file={$dir}/my.cnf --initialize-insecure", __DIR__);
-
-$process->start();
+$process = Process::start("mysqld --defaults-file={$dir}/my.cnf --initialize-insecure", __DIR__);
 
 $stderr = ByteStream\buffer($process->getStderr());
 
@@ -64,9 +62,7 @@ if (\preg_match("# \[ERROR\] #", $stderr)) {
 
 $process->join();
 
-$process = new Process("mysqld --defaults-file={$dir}/my.cnf --user=root", __DIR__);
-
-$process->start();
+$process = Process::start("mysqld --defaults-file={$dir}/my.cnf --user=root", __DIR__);
 
 print "\rStarting mysqld...           ";
 

@@ -13,19 +13,20 @@
         }
     ],
     "require": {
-        "php": ">=8",
-        "amphp/amp": "^3-dev",
-        "amphp/pipeline": "^1-dev",
-        "amphp/socket": "^2-dev",
-        "amphp/sql": "^2-dev",
-        "amphp/sql-common": "^2-dev"
+        "php": ">=8.1",
+        "amphp/amp": "^3",
+        "amphp/pipeline": "^1",
+        "amphp/socket": "^2",
+        "amphp/sql": "^2",
+        "amphp/sql-common": "^2",
+        "revolt/event-loop": "dev-main as 0.2.3"
     },
     "require-dev": {
         "ext-openssl": "*",
-        "amphp/process": "^2-dev",
-        "amphp/file": "^3-dev",
+        "amphp/process": "^2",
+        "amphp/file": "^3",
         "phpunit/phpunit": "^9",
-        "amphp/phpunit-util": "^2-dev",
+        "amphp/phpunit-util": "^3",
         "amphp/php-cs-fixer-config": "dev-master",
         "phpbench/phpbench": "^1.1"
     },

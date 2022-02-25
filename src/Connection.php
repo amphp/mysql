@@ -6,6 +6,7 @@ use Amp\Cancellation;
 use Amp\DeferredFuture;
 use Amp\NullCancellation;
 use Amp\Socket;
+use Amp\Sql\TransactionIsolation;
 use Revolt\EventLoop;
 
 final class Connection implements Link
@@ -29,18 +30,18 @@ final class Connection implements Link
     /**
      * @param ConnectionConfig $config
      * @param Cancellation|null $token
-     * @param Socket\Connector|null $connector
+     * @param Socket\SocketConnector|null $connector
      *
      * @return self
      */
     public static function connect(
         ConnectionConfig $config,
         ?Cancellation $token = null,
-        ?Socket\Connector $connector = null
+        ?Socket\SocketConnector $connector = null
     ): self {
         $token = $token ?? new NullCancellation;
 
-        $socket = ($connector ?? Socket\connector())
+        $socket = ($connector ?? Socket\socketConnector())
             ->connect($config->getConnectionString(), $config->getConnectContext(), $token);
 
         $processor = new Internal\Processor($socket, $config);
@@ -91,10 +92,9 @@ final class Connection implements Link
 
     public function close(): void
     {
-        $processor = $this->processor;
         // Send close command if connection is not already in a closed or closing state
-        if ($processor->isAlive()) {
-            $processor->sendClose()->finally(static fn() => $processor->close())->ignore();
+        if ($this->processor->isAlive()) {
+            $this->processor->sendClose()->await();
         }
     }
 
@@ -120,7 +120,7 @@ final class Connection implements Link
         return $this->processor->query($sql)->await();
     }
 
-    public function beginTransaction(int $isolation = Transaction::ISOLATION_COMMITTED): Transaction
+    public function beginTransaction(TransactionIsolation $isolation = TransactionIsolation::COMMITTED): Transaction
     {
         while ($this->busy) {
             $this->busy->getFuture()->await();
@@ -128,33 +128,18 @@ final class Connection implements Link
 
         $this->busy = $deferred = new DeferredFuture;
 
-        switch ($isolation) {
-            case Transaction::ISOLATION_UNCOMMITTED:
-                $promise = $this->processor->query("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
-                break;
-
-            case Transaction::ISOLATION_COMMITTED:
-                $promise = $this->processor->query("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED");
-                break;
-
-            case Transaction::ISOLATION_REPEATABLE:
-                $promise = $this->processor->query("SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ");
-                break;
-
-            case Transaction::ISOLATION_SERIALIZABLE:
-                $promise = $this->processor->query("SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE");
-                break;
-
-            default:
-                throw new \Error("Invalid transaction type");
-        }
-
         try {
-            $promise->await();
+            $this->processor->query(match ($isolation) {
+                TransactionIsolation::UNCOMMITTED => "SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED",
+                TransactionIsolation::COMMITTED => "SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED",
+                TransactionIsolation::REPEATABLE => "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+                TransactionIsolation::SERIALIZABLE => "SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+            })->await();
+
             $this->processor->query("START TRANSACTION")->await();
         } catch (\Throwable $exception) {
             $this->busy = null;
-            $deferred->complete(null);
+            $deferred->complete();
             throw $exception;
         }
 

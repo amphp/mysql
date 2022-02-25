@@ -7,19 +7,19 @@ use Amp\Sql\Result as SqlResult;
 
 final class PooledResult extends SqlPooledResult implements Result
 {
-    private Result $result;
+    private readonly Result $result;
 
     /**
      * @param Result $result
-     * @param callable  $release
+     * @param \Closure():void $release
      */
-    public function __construct(Result $result, callable $release)
+    public function __construct(Result $result, \Closure $release)
     {
         parent::__construct($result, $release);
         $this->result = $result;
     }
 
-    protected function newInstanceFrom(SqlResult $result, callable $release): self
+    protected function newInstanceFrom(SqlResult $result, \Closure $release): self
     {
         \assert($result instanceof Result);
         return new self($result, $release);

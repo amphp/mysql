@@ -24,7 +24,7 @@ foreach (\range(1, 5) as $num) {
 }
 
 /* wait until everything is inserted */
-Future\all($future);
+$results = Future\await($future);
 
 print "Insertion successful (if it wasn't, an exception would have been thrown by now)" . PHP_EOL;
 

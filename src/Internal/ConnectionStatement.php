@@ -20,7 +20,7 @@ final class ConnectionStatement implements Statement
 
     private ?Processor $processor;
 
-    private ResultProxy $result;
+    private readonly ResultProxy $result;
 
     private int $lastUsedAt;
 

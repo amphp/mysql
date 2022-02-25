@@ -8,6 +8,7 @@ use Amp\Mysql\Result;
 use Amp\Mysql\Statement;
 use Amp\Mysql\Transaction;
 use Amp\Sql\TransactionError;
+use Amp\Sql\TransactionIsolation;
 use Revolt\EventLoop;
 
 final class ConnectionTransaction implements Transaction
@@ -16,32 +17,24 @@ final class ConnectionTransaction implements Transaction
 
     private ?Processor $processor;
 
-    private int $isolation;
+    private readonly TransactionIsolation $isolation;
 
-    /** @var callable */
-    private $release;
+    private readonly \Closure $release;
 
     private int $refCount = 1;
 
     /**
-     * @param Processor $processor
-     * @param callable $release
-     * @param int $isolation
+     * @param \Closure():void $release
      *
      * @throws \Error If the isolation level is invalid.
      */
-    public function __construct(Processor $processor, callable $release, int $isolation = Transaction::ISOLATION_COMMITTED)
-    {
-        $this->isolation = match ($isolation) {
-            Transaction::ISOLATION_UNCOMMITTED,
-            Transaction::ISOLATION_COMMITTED,
-            Transaction::ISOLATION_REPEATABLE,
-            Transaction::ISOLATION_SERIALIZABLE,
-                => $isolation,
-            default => throw new \Error("Isolation must be a valid transaction isolation level"),
-        };
-
+    public function __construct(
+        Processor $processor,
+        \Closure $release,
+        TransactionIsolation $isolation = TransactionIsolation::COMMITTED
+    ) {
         $this->processor = $processor;
+        $this->isolation = $isolation;
 
         $refCount =& $this->refCount;
         $this->release = static function () use (&$refCount, $release): void {
@@ -79,7 +72,7 @@ final class ConnectionTransaction implements Transaction
     public function close(): void
     {
         if ($this->processor) {
-            $this->commit(); // Invokes $this->release callback.
+            $this->rollback(); // Invokes $this->release callback.
         }
     }
 
@@ -99,10 +92,7 @@ final class ConnectionTransaction implements Transaction
         return $this->processor !== null;
     }
 
-    /**
-     * @return int
-     */
-    public function getIsolationLevel(): int
+    public function getIsolationLevel(): TransactionIsolation
     {
         return $this->isolation;
     }

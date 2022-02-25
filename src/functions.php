@@ -4,7 +4,6 @@ namespace Amp\Mysql;
 
 use Amp\Sql\Common\ConnectionPool;
 use Amp\Sql\ConnectionConfig as SqlConnectionConfig;
-use Amp\Sql\Connector;
 use Revolt\EventLoop;
 
 function connector(?Connector $connector = null): Connector

@@ -10,11 +10,11 @@ final class CommandResult implements Result, \IteratorAggregate
 {
     private ?int $lastInsertId;
 
-    private SqlCommandResult $delegate;
+    private readonly SqlCommandResult $delegate;
 
     public function __construct(int $affectedRows, int $lastInsertId)
     {
-        $this->delegate = new SqlCommandResult($affectedRows, Future::complete(null));
+        $this->delegate = new SqlCommandResult($affectedRows, Future::complete());
         $this->lastInsertId = $lastInsertId ?: null; // Convert 0 to null
     }
 

@@ -61,24 +61,16 @@ REGEX;
     /** @var \Generator[] */
     private array $processors = [];
 
-    /** @var int */
-    private int $protocol;
-
     private int $seqId = -1;
     private int $compressionId = -1;
 
     private ?EncryptableSocket $socket;
 
-    private int $authPluginDataLen;
     private ?string $query = null;
     public array $named = [];
 
-    /** @var callable|null */
-    private $parseCallback = null;
-    /** @var callable|null */
-    private $packetCallback = null;
-
-    private ?Future $pendingWrite = null;
+    private ?\Closure $parseCallback = null;
+    private ?\Closure $packetCallback = null;
 
     public ConnectionConfig $config;
 
@@ -287,7 +279,7 @@ REGEX;
         return \array_shift($this->deferreds);
     }
 
-    private function appendTask(callable $callback): void
+    private function appendTask(\Closure $callback): void
     {
         if ($this->packetCallback
             || $this->parseCallback
@@ -316,7 +308,7 @@ REGEX;
         return $this->lastUsedAt;
     }
 
-    protected function startCommand(callable $callback): Future
+    protected function startCommand(\Closure $callback): Future
     {
         if ($this->connectionState > self::READY) {
             throw new \Error("The connection has been closed");
@@ -361,7 +353,7 @@ REGEX;
     {
         return $this->startCommand(function () use ($query): void {
             $this->query = $query;
-            $this->parseCallback = [$this, "handleQuery"];
+            $this->parseCallback = $this->handleQuery(...);
             $this->sendPacket("\x03$query");
         });
     }
@@ -371,7 +363,7 @@ REGEX;
     {
         return $this->startCommand(function () use ($query): void {
             $this->query = $query;
-            $this->parseCallback = [$this, "handlePrepare"];
+            $this->parseCallback = $this->handlePrepare(...);
 
             $query = \preg_replace_callback(self::STATEMENT_PARAM_REGEX, function ($m): string {
                 static $index = 0;
@@ -489,7 +481,7 @@ REGEX;
             $this->addDeferred($deferred);
             $this->sendPacket($payload);
             // apparently LOAD DATA LOCAL INFILE requests are not supported via prepared statements
-            $this->packetCallback = [$this, "handleExecute"];
+            $this->packetCallback = $this->handleExecute(...);
         });
         return $deferred->getFuture(); // do not use $this->startCommand(), that might unexpectedly reset the seqId!
     }
@@ -513,7 +505,7 @@ REGEX;
     {
         return $this->startCommand(function () use ($table, $like): void {
             $this->sendPacket("\x04$table\0$like");
-            $this->parseCallback = [$this, "handleFieldlist"];
+            $this->parseCallback = $this->handleFieldList(...);
         });
     }
 
@@ -573,7 +565,7 @@ REGEX;
     {
         return $this->startCommand(function (): void {
             $this->sendPacket("\x09");
-            $this->parseCallback = [$this, "readStatistics"];
+            $this->parseCallback = $this->readStatistics(...);
         });
     }
 
@@ -778,8 +770,8 @@ REGEX;
     {
         $off = 1;
 
-        $this->protocol = \ord($packet);
-        if ($this->protocol !== 0x0a) {
+        $protocol = \ord($packet);
+        if ($protocol !== 0x0a) {
             throw new ConnectionException("Unsupported protocol version ".\ord($packet)." (Expected: 10)");
         }
 
@@ -807,13 +799,13 @@ REGEX;
             $this->serverCapabilities += DataTypes::decodeUnsigned16(\substr($packet, $off)) << 16;
             $off += 2;
 
-            $this->authPluginDataLen = $this->serverCapabilities & self::CLIENT_PLUGIN_AUTH ? \ord(\substr($packet, $off)) : 0;
+            $authPluginDataLen = $this->serverCapabilities & self::CLIENT_PLUGIN_AUTH ? \ord(\substr($packet, $off)) : 0;
             $off += 1;
 
             if ($this->serverCapabilities & self::CLIENT_SECURE_CONNECTION) {
                 $off += 10;
 
-                $strlen = \max(13, $this->authPluginDataLen - 8);
+                $strlen = \max(13, $authPluginDataLen - 8);
                 $this->authPluginData .= \substr($packet, $off, $strlen);
                 $off += $strlen;
 
@@ -902,7 +894,7 @@ REGEX;
                 return;
         }
 
-        $this->parseCallback = [$this, "handleTextColumnDefinition"];
+        $this->parseCallback = $this->handleTextColumnDefinition(...);
         $this->getDeferred()->complete(new ConnectionResult($result = new ResultProxy));
         /* we need to resolve before assigning vars, so that a onResolve() handler won't have a partial result available */
         $this->result = $result;
@@ -912,7 +904,7 @@ REGEX;
     /** @see 14.7.1 Binary Protocol Resultset */
     private function handleExecute(string $packet): void
     {
-        $this->parseCallback = [$this, "handleBinaryColumnDefinition"];
+        $this->parseCallback = $this->handleBinaryColumnDefinition(...);
         $this->getDeferred()->complete(new ConnectionResult($result = new ResultProxy));
         /* we need to resolve before assigning vars, so that a onResolve() handler won't have a partial result available */
         $this->result = $result;
@@ -953,7 +945,7 @@ REGEX;
                 $this->parseCallback = null;
                 $this->handleError($packet);
             } else {
-                $cb = $this->parseCallback = [$this, $cbMethod];
+                $cb = $this->parseCallback = $this->{$cbMethod}(...);
                 if ($this->capabilities & self::CLIENT_DEPRECATE_EOF) {
                     $cb($packet);
                 } else {
@@ -974,7 +966,7 @@ REGEX;
             if (!$this->result->columnsToFetch) {
                 $this->prepareFields($packet);
             } else {
-                $this->parseCallback = [$this, "prepareFields"];
+                $this->parseCallback = $this->prepareFields(...);
             }
             return;
         }
@@ -1069,13 +1061,13 @@ REGEX;
             $deferred = new DeferredFuture;
         }
         if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
-            $this->parseCallback = [$this, "handleQuery"];
+            $this->parseCallback = $this->handleQuery(...);
             $this->addDeferred($deferred);
         } else {
             $this->parseCallback = null;
             $this->query = null;
             $this->result = null;
-            $deferred->complete(null);
+            $deferred->complete();
             $this->ready();
         }
         $result->updateState(ResultProxy::ROWS_FETCHED);
@@ -1184,7 +1176,7 @@ REGEX;
         $this->getDeferred()->complete(new ConnectionStatement($this, $this->query, $stmtId, $this->named, $this->result));
         $this->named = [];
         if ($params) {
-            $this->parseCallback = [$this, "prepareParams"];
+            $this->parseCallback = $this->prepareParams(...);
         } else {
             $this->prepareParams($packet);
         }
@@ -1203,13 +1195,13 @@ REGEX;
         return $this->startCommand(function () {
             $this->sendPacket("\x01");
             $this->connectionState = self::CLOSING;
-        });
+        })->finally(fn () => $this->close());
     }
 
     public function close(): void
     {
         if ($this->connectionState === self::CLOSING && $this->deferreds) {
-            \array_pop($this->deferreds)->complete(null);
+            \array_pop($this->deferreds)->complete();
         }
 
         $this->connectionState = self::CLOSED;
@@ -1218,6 +1210,8 @@ REGEX;
             $this->socket->close();
             $this->socket = null;
         }
+
+        $this->processors = [];
     }
 
     private function write(string $packet): void
@@ -1245,7 +1239,7 @@ REGEX;
             $packet = $this->compressPacket($packet);
         }
 
-        $this->socket->write($packet)->await();
+        $this->socket->write($packet);
     }
 
     private function resetIds(): void

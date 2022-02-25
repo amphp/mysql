@@ -5,22 +5,23 @@ namespace Amp\Mysql\Internal;
 use Amp\DeferredFuture;
 use Amp\Future;
 use Amp\Mysql\Result;
-use Amp\Pipeline\AsyncGenerator;
+use Amp\Pipeline\ConcurrentIterableIterator;
+use Amp\Pipeline\ConcurrentIterator;
 use Revolt\EventLoop;
 use function Amp\async;
 
 final class ConnectionResult implements Result, \IteratorAggregate
 {
-    private ResultProxy $result;
+    private readonly ResultProxy $result;
 
-    private AsyncGenerator $generator;
+    private readonly ConcurrentIterator $generator;
 
     private ?Future $nextResult = null;
 
     public function __construct(ResultProxy $result)
     {
         $this->result = $result;
-        $this->generator = new AsyncGenerator(static fn () => self::iterate($result));
+        $this->generator = new ConcurrentIterableIterator(self::iterate($result));
     }
 
     public function getIterator(): \Traversable
@@ -76,7 +77,7 @@ final class ConnectionResult implements Result, \IteratorAggregate
         }
 
         if ($result->state === ResultProxy::ROWS_FETCHED) {
-            return Future::complete(null);
+            return Future::complete();
         }
 
         $deferred = new DeferredFuture;
@@ -136,13 +137,6 @@ final class ConnectionResult implements Result, \IteratorAggregate
      */
     public function getFields(): ?array
     {
-        if ($this->result === null) {
-            throw new \Error(\sprintf(
-                "The current result set is empty; call this method before invoking %s::getNextResult()",
-                Result::class,
-            ));
-        }
-
         if ($this->result->state >= ResultProxy::COLUMNS_FETCHED) {
             return $this->result->columns;
         }

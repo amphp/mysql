@@ -8,6 +8,7 @@ use Amp\Sql\Pool as SqlPool;
 use Amp\Sql\Result as SqlResult;
 use Amp\Sql\Statement as SqlStatement;
 use Amp\Sql\Transaction as SqlTransaction;
+use Amp\Sql\TransactionIsolation;
 
 final class Pool extends ConnectionPool implements Link
 {
@@ -16,24 +17,24 @@ final class Pool extends ConnectionPool implements Link
         return connector();
     }
 
-    protected function createResult(SqlResult $result, callable $release): Result
+    protected function createResult(SqlResult $result, \Closure $release): Result
     {
         \assert($result instanceof Result);
         return new PooledResult($result, $release);
     }
 
-    protected function createStatement(SqlStatement $statement, callable $release): Statement
+    protected function createStatement(SqlStatement $statement, \Closure $release): Statement
     {
         \assert($statement instanceof Statement);
         return new PooledStatement($statement, $release);
     }
 
-    protected function createStatementPool(SqlPool $pool, string $sql, callable $prepare): StatementPool
+    protected function createStatementPool(SqlPool $pool, string $sql, \Closure $prepare): StatementPool
     {
         return new StatementPool($pool, $sql, $prepare);
     }
 
-    protected function createTransaction(SqlTransaction $transaction, callable $release): Transaction
+    protected function createTransaction(SqlTransaction $transaction, \Closure $release): Transaction
     {
         return new PooledTransaction($transaction, $release);
     }
@@ -73,7 +74,7 @@ final class Pool extends ConnectionPool implements Link
      *
      * @inheritDoc
      */
-    public function beginTransaction(int $isolation = Transaction::ISOLATION_COMMITTED): Transaction
+    public function beginTransaction(TransactionIsolation $isolation = TransactionIsolation::COMMITTED): Transaction
     {
         return parent::beginTransaction($isolation);
     }

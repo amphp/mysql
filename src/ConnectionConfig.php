@@ -126,7 +126,7 @@ final class ConnectionConfig extends SqlConnectionConfig
         return $new;
     }
 
-    public function getConnectContext()
+    public function getConnectContext(): ConnectContext
     {
         return $this->context;
     }

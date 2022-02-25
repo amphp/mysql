@@ -8,13 +8,13 @@ use Amp\Sql\Statement as SqlStatement;
 
 final class PooledTransaction extends SqlPooledTransaction implements Transaction
 {
-    protected function createStatement(SqlStatement $statement, callable $release): Statement
+    protected function createStatement(SqlStatement $statement, \Closure $release): Statement
     {
         \assert($statement instanceof Statement);
         return new PooledStatement($statement, $release);
     }
 
-    protected function createResult(SqlResult $result, callable $release): Result
+    protected function createResult(SqlResult $result, \Closure $release): Result
     {
         \assert($result instanceof Result);
         return new PooledResult($result, $release);

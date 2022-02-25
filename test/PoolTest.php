@@ -166,7 +166,7 @@ class PoolTest extends LinkTest
         $pool = $this->createPool($this->makeConnectionSet($processors));
 
         try {
-            $return = $pool->beginTransaction(SqlTransaction::ISOLATION_COMMITTED);
+            $return = $pool->beginTransaction();
             $this->assertInstanceOf(SqlTransaction::class, $return);
             $return->rollback();
         } finally {
@@ -198,7 +198,7 @@ class PoolTest extends LinkTest
 
         $futures = [];
         for ($i = 0; $i < $count; ++$i) {
-            $futures[] = async(fn() => $pool->beginTransaction(SqlTransaction::ISOLATION_COMMITTED));
+            $futures[] = async(fn() => $pool->beginTransaction());
         }
 
         try {

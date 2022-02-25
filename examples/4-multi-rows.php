@@ -22,7 +22,7 @@ try {
      * @var Mysql\Result $result1
      * @var Mysql\Result $result2
      */
-    [$result1, $result2] = Future\all($future); // Both queries execute simultaneously. Wait for both to finish here.
+    [$result1, $result2] = Future\await($future); // Both queries execute simultaneously. Wait for both to finish here.
 } catch (\Throwable $e) {
     var_dump($e);
 }

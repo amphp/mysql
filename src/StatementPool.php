@@ -23,7 +23,7 @@ final class StatementPool extends SqlStatementPool implements Statement
         return $statement;
     }
 
-    protected function createResult(SqlResult $result, callable $release): Result
+    protected function createResult(SqlResult $result, \Closure $release): Result
     {
         if (!$result instanceof Result) {
             throw new \TypeError('Result object must be an instance of ' . Result::class);
