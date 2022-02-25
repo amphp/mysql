@@ -13,7 +13,9 @@ const DB_USER = 'root';
 const DB_PASS = '';
 const DB_NAME = 'test';
 
-print "\rCleaning up test directory...";
+const CLEAR = "\r\033[K";
+
+echo CLEAR, "Cleaning up test directory...";
 
 (function (): void {
     /* cleanup in case it wasn't terminated properly... */
@@ -47,7 +49,7 @@ print "\rCleaning up test directory...";
     }
 })();
 
-print "\rCreating mysql server...     ";
+echo CLEAR, "Creating mysql server...";
 
 $dir = __DIR__;
 
@@ -64,11 +66,11 @@ $process->join();
 
 $process = Process::start("mysqld --defaults-file={$dir}/my.cnf --user=root", __DIR__);
 
-print "\rStarting mysqld...           ";
+echo CLEAR, "Starting mysqld...";
 
 delay(2); // Give mysqld time to start.
 
-print "\rCreating test database...    ";
+echo CLEAR, "Creating test database...";
 
 $db = new \mysqli(DB_HOST, DB_USER, DB_PASS);
 $db->query("CREATE DATABASE test");
@@ -76,6 +78,6 @@ $db->query("CREATE TABLE test.main (id INT NOT NULL AUTO_INCREMENT, a INT, b INT
 $db->query("INSERT INTO test.main (a, b) VALUES (1, 2), (2, 3), (3, 4), (4, 5), (5, 6)");
 $db->close();
 
-print "\r";
+echo CLEAR;
 
 \register_shutdown_function(fn() => $process->signal(\SIGTERM));
