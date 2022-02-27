@@ -285,6 +285,15 @@ abstract class LinkTest extends AsyncTestCase
         $this->assertInstanceOf(Result::class, $result);
         $this->assertGreaterThan(5, $result->getLastInsertId());
 
+        $result = $transaction->query("SELECT * FROM main WHERE a = 6");
+
+        $got = [];
+        foreach ($result as $row) {
+            $got[] = \array_values($row);
+        }
+        $this->assertCount(1, $got);
+        $this->assertNull($result->getNextResult());
+
         $result = $transaction->execute("SELECT * FROM main WHERE a = ?", [6]);
 
         $got = [];
@@ -292,7 +301,7 @@ abstract class LinkTest extends AsyncTestCase
             $got[] = \array_values($row);
         }
         $this->assertCount(1, $got);
-        $result = $result->getNextResult();
+        $this->assertNull($result->getNextResult());
 
         $transaction->rollback();
 
