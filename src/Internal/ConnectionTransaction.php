@@ -31,7 +31,7 @@ final class ConnectionTransaction implements Transaction
     public function __construct(
         Processor $processor,
         \Closure $release,
-        TransactionIsolation $isolation = TransactionIsolation::COMMITTED
+        TransactionIsolation $isolation
     ) {
         $this->processor = $processor;
         $this->isolation = $isolation;

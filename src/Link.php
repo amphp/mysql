@@ -12,5 +12,5 @@ interface Link extends Executor, SqlLink
      *
      * @return Transaction Transaction object specific to this library.
      */
-    public function beginTransaction(TransactionIsolation $isolation = TransactionIsolation::COMMITTED): Transaction;
+    public function beginTransaction(TransactionIsolation $isolation = TransactionIsolation::Committed): Transaction;
 }

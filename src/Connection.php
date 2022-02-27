@@ -120,7 +120,7 @@ final class Connection implements Link
         return $this->processor->query($sql)->await();
     }
 
-    public function beginTransaction(TransactionIsolation $isolation = TransactionIsolation::COMMITTED): Transaction
+    public function beginTransaction(TransactionIsolation $isolation = TransactionIsolation::Committed): Transaction
     {
         while ($this->busy) {
             $this->busy->getFuture()->await();
@@ -129,11 +129,11 @@ final class Connection implements Link
         $this->busy = $deferred = new DeferredFuture;
 
         try {
-            $this->processor->query(match ($isolation) {
-                TransactionIsolation::UNCOMMITTED => "SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED",
-                TransactionIsolation::COMMITTED => "SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED",
-                TransactionIsolation::REPEATABLE => "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ",
-                TransactionIsolation::SERIALIZABLE => "SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+            $this->processor->query("SET SESSION TRANSACTION ISOLATION LEVEL " . match ($isolation) {
+                TransactionIsolation::Uncommitted => "READ UNCOMMITTED",
+                TransactionIsolation::Committed => "READ COMMITTED",
+                TransactionIsolation::Repeatable => "REPEATABLE READ",
+                TransactionIsolation::Serializable => "SERIALIZABLE",
             })->await();
 
             $this->processor->query("START TRANSACTION")->await();

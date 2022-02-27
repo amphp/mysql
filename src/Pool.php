@@ -74,7 +74,7 @@ final class Pool extends ConnectionPool implements Link
      *
      * @inheritDoc
      */
-    public function beginTransaction(TransactionIsolation $isolation = TransactionIsolation::COMMITTED): Transaction
+    public function beginTransaction(TransactionIsolation $isolation = TransactionIsolation::Committed): Transaction
     {
         return parent::beginTransaction($isolation);
     }
