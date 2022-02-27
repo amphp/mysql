@@ -22,8 +22,6 @@ final class PooledTransaction extends SqlPooledTransaction implements Transactio
 
     /**
      * Changes return type to this library's Result type.
-     *
-     * @inheritDoc
      */
     public function query(string $sql): Result
     {
@@ -32,8 +30,6 @@ final class PooledTransaction extends SqlPooledTransaction implements Transactio
 
     /**
      * Changes return type to this library's Statement type.
-     *
-     * @inheritDoc
      */
     public function prepare(string $sql): Statement
     {
@@ -42,8 +38,6 @@ final class PooledTransaction extends SqlPooledTransaction implements Transactio
 
     /**
      * Changes return type to this library's Result type.
-     *
-     * @inheritDoc
      */
     public function execute(string $sql, array $params = []): Result
     {

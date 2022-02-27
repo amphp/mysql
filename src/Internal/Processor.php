@@ -82,7 +82,6 @@ REGEX;
 
     private ?ResultProxy $result = null;
 
-    /** @var int */
     private int $lastUsedAt;
 
     private int $connectionId;
@@ -193,12 +192,12 @@ REGEX;
 
         $this->processors = [$this->parseMysql()];
 
-        $id = $token->subscribe(fn() => $this->close());
+        $id = $token->subscribe(fn () => $this->close());
 
-        EventLoop::queue(fn() => $this->read());
+        EventLoop::queue(fn () => $this->read());
 
         $future = $deferred->getFuture();
-        $future = $future->finally(static fn() => $token->unsubscribe($id));
+        $future = $future->finally(static fn () => $token->unsubscribe($id));
 
         if ($this->config->getCharset() !== ConnectionConfig::DEFAULT_CHARSET || $this->config->getCollation() !== ConnectionConfig::DEFAULT_COLLATE) {
             $future = $future->map(function () {
@@ -337,7 +336,6 @@ REGEX;
 
         return $future;
     }
-
 
     /** @see 14.6.3 COM_INIT_DB */
     public function useDb(string $db): Future

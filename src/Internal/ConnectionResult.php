@@ -64,7 +64,6 @@ final class ConnectionResult implements Result, \IteratorAggregate
     }
 
     /**
-     * @param ResultProxy $result
      * @return Future<array|null>
      */
     private static function fetchRow(ResultProxy $result): Future
@@ -94,9 +93,6 @@ final class ConnectionResult implements Result, \IteratorAggregate
         return $deferred->getFuture();
     }
 
-    /**
-     * @inheritDoc
-     */
     public function getNextResult(): ?Result
     {
         if ($this->nextResult) {
@@ -132,9 +128,6 @@ final class ConnectionResult implements Result, \IteratorAggregate
         return $this->result->insertId;
     }
 
-    /**
-     * @inheritDoc
-     */
     public function getFields(): ?array
     {
         if ($this->result->state >= ResultProxy::COLUMNS_FETCHED) {

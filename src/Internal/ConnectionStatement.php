@@ -65,7 +65,6 @@ final class ConnectionStatement implements Statement
         return $this->processor->isAlive();
     }
 
-    /** {@inheritdoc} */
     public function bind(int|string $paramId, mixed $data): void
     {
         if (\is_int($paramId)) {
@@ -103,7 +102,6 @@ final class ConnectionStatement implements Statement
         }
     }
 
-    /** {@inheritdoc} */
     public function execute(array $params = []): Result
     {
         $this->lastUsedAt = \time();
@@ -161,7 +159,6 @@ final class ConnectionStatement implements Statement
         return $deferred->getFuture()->await();
     }
 
-    /** {@inheritdoc} */
     public function getLastUsedAt(): int
     {
         return $this->lastUsedAt;

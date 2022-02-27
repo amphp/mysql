@@ -43,8 +43,6 @@ class PoolTest extends LinkTest
     }
 
     /**
-     * @param int $count
-     *
      * @return array<int, Processor&MockObject>
      */
     private function makeProcessorSet(int $count): array
@@ -68,9 +66,6 @@ class PoolTest extends LinkTest
         })->bindTo(null, Connection::class), $processors);
     }
 
-    /**
-     * @return array
-     */
     public function getConnectionCounts(): array
     {
         return \array_map(function (int $count): array { return [$count]; }, \range(2, 10, 2));
@@ -78,8 +73,6 @@ class PoolTest extends LinkTest
 
     /**
      * @dataProvider getConnectionCounts
-     *
-     * @param int $count
      */
     public function testSingleQuery(int $count)
     {
@@ -106,8 +99,6 @@ class PoolTest extends LinkTest
 
     /**
      * @dataProvider getConnectionCounts
-     *
-     * @param int $count
      */
     public function testConsecutiveQueries(int $count)
     {
@@ -131,7 +122,7 @@ class PoolTest extends LinkTest
             $futures = [];
 
             for ($i = 0; $i < $count; ++$i) {
-                $futures[] = async(fn() => $pool->query('SQL Query'));
+                $futures[] = async(fn () => $pool->query('SQL Query'));
             }
 
             $results = Future\all($futures);
@@ -146,8 +137,6 @@ class PoolTest extends LinkTest
 
     /**
      * @dataProvider getConnectionCounts
-     *
-     * @param int $count
      */
     public function testMultipleTransactions(int $count)
     {
@@ -176,8 +165,6 @@ class PoolTest extends LinkTest
 
     /**
      * @dataProvider getConnectionCounts
-     *
-     * @param int $count
      */
     public function testConsecutiveTransactions(int $count)
     {
@@ -198,7 +185,7 @@ class PoolTest extends LinkTest
 
         $futures = [];
         for ($i = 0; $i < $count; ++$i) {
-            $futures[] = async(fn() => $pool->beginTransaction());
+            $futures[] = async(fn () => $pool->beginTransaction());
         }
 
         try {
@@ -214,8 +201,6 @@ class PoolTest extends LinkTest
 
     /**
      * @dataProvider getConnectionCounts
-     *
-     * @param int $count
      */
     public function testExtractConnection(int $count)
     {
@@ -234,7 +219,7 @@ class PoolTest extends LinkTest
         try {
             $futures = [];
             for ($i = 0; $i < $count; ++$i) {
-                $futures[] = async(fn() => $pool->extractConnection());
+                $futures[] = async(fn () => $pool->extractConnection());
             }
             $results = Future\all($futures);
             foreach ($results as $result) {
@@ -248,8 +233,6 @@ class PoolTest extends LinkTest
 
     /**
      * @dataProvider getConnectionCounts
-     *
-     * @param int $count
      */
     public function testConnectionClosedInPool(int $count)
     {
@@ -286,12 +269,12 @@ class PoolTest extends LinkTest
             $this->assertSame($count + 1, $pool->getConnectionLimit());
             $futures = [];
             for ($i = 0; $i < $count + 1; ++$i) {
-                $futures[] = async(fn() => $pool->query($query));
+                $futures[] = async(fn () => $pool->query($query));
             }
             Future\all($futures);
             $futures = [];
             for ($i = 0; $i < $count; ++$i) {
-                $futures[] = async(fn() => $pool->query($query));
+                $futures[] = async(fn () => $pool->query($query));
             }
             Future\all($futures);
         } finally {

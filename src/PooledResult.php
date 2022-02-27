@@ -10,7 +10,6 @@ final class PooledResult extends SqlPooledResult implements Result
     private readonly Result $result;
 
     /**
-     * @param Result $result
      * @param \Closure():void $release
      */
     public function __construct(Result $result, \Closure $release)

@@ -23,8 +23,6 @@ final class PooledStatement extends SqlPooledStatement implements Statement
 
     /**
      * Changes return type to this library's Result type.
-     *
-     * @inheritDoc
      */
     public function execute(array $params = []): Result
     {

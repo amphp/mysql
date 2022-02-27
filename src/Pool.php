@@ -41,8 +41,6 @@ final class Pool extends ConnectionPool implements Link
 
     /**
      * Changes return type to this library's Result type.
-     *
-     * @inheritDoc
      */
     public function query(string $sql): Result
     {
@@ -51,8 +49,6 @@ final class Pool extends ConnectionPool implements Link
 
     /**
      * Changes return type to this library's Statement type.
-     *
-     * @inheritDoc
      */
     public function prepare(string $sql): Statement
     {
@@ -61,8 +57,6 @@ final class Pool extends ConnectionPool implements Link
 
     /**
      * Changes return type to this library's Result type.
-     *
-     * @inheritDoc
      */
     public function execute(string $sql, array $params = []): Result
     {
@@ -71,8 +65,6 @@ final class Pool extends ConnectionPool implements Link
 
     /**
      * Changes return type to this library's Transaction type.
-     *
-     * @inheritDoc
      */
     public function beginTransaction(TransactionIsolation $isolation = TransactionIsolation::Committed): Transaction
     {

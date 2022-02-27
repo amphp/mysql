@@ -80,8 +80,6 @@ final class ResultProxy
     }
 
     /**
-     * @return array
-     *
      * @codeCoverageIgnore
      */
     public function __debugInfo(): array

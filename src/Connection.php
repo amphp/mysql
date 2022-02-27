@@ -27,13 +27,6 @@ final class Connection implements Link
     /** @var \Closure Function used to release connection after a transaction has completed. */
     private \Closure $release;
 
-    /**
-     * @param ConnectionConfig $config
-     * @param Cancellation|null $token
-     * @param Socket\SocketConnector|null $connector
-     *
-     * @return self
-     */
     public static function connect(
         ConnectionConfig $config,
         ?Cancellation $token = null,
@@ -49,9 +42,6 @@ final class Connection implements Link
         return new self($processor);
     }
 
-    /**
-     * @param Internal\Processor $processor
-     */
     private function __construct(Internal\Processor $processor)
     {
         $this->processor = $processor;
@@ -160,9 +150,6 @@ final class Connection implements Link
         return $this->processor->prepare($sql)->await();
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function execute(string $sql, array $params = []): Result
     {
         $statement = $this->prepare($sql);

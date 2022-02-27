@@ -3,17 +3,15 @@
 namespace Amp\Mysql\Test;
 
 use Amp\Mysql\DataTypes;
+use Amp\Mysql\Link;
 use Amp\Mysql\Result;
 use Amp\PHPUnit\AsyncTestCase;
-use Amp\Mysql\Link;
 use Amp\Sql\QueryError;
 
 abstract class LinkTest extends AsyncTestCase
 {
     /**
      * Returns the Link class to be tested.
-     *
-     * @return Link
      */
     abstract protected function getLink(string $connectionString): Link;
 

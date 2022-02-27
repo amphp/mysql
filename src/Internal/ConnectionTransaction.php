@@ -56,18 +56,13 @@ final class ConnectionTransaction implements Transaction
         }
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getLastUsedAt(): int
     {
         return $this->processor->getLastUsedAt();
     }
 
     /**
-     * {@inheritdoc}
-     *
-     * Closes and commits all changes in the transaction.
+     * Closes and rolls back all changes in the transaction.
      */
     public function close(): void
     {
@@ -76,9 +71,6 @@ final class ConnectionTransaction implements Transaction
         }
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function isAlive(): bool
     {
         return $this->processor && $this->processor->isAlive();
@@ -98,8 +90,6 @@ final class ConnectionTransaction implements Transaction
     }
 
     /**
-     * {@inheritdoc}
-     *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
     public function query(string $sql): Result
@@ -114,8 +104,6 @@ final class ConnectionTransaction implements Transaction
     }
 
     /**
-     * {@inheritdoc}
-     *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
     public function prepare(string $sql): Statement
@@ -129,8 +117,6 @@ final class ConnectionTransaction implements Transaction
     }
 
     /**
-     * {@inheritdoc}
-     *
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
     public function execute(string $sql, array $params = []): Result

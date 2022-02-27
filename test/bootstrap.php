@@ -80,4 +80,4 @@ $db->close();
 
 echo CLEAR;
 
-\register_shutdown_function(fn() => $process->signal(\SIGTERM));
+\register_shutdown_function(fn () => $process->signal(\SIGTERM));

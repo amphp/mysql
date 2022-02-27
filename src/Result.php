@@ -13,8 +13,6 @@ interface Result extends SqlResult
     public function getLastInsertId(): ?int;
 
     /**
-     * @return array|null
-     *
      * @psalm-return array<int, array<int, string>>|null
      */
     public function getFields(): ?array;
