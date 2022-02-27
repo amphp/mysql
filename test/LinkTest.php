@@ -335,4 +335,15 @@ abstract class LinkTest extends AsyncTestCase
 
         $db->close();
     }
+
+    public function testJsonDecoding()
+    {
+        $db = $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
+
+        $result = $db->execute("SELECT a FROM test.json");
+
+        foreach ($result as $row) {
+            $this->assertSame(["a" => '{"key": "value"}'], $row);
+        }
+    }
 }
