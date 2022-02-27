@@ -28,7 +28,8 @@
         "phpunit/phpunit": "^9",
         "amphp/phpunit-util": "^3",
         "amphp/php-cs-fixer-config": "dev-master",
-        "phpbench/phpbench": "^1.1"
+        "phpbench/phpbench": "^1.1",
+        "psalm/phar": "^4.22"
     },
     "minimum-stability": "dev",
     "prefer-stable": true,

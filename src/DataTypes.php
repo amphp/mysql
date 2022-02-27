@@ -375,29 +375,32 @@ final class DataTypes
         return \unpack("V", $str)[1];
     }
 
-    public static function decodeUnsigned32(string $str) /* : int|string */
+    public static function decodeUnsigned32(string $str): int|string
     {
         if (\PHP_INT_SIZE > 4) {
             return \unpack("V", $str)[1];
         }
 
         \assert(\extension_loaded("gmp"), "The GMP extension is required for UNSIGNED INT fields on 32-bit systems");
+        /** @psalm-suppress UndefinedConstant */
         return \gmp_strval(\gmp_import(\substr($str, 0, 4), 1, \GMP_LSW_FIRST));
     }
 
-    public static function decodeInt64(string $str) /* : int|string */
+    public static function decodeInt64(string $str): int|string
     {
         if (\PHP_INT_SIZE > 4) {
             return \unpack("P", $str)[1];
         }
 
         \assert(\extension_loaded("gmp"), "The GMP extension is required for BIGINT fields on 32-bit systems");
+        /** @psalm-suppress UndefinedConstant */
         return \gmp_strval(\gmp_import(\substr($str, 0, 8), 1, \GMP_LSW_FIRST));
     }
 
-    public static function decodeUnsigned64(string $str) /* : int|string */
+    public static function decodeUnsigned64(string $str): int|string
     {
         \assert(\extension_loaded("gmp"), "The GMP extension is required for UNSIGNED BIGINT fields");
+        /** @psalm-suppress UndefinedConstant */
         return \gmp_strval(\gmp_import(\substr($str, 0, 8), 1, \GMP_LSW_FIRST));
     }
 
