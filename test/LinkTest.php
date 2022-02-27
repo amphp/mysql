@@ -314,6 +314,16 @@ abstract class LinkTest extends AsyncTestCase
         $this->assertInstanceOf(CommandResult::class, $result);
 
         /** @var ResultSet $result */
+        $result = yield $transaction->query("SELECT * FROM main WHERE a = 6");
+
+        $got = [];
+        while (yield $result->advance()) {
+            $got[] = \array_values($result->getCurrent());
+        }
+        $this->assertCount(1, $got);
+        $this->assertFalse(yield $result->nextResultSet());
+
+        /** @var ResultSet $result */
         $result = yield $transaction->execute("SELECT * FROM main WHERE a = ?", [6]);
 
         $got = [];
@@ -321,7 +331,7 @@ abstract class LinkTest extends AsyncTestCase
             $got[] = \array_values($result->getCurrent());
         }
         $this->assertCount(1, $got);
-        yield $result->nextResultSet();
+        $this->assertFalse(yield $result->nextResultSet());
 
         yield $transaction->rollback();
 

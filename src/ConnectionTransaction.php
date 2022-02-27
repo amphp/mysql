@@ -119,9 +119,9 @@ final class ConnectionTransaction implements SqlTransaction
         return call(function () use ($sql) {
             $result = yield $this->processor->query($sql);
 
-            if ($result instanceof ResultSet) {
+            if ($result instanceof Internal\ResultProxy) {
                 ++$this->refCount;
-                return new PooledResultSet($result, $this->release);
+                return new PooledResultSet(new ConnectionResultSet($result), $this->release);
             }
 
             return $result;
