@@ -22,6 +22,7 @@
         "revolt/event-loop": "dev-main as 0.2.3"
     },
     "require-dev": {
+        "ext-mysqli": "*",
         "ext-openssl": "*",
         "amphp/process": "^2",
         "amphp/file": "^3",
@@ -45,7 +46,10 @@
         "psr-4": {
             "Amp\\Mysql\\Test\\": "test",
             "Amp\\Mysql\\Bench\\": "benchmarks"
-        }
+        },
+        "files": [
+            "test/initialize.php"
+        ]
     },
     "scripts": {
         "check": [

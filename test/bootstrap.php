@@ -11,7 +11,6 @@ require __DIR__.'/../vendor/autoload.php';
 const DB_HOST = 'localhost:10101';
 const DB_USER = 'root';
 const DB_PASS = '';
-const DB_NAME = 'test';
 
 const CLEAR = "\r\033[K";
 
@@ -72,11 +71,7 @@ delay(2); // Give mysqld time to start.
 
 echo CLEAR, "Creating test database...";
 
-$db = new \mysqli(DB_HOST, DB_USER, DB_PASS);
-$db->query("CREATE DATABASE test");
-$db->query("CREATE TABLE test.main (id INT NOT NULL AUTO_INCREMENT, a INT, b INT, PRIMARY KEY (id))");
-$db->query("INSERT INTO test.main (a, b) VALUES (1, 2), (2, 3), (3, 4), (4, 5), (5, 6)");
-$db->close();
+initialize(new \mysqli(DB_HOST, DB_USER, DB_PASS));
 
 echo CLEAR;
 
