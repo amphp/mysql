@@ -18,8 +18,7 @@
         "amphp/pipeline": "^1",
         "amphp/socket": "^2",
         "amphp/sql": "^2",
-        "amphp/sql-common": "^2",
-        "revolt/event-loop": "dev-main as 0.2.3"
+        "amphp/sql-common": "^2"
     },
     "require-dev": {
         "ext-mysqli": "*",
