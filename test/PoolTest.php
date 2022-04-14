@@ -4,14 +4,14 @@ namespace Amp\Mysql\Test;
 
 use Amp\Future;
 use Amp\Mysql\Connection;
-use Amp\Mysql\ConnectionConfig;
 use Amp\Mysql\Internal\CommandResult;
 use Amp\Mysql\Internal\Processor;
 use Amp\Mysql\Link;
+use Amp\Mysql\MysqlConfig;
+use Amp\Mysql\MysqlConnector;
 use Amp\Mysql\Pool;
 use Amp\Mysql\Result;
 use Amp\Mysql\Statement;
-use Amp\Sql\Connector;
 use Amp\Sql\Transaction as SqlTransaction;
 use PHPUnit\Framework\MockObject\MockObject;
 use function Amp\async;
@@ -25,19 +25,19 @@ class PoolTest extends LinkTest
 {
     protected function getLink(string $connectionString): Link
     {
-        return new Pool(ConnectionConfig::fromString($connectionString));
+        return new Pool(MysqlConfig::fromString($connectionString));
     }
 
     protected function createPool(array $connections): Pool
     {
-        $connector = $this->createMock(Connector::class);
+        $connector = $this->createMock(MysqlConnector::class);
         $connector->method('connect')
             ->will($this->returnCallback(function () use ($connections): Connection {
                 static $count = 0;
                 return $connections[$count++ % \count($connections)];
             }));
 
-        $config = ConnectionConfig::fromString('host=host;user=user;password=password');
+        $config = MysqlConfig::fromString('host=host;user=user;password=password');
 
         return new Pool($config, \count($connections), Pool::DEFAULT_IDLE_TIMEOUT, $connector);
     }

@@ -3,9 +3,9 @@
 namespace Amp\Mysql;
 
 use Amp\Socket\ConnectContext;
-use Amp\Sql\ConnectionConfig as SqlConnectionConfig;
+use Amp\Sql\SqlConfig;
 
-final class ConnectionConfig extends SqlConnectionConfig
+final class MysqlConfig extends SqlConfig
 {
     public const DEFAULT_PORT = 3306;
     public const BIN_CHARSET = 45; // utf8mb4_general_ci

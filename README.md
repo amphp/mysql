@@ -48,7 +48,7 @@ More extensive code examples reside in the [`examples`](examples) directory.
 
 ```php
 Amp\Loop::run(function() {
-    $config = Amp\Mysql\ConnectionConfig::fromString(
+    $config = Amp\Mysql\MysqlConfig::fromString(
         "host=127.0.0.1 user=username password=password db=test"
     );
     

@@ -2,7 +2,7 @@
 
 namespace Amp\Mysql;
 
-use Amp\Sql\FailureException;
+use Amp\Sql\SqlException;
 
 /** @see 14.6.4.1.1.1 Column Type */
 final class DataTypes
@@ -76,7 +76,7 @@ final class DataTypes
                 $value = "";
                 break;
             default:
-                throw new FailureException("Unexpected type for binding parameter: " . \gettype($param));
+                throw new SqlException("Unexpected type for binding parameter: " . \gettype($param));
         }
 
         return [$unsigned, $type, $value];
@@ -161,7 +161,7 @@ final class DataTypes
                         break;
 
                     default:
-                        throw new FailureException("Unexpected string length for date in binary protocol: " . ($len - 1));
+                        throw new SqlException("Unexpected string length for date in binary protocol: " . ($len - 1));
                 }
                 return \str_pad($year, 2, "0", STR_PAD_LEFT) . "-" . \str_pad($month, 2, "0", STR_PAD_LEFT) . "-" . \str_pad($day, 2, "0", STR_PAD_LEFT) . " " . \str_pad($hour, 2, "0", STR_PAD_LEFT) . ":" . \str_pad($minute, 2, "0", STR_PAD_LEFT) . ":" . \str_pad($second, 2, "0", STR_PAD_LEFT) . "." . \str_pad($microsecond, 5, "0", STR_PAD_LEFT);
 
@@ -182,7 +182,7 @@ final class DataTypes
                         break;
 
                     default:
-                        throw new FailureException("Unexpected string length for time in binary protocol: " . ($len - 1));
+                        throw new SqlException("Unexpected string length for time in binary protocol: " . ($len - 1));
                 }
                 return ($negative ? "" : "-") . \str_pad($day, 2, "0", STR_PAD_LEFT) . "d " . \str_pad($hour, 2, "0", STR_PAD_LEFT) . ":" . \str_pad($minute, 2, "0", STR_PAD_LEFT) . ":" . \str_pad($second, 2, "0", STR_PAD_LEFT) . "." . \str_pad($microsecond, 5, "0", STR_PAD_LEFT);
 
@@ -191,7 +191,7 @@ final class DataTypes
                 return null;
 
             default:
-                throw new FailureException("Invalid type for Binary Protocol: 0x" . \dechex($type));
+                throw new SqlException("Invalid type for Binary Protocol: 0x" . \dechex($type));
         }
     }
 
@@ -272,7 +272,7 @@ final class DataTypes
         }
 
         // If that happens connection is borked...
-        throw new FailureException("$int is not in ranges [0x00, 0xfa] or [0xfc, 0xfe]");
+        throw new SqlException("$int is not in ranges [0x00, 0xfa] or [0xfc, 0xfe]");
     }
 
     public static function decodeString(string $str, ?int &$intlen = null, ?int &$len = null): string
@@ -305,7 +305,7 @@ final class DataTypes
         }
 
         // If that happens connection is borked...
-        throw new FailureException("$int is not in ranges [0x00, 0xfa] or [0xfc, 0xfe]");
+        throw new SqlException("$int is not in ranges [0x00, 0xfa] or [0xfc, 0xfe]");
     }
 
     public static function decodeIntByLen(string $str, int $len): int
@@ -422,7 +422,7 @@ final class DataTypes
             return "\xfe" . self::encodeInt64($int);
         }
 
-        throw new FailureException("encodeInt doesn't allow integers bigger than 2^64 - 1 (current: $int)");
+        throw new SqlException("encodeInt doesn't allow integers bigger than 2^64 - 1 (current: $int)");
     }
 
     public static function encodeInt16(int $int): string

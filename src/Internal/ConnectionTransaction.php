@@ -19,6 +19,7 @@ final class ConnectionTransaction implements Transaction
 
     private readonly TransactionIsolation $isolation;
 
+    /** @var \Closure():void */
     private readonly \Closure $release;
 
     private int $refCount = 1;

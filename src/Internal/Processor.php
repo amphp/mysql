@@ -6,13 +6,13 @@ use Amp\Cancellation;
 use Amp\DeferredFuture;
 use Amp\File;
 use Amp\Future;
-use Amp\Mysql\ConnectionConfig;
 use Amp\Mysql\DataTypes;
 use Amp\Mysql\InitializationException;
+use Amp\Mysql\MysqlConfig;
 use Amp\Socket\EncryptableSocket;
 use Amp\Sql\ConnectionException;
-use Amp\Sql\FailureException;
 use Amp\Sql\QueryError;
+use Amp\Sql\SqlException;
 use Amp\Sql\TransientResource;
 use Revolt\EventLoop;
 
@@ -72,7 +72,7 @@ REGEX;
     private ?\Closure $parseCallback = null;
     private ?\Closure $packetCallback = null;
 
-    public ConnectionConfig $config;
+    public MysqlConfig $config;
 
     /** @var DeferredFuture[] */
     private array $deferreds = [];
@@ -127,7 +127,7 @@ REGEX;
     private const CLOSING = 3;
     private const CLOSED = 4;
 
-    public function __construct(EncryptableSocket $socket, ConnectionConfig $config)
+    public function __construct(EncryptableSocket $socket, MysqlConfig $config)
     {
         $this->socket = $socket;
         $this->connInfo = new ConnectionState;
@@ -184,7 +184,7 @@ REGEX;
         $this->socket->reference();
     }
 
-    public function connect(Cancellation $token): void
+    public function connect(?Cancellation $cancellation = null): void
     {
         \assert(!$this->processors, self::class."::connect() must not be called twice");
 
@@ -192,14 +192,16 @@ REGEX;
 
         $this->processors = [$this->parseMysql()];
 
-        $id = $token->subscribe(fn () => $this->close());
+        $id = $cancellation?->subscribe(fn () => $this->close());
 
         EventLoop::queue(fn () => $this->read());
 
         $future = $deferred->getFuture();
-        $future = $future->finally(static fn () => $token->unsubscribe($id));
+        if ($id !== null) {
+            $future = $future->finally(static fn () => $cancellation?->unsubscribe($id));
+        }
 
-        if ($this->config->getCharset() !== ConnectionConfig::DEFAULT_CHARSET || $this->config->getCollation() !== ConnectionConfig::DEFAULT_COLLATE) {
+        if ($this->config->getCharset() !== MysqlConfig::DEFAULT_CHARSET || $this->config->getCollation() !== MysqlConfig::DEFAULT_COLLATE) {
             $future = $future->map(function () {
                 $charset = $this->config->getCharset();
                 $collate = $this->config->getCollation();
@@ -758,7 +760,7 @@ REGEX;
     private function handleEof(string $packet): void
     {
         $this->parseEof($packet);
-        $exception = new FailureException($this->connInfo->errorMsg, $this->connInfo->errorCode);
+        $exception = new SqlException($this->connInfo->errorMsg, $this->connInfo->errorCode);
         $this->getDeferred()->error($exception);
         $this->ready();
     }
@@ -1503,7 +1505,7 @@ REGEX;
         $payload = "";
         $payload .= \pack("V", $this->capabilities);
         $payload .= \pack("V", 1 << 24 - 1); // max-packet size
-        $payload .= \chr(ConnectionConfig::BIN_CHARSET);
+        $payload .= \chr(MysqlConfig::BIN_CHARSET);
         $payload .= \str_repeat("\0", 23); // reserved
 
         if (!$inSSL && ($this->capabilities & self::CLIENT_SSL)) {

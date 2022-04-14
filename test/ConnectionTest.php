@@ -2,21 +2,23 @@
 
 namespace Amp\Mysql\Test;
 
-use Amp\Mysql\CancellableConnector;
 use Amp\Mysql\Connection;
-use Amp\Mysql\ConnectionConfig;
+use Amp\Mysql\DefaultMysqlConnector;
 use Amp\Mysql\Link;
+use Amp\Mysql\MysqlConfig;
 
 class ConnectionTest extends LinkTest
 {
     protected function getLink(string $connectionString): Link
     {
-        return (new CancellableConnector)->connect(ConnectionConfig::fromString($connectionString));
+        return (new DefaultMysqlConnector)->connect(MysqlConfig::fromString($connectionString));
     }
 
     public function testConnect()
     {
-        $db = Connection::connect(ConnectionConfig::fromString("host=".DB_HOST." user=".DB_USER." pass=".DB_PASS." db=test"));
+        $connector = new DefaultMysqlConnector();
+
+        $db = $connector->connect(MysqlConfig::fromString("host=".DB_HOST." user=".DB_USER." pass=".DB_PASS." db=test"));
 
         $this->assertInstanceOf(Connection::class, $db);
 

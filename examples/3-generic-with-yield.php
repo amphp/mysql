@@ -6,7 +6,7 @@ use Amp\Future;
 use Amp\Mysql;
 use function Amp\async;
 
-$db = Mysql\pool(Mysql\ConnectionConfig::fromString("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME));
+$db = Mysql\pool(Mysql\MysqlConfig::fromString("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME));
 
 $db->query("DROP TABLE IF EXISTS tmp");
 
@@ -20,7 +20,7 @@ $statement = $db->prepare("INSERT INTO tmp (a, b) VALUES (?, ? * 2)");
 
 $future = [];
 foreach (\range(1, 5) as $num) {
-    $future[] = async(fn() => $statement->execute([$num, $num]));
+    $future[] = async(fn () => $statement->execute([$num, $num]));
 }
 
 /* wait until everything is inserted */
@@ -31,7 +31,7 @@ print "Insertion successful (if it wasn't, an exception would have been thrown b
 $result = $db->query("SELECT a, b FROM tmp");
 
 foreach ($result as $row) {
-    \var_dump($row);
+    var_dump($row);
 }
 
 $db->query("DROP TABLE tmp");

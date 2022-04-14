@@ -5,7 +5,7 @@ require 'support/generic-table.php';
 
 use Amp\Mysql;
 
-$db = Mysql\pool(Mysql\ConnectionConfig::fromString("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME));
+$db = Mysql\pool(Mysql\MysqlConfig::fromString("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME));
 
 /* create same table than in 3-generic-with-yield.php */
 createGenericTable($db);

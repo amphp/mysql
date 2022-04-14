@@ -3,11 +3,10 @@
 namespace Amp\Mysql;
 
 use Amp\Sql\Common\ConnectionPool;
-use Amp\Sql\ConnectionConfig as SqlConnectionConfig;
-use Amp\Sql\FailureException;
+use Amp\Sql\SqlException;
 use Revolt\EventLoop;
 
-function connector(?Connector $connector = null): Connector
+function connector(?MysqlConnector $connector = null): MysqlConnector
 {
     static $map;
     $map ??= new \WeakMap();
@@ -17,16 +16,16 @@ function connector(?Connector $connector = null): Connector
         return $map[$driver] = $connector;
     }
 
-    return $map[$driver] ??= new CancellableConnector;
+    return $map[$driver] ??= new DefaultMysqlConnector;
 }
 
 /**
  * Create a connection using the global Connector instance.
  *
- * @throws FailureException If connecting fails.
+ * @throws SqlException If connecting fails.
  * @throws \Error If the connection string does not contain a host, user, and password.
  */
-function connect(SqlConnectionConfig $config): Connection
+function connect(MysqlConfig $config): Connection
 {
     return connector()->connect($config);
 }
@@ -37,9 +36,9 @@ function connect(SqlConnectionConfig $config): Connection
  * @throws \Error If the connection string does not contain a host, user, and password.
  */
 function pool(
-    SqlConnectionConfig $config,
+    MysqlConfig $config,
     int $maxConnections = ConnectionPool::DEFAULT_MAX_CONNECTIONS,
-    int $idleTimeout = ConnectionPool::DEFAULT_IDLE_TIMEOUT
+    int $idleTimeout = ConnectionPool::DEFAULT_IDLE_TIMEOUT,
 ): Pool {
     return new Pool($config, $maxConnections, $idleTimeout, connector());
 }

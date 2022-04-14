@@ -4,8 +4,7 @@ namespace Amp\Mysql;
 
 use Amp\Cancellation;
 use Amp\DeferredFuture;
-use Amp\NullCancellation;
-use Amp\Socket;
+use Amp\Socket\Socket;
 use Amp\Sql\TransactionIsolation;
 use Revolt\EventLoop;
 
@@ -27,18 +26,13 @@ final class Connection implements Link
     /** @var \Closure Function used to release connection after a transaction has completed. */
     private \Closure $release;
 
-    public static function connect(
-        ConnectionConfig $config,
-        ?Cancellation $token = null,
-        ?Socket\SocketConnector $connector = null
+    public static function initialize(
+        Socket $socket,
+        MysqlConfig $config,
+        ?Cancellation $cancellation = null,
     ): self {
-        $token = $token ?? new NullCancellation;
-
-        $socket = ($connector ?? Socket\socketConnector())
-            ->connect($config->getConnectionString(), $config->getConnectContext(), $token);
-
         $processor = new Internal\Processor($socket, $config);
-        $processor->connect($token);
+        $processor->connect($cancellation);
         return new self($processor);
     }
 
@@ -119,13 +113,7 @@ final class Connection implements Link
         $this->busy = $deferred = new DeferredFuture;
 
         try {
-            $this->processor->query("SET SESSION TRANSACTION ISOLATION LEVEL " . match ($isolation) {
-                TransactionIsolation::Uncommitted => "READ UNCOMMITTED",
-                TransactionIsolation::Committed => "READ COMMITTED",
-                TransactionIsolation::Repeatable => "REPEATABLE READ",
-                TransactionIsolation::Serializable => "SERIALIZABLE",
-            })->await();
-
+            $this->processor->query("SET SESSION TRANSACTION ISOLATION LEVEL " . $isolation->toSql())->await();
             $this->processor->query("START TRANSACTION")->await();
         } catch (\Throwable $exception) {
             $this->busy = null;

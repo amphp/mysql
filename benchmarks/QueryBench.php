@@ -2,9 +2,9 @@
 
 namespace Amp\Mysql\Bench;
 
-use Amp\Mysql\CancellableConnector;
+use Amp\Mysql\DefaultMysqlConnector;
 use Amp\Mysql\Connection;
-use Amp\Mysql\ConnectionConfig;
+use Amp\Mysql\MysqlConfig;
 use Amp\Mysql\Pool as ConnectionPool;
 use Amp\Mysql\ResultSet;
 use function Amp\call;
@@ -37,8 +37,8 @@ class QueryBench extends AbstractBench
 
     public function init()
     {
-        $config = ConnectionConfig::fromString("host=$this->host;user=$this->user;pass=$this->pass");
-        $connector = new CancellableConnector;
+        $config = MysqlConfig::fromString("host=$this->host;user=$this->user;pass=$this->pass");
+        $connector = new DefaultMysqlConnector;
         $this->connectionPool = new ConnectionPool($config, $this->poolLimit, 10, $connector);
         $connectionPromise = $connector->connect($config);
         $this->connection = wait($connectionPromise);

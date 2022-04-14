@@ -3,7 +3,6 @@
 namespace Amp\Mysql;
 
 use Amp\Sql\Common\ConnectionPool;
-use Amp\Sql\Connector;
 use Amp\Sql\Pool as SqlPool;
 use Amp\Sql\Result as SqlResult;
 use Amp\Sql\Statement as SqlStatement;
@@ -12,9 +11,13 @@ use Amp\Sql\TransactionIsolation;
 
 final class Pool extends ConnectionPool implements Link
 {
-    protected function createDefaultConnector(): Connector
-    {
-        return connector();
+    public function __construct(
+        MysqlConfig $config,
+        int $maxConnections = self::DEFAULT_MAX_CONNECTIONS,
+        int $idleTimeout = self::DEFAULT_IDLE_TIMEOUT,
+        ?MysqlConnector $connector = null,
+    ) {
+        parent::__construct($config, $connector ?? connector(), $maxConnections, $idleTimeout);
     }
 
     protected function createResult(SqlResult $result, \Closure $release): Result
