@@ -83,7 +83,7 @@ final class DataTypes
     }
 
     /** @see 14.7.3 Binary Protocol Value */
-    public static function decodeBinary(int $type, string $str, ?int &$len = null) /* : mixed */
+    public static function decodeBinary(int $type, string $str, ?int &$len = null): mixed
     {
         $unsigned = $type & 0x80;
         switch ($type) {
@@ -163,7 +163,14 @@ final class DataTypes
                     default:
                         throw new SqlException("Unexpected string length for date in binary protocol: " . ($len - 1));
                 }
-                return \str_pad($year, 2, "0", STR_PAD_LEFT) . "-" . \str_pad($month, 2, "0", STR_PAD_LEFT) . "-" . \str_pad($day, 2, "0", STR_PAD_LEFT) . " " . \str_pad($hour, 2, "0", STR_PAD_LEFT) . ":" . \str_pad($minute, 2, "0", STR_PAD_LEFT) . ":" . \str_pad($second, 2, "0", STR_PAD_LEFT) . "." . \str_pad($microsecond, 5, "0", STR_PAD_LEFT);
+
+                return \str_pad($year, 2, "0", STR_PAD_LEFT)
+                    . "-" . \str_pad($month, 2, "0", STR_PAD_LEFT)
+                    . "-" . \str_pad($day, 2, "0", STR_PAD_LEFT)
+                    . " " . \str_pad($hour, 2, "0", STR_PAD_LEFT)
+                    . ":" . \str_pad($minute, 2, "0", STR_PAD_LEFT)
+                    . ":" . \str_pad($second, 2, "0", STR_PAD_LEFT)
+                    . "." . \str_pad($microsecond, 5, "0", STR_PAD_LEFT);
 
             case self::MYSQL_TYPE_TIME:
                 $negative = $day = $hour = $minute = $second = $microsecond = 0;
@@ -184,7 +191,12 @@ final class DataTypes
                     default:
                         throw new SqlException("Unexpected string length for time in binary protocol: " . ($len - 1));
                 }
-                return ($negative ? "" : "-") . \str_pad($day, 2, "0", STR_PAD_LEFT) . "d " . \str_pad($hour, 2, "0", STR_PAD_LEFT) . ":" . \str_pad($minute, 2, "0", STR_PAD_LEFT) . ":" . \str_pad($second, 2, "0", STR_PAD_LEFT) . "." . \str_pad($microsecond, 5, "0", STR_PAD_LEFT);
+
+                return ($negative ? "" : "-") . \str_pad($day, 2, "0", STR_PAD_LEFT)
+                    . "d " . \str_pad($hour, 2, "0", STR_PAD_LEFT)
+                    . ":" . \str_pad($minute, 2, "0", STR_PAD_LEFT)
+                    . ":" . \str_pad($second, 2, "0", STR_PAD_LEFT)
+                    . "." . \str_pad($microsecond, 5, "0", STR_PAD_LEFT);
 
             case self::MYSQL_TYPE_NULL:
                 $len = 0;
@@ -200,7 +212,7 @@ final class DataTypes
         return \substr($str, 0, $len = \strpos($str, "\0"));
     }
 
-    public static function decodeStringOff(int $type, string $str, int &$off) /* : mixed */
+    public static function decodeStringOff(int $type, string $str, int &$off): mixed
     {
         $len = self::decodeUnsignedOff($str, $off);
         $off += $len;
@@ -281,7 +293,7 @@ final class DataTypes
         return \substr($str, $intlen, $len);
     }
 
-    public static function decodeUnsigned(string $str, ?int &$len = null)
+    public static function decodeUnsigned(string $str, ?int &$len = null): int|string
     {
         $int = \ord($str);
         if ($int < 0xfb) {
@@ -342,7 +354,7 @@ final class DataTypes
         return $int << $shift >> $shift;
     }
 
-    public static function decodeUnsigned16(string $str)
+    public static function decodeUnsigned16(string $str): int
     {
         return \unpack("v", $str)[1];
     }
