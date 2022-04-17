@@ -2,7 +2,7 @@
 
 namespace Amp\Mysql\Test;
 
-use Amp\Mysql\DataTypes;
+use Amp\Mysql\DataType;
 use Amp\Mysql\Link;
 use Amp\Mysql\Result;
 use Amp\PHPUnit\AsyncTestCase;
@@ -90,9 +90,9 @@ abstract class LinkTest extends AsyncTestCase
         $this->assertCount(2, $fields);
         $this->assertSame($fields[0]["original_name"], "b");
         $this->assertSame($fields[0]["name"], "d");
-        $this->assertSame($fields[0]["type"], DataTypes::MYSQL_TYPE_LONG);
+        $this->assertSame($fields[0]["type"], DataType::Long->value);
         $this->assertSame($fields[1]["name"], "c");
-        $this->assertSame($fields[1]["type"], DataTypes::MYSQL_TYPE_LONGLONG);
+        $this->assertSame($fields[1]["type"], DataType::LongLong->value);
 
         $this->assertNull($resultset->getNextResult());
     }

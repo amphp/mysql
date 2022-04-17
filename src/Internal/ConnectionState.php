@@ -4,9 +4,9 @@ namespace Amp\Mysql\Internal;
 
 final class ConnectionState
 {
-    public ?int $affectedRows = null;
-    public ?int $insertId = null;
-    public ?int $statusFlags = null;
+    public int $affectedRows = 0;
+    public int $insertId = 0;
+    public int $statusFlags = 0;
     public ?int $warnings = null;
     public ?string $statusInfo = null;
     public array $sessionState = [];

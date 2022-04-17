@@ -6,7 +6,7 @@ use Amp\Cancellation;
 use Amp\DeferredFuture;
 use Amp\File;
 use Amp\Future;
-use Amp\Mysql\DataTypes;
+use Amp\Mysql\DataType;
 use Amp\Mysql\InitializationException;
 use Amp\Mysql\MysqlConfig;
 use Amp\Socket\EncryptableSocket;
@@ -20,36 +20,6 @@ use Revolt\EventLoop;
  * 14.2.3 Auth switch request??
  * 14.2.4 COM_CHANGE_USER
  */
-
-/** @see 14.1.3.4 Status Flags */
-final class StatusFlags
-{
-    public const SERVER_STATUS_IN_TRANS = 0x0001; // a transaction is active
-    public const SERVER_STATUS_AUTOCOMMIT = 0x0002; // auto-commit is enabled
-    public const SERVER_MORE_RESULTS_EXISTS = 0x0008;
-    public const SERVER_STATUS_NO_GOOD_INDEX_USED = 0x0010;
-    public const SERVER_STATUS_NO_INDEX_USED = 0x0020;
-    public const SERVER_STATUS_CURSOR_EXISTS = 0x0040; // Used by Binary Protocol Resultset to signal that COM_STMT_FETCH has to be used to fetch the row-data.
-    public const SERVER_STATUS_LAST_ROW_SENT = 0x0080;
-    public const SERVER_STATUS_DB_DROPPED = 0x0100;
-    public const SERVER_STATUS_NO_BACKSLASH_ESCAPES = 0x0200;
-    public const SERVER_STATUS_METADATA_CHANGED = 0x0400;
-    public const SERVER_QUERY_WAS_SLOW = 0x0800;
-    public const SERVER_PS_OUT_PARAMS = 0x1000;
-    public const SERVER_STATUS_IN_TRANS_READONLY = 0x2000; // in a read-only transaction
-    public const SERVER_SESSION_STATE_CHANGED = 0x4000; // connection state information has changed
-}
-
-/** @see 13.1.3.1.1 Session State Information */
-final class SessionStateTypes
-{
-    public const SESSION_TRACK_SYSTEM_VARIABLES = 0x00;
-    public const SESSION_TRACK_SCHEMA = 0x01;
-    public const SESSION_TRACK_STATE_CHANGE = 0x02;
-    public const SESSION_TRACK_GTIDS = 0x03;
-    public const SESSION_TRACK_TRANSACTION_CHARACTERISTICS = 0x04;
-    public const SESSION_TRACK_TRANSACTION_STATE = 0x05;
-}
 
 /** @internal */
 class Processor implements TransientResource
@@ -201,7 +171,9 @@ REGEX;
             $future = $future->finally(static fn () => $cancellation?->unsubscribe($id));
         }
 
-        if ($this->config->getCharset() !== MysqlConfig::DEFAULT_CHARSET || $this->config->getCollation() !== MysqlConfig::DEFAULT_COLLATE) {
+        if ($this->config->getCharset() !== MysqlConfig::DEFAULT_CHARSET
+            || $this->config->getCollation() !== MysqlConfig::DEFAULT_COLLATE
+        ) {
             $future = $future->map(function () {
                 $charset = $this->config->getCharset();
                 $collate = $this->config->getCollation();
@@ -326,9 +298,9 @@ REGEX;
 
     public function setCharset(string $charset, string $collate = ""): Future
     {
-        if ($collate === "" && false !== $off = \strpos($charset, "_")) {
+        if ($collate === "" && false !== $offset = \strpos($charset, "_")) {
             $collate = $charset;
-            $charset = \substr($collate, 0, $off);
+            $charset = \substr($collate, 0, $offset);
         }
 
         $query = "SET NAMES '$charset'" . ($collate === "" ? "" : " COLLATE '$collate'");
@@ -421,8 +393,8 @@ REGEX;
     public function bindParam(int $stmtId, int $paramId, string $data): void
     {
         $payload = "\x18";
-        $payload .= DataTypes::encodeInt32($stmtId);
-        $payload .= DataTypes::encodeInt16($paramId);
+        $payload .= DataType::encodeInt32($stmtId);
+        $payload .= DataType::encodeInt16($paramId);
         $payload .= $data;
         $this->appendTask(function () use ($payload) {
             $this->resetIds();
@@ -433,15 +405,16 @@ REGEX;
 
     /** @see 14.7.6 COM_STMT_EXECUTE */
     // prebound params: null-bit set, type MYSQL_TYPE_LONG_BLOB, no value
-    // $params is by-ref, because the actual result object might not yet have been filled completely with data upon call of this method ...
+    // $params is by-ref, because the actual result object might not yet have been filled completely with data upon
+    // call of this method ...
     public function execute(int $stmtId, string $query, array &$params, array $prebound, array $data = []): Future
     {
         $deferred = new DeferredFuture;
         $this->appendTask(function () use ($stmtId, $query, &$params, $prebound, $data, $deferred): void {
             $payload = "\x17";
-            $payload .= DataTypes::encodeInt32($stmtId);
+            $payload .= DataType::encodeInt32($stmtId);
             $payload .= \chr(0); // cursor flag // @TODO cursor types?!
-            $payload .= DataTypes::encodeInt32(1);
+            $payload .= DataType::encodeInt32(1);
             $paramCount = \count($params);
             $bound = !empty($data) || !empty($prebound);
             $types = "";
@@ -454,18 +427,20 @@ REGEX;
                 $payload .= \str_repeat("\0", ($paramCount + 7) >> 3);
                 foreach ($args as $paramId => $param) {
                     if ($param === null) {
-                        $off = $nullOff + ($paramId >> 3);
-                        $payload[$off] = $payload[$off] | \chr(1 << ($paramId % 8));
+                        $offset = $nullOff + ($paramId >> 3);
+                        $payload[$offset] = $payload[$offset] | \chr(1 << ($paramId % 8));
                     } else {
                         $bound = 1;
                     }
-                    list($unsigned, $type, $value) = DataTypes::encodeBinary($param);
+
+                    /** @var DataType $type */
+                    [$type, $value] = DataType::encodeBinary($param);
                     if (isset($prebound[$paramId])) {
-                        $types .= \chr(DataTypes::MYSQL_TYPE_LONG_BLOB);
+                        $types .= \chr(DataType::LongBlob->value);
                     } else {
-                        $types .= \chr($type);
+                        $types .= \chr($type->value);
                     }
-                    $types .= $unsigned?"\x80":"\0";
+                    $types .= "\0";
                     $values .= $value;
                 }
                 $payload .= \chr($bound);
@@ -489,7 +464,7 @@ REGEX;
     /** @see 14.7.7 COM_STMT_CLOSE */
     public function closeStmt(int $stmtId): void
     {
-        $payload = "\x19" . DataTypes::encodeInt32($stmtId);
+        $payload = "\x19" . DataType::encodeInt32($stmtId);
         $this->appendTask(function () use ($payload): void {
             if ($this->connectionState === self::READY) {
                 $this->resetIds();
@@ -582,7 +557,7 @@ REGEX;
     public function killProcess(int $process): Future
     {
         return $this->startCommand(function () use ($process): void {
-            $this->sendPacket("\x0c" . DataTypes::encodeInt32($process));
+            $this->sendPacket("\x0c" . DataType::encodeInt32($process));
         });
     }
 
@@ -597,7 +572,7 @@ REGEX;
     /** @see 14.7.8 COM_STMT_RESET */
     public function resetStmt(int $stmtId): Future
     {
-        $payload = "\x1a" . DataTypes::encodeInt32($stmtId);
+        $payload = "\x1a" . DataType::encodeInt32($stmtId);
         $deferred = new DeferredFuture;
         $this->appendTask(function () use ($payload, $deferred): void {
             $this->resetIds();
@@ -610,7 +585,7 @@ REGEX;
     /** @see 14.8.4 COM_STMT_FETCH */
     public function fetchStmt(int $stmtId): Future
     {
-        $payload = "\x1c" . DataTypes::encodeInt32($stmtId) . DataTypes::encodeInt32(1);
+        $payload = "\x1c" . DataType::encodeInt32($stmtId) . DataType::encodeInt32(1);
         $deferred = new DeferredFuture;
         $this->appendTask(function () use ($payload, $deferred): void {
             $this->resetIds();
@@ -645,24 +620,28 @@ REGEX;
     /** @see 14.1.3.2 ERR-Packet */
     private function handleError(string $packet): void
     {
-        $off = 1;
+        $offset = 1;
 
-        $this->connInfo->errorCode = DataTypes::decodeUnsigned16(\substr($packet, $off, 2));
-        $off += 2;
+        $this->connInfo->errorCode = DataType::decodeUnsigned16($packet, $offset);
 
         if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
-            $this->connInfo->errorState = \substr($packet, $off, 6);
-            $off += 6;
+            $this->connInfo->errorState = \substr($packet, $offset, 6);
+            $offset += 6;
         }
 
-        $this->connInfo->errorMsg = \substr($packet, $off);
+        $this->connInfo->errorMsg = \substr($packet, $offset);
 
         $this->parseCallback = null;
 
         if ($this->connectionState < self::READY) {
             // connection failure
             $this->close();
-            $this->getDeferred()->error(new InitializationException("Could not connect to {$this->config->getConnectionString()}: {$this->connInfo->errorState} {$this->connInfo->errorMsg}"));
+            $this->getDeferred()->error(new InitializationException(\sprintf(
+                'Could not connect to %s: %s %s',
+                $this->config->getConnectionString(),
+                $this->connInfo->errorState ?? 'Unknown state',
+                $this->connInfo->errorMsg ?? 'Unknown error',
+            )));
             return;
         }
 
@@ -675,9 +654,16 @@ REGEX;
         $deferred = $this->result ?? $this->getDeferred();
 
         // normal error
-        $exception = new QueryError("MySQL error ({$this->connInfo->errorCode}): {$this->connInfo->errorState} {$this->connInfo->errorMsg}", $this->query);
+        $exception = new QueryError(\sprintf(
+            'MySQL error (%d): %s %s',
+            $this->connInfo->errorCode ?? 0,
+            $this->connInfo->errorState ?? 'Unknown state',
+            $this->connInfo->errorMsg ?? 'Unknown error',
+        ), $this->query);
+
         $this->result = null;
         $this->query = null;
+
         $deferred->error($exception);
 
         $this->ready();
@@ -686,57 +672,57 @@ REGEX;
     /** @see 14.1.3.1 OK-Packet */
     private function parseOk(string $packet): void
     {
-        $off = 1;
+        $offset = 1;
 
-        $this->connInfo->affectedRows = DataTypes::decodeUnsigned(\substr($packet, $off), $intlen);
-        $off += $intlen;
-
-        $this->connInfo->insertId = DataTypes::decodeUnsigned(\substr($packet, $off), $intlen);
-        $off += $intlen;
+        $this->connInfo->affectedRows = DataType::decodeUnsigned($packet, $offset);
+        $this->connInfo->insertId = DataType::decodeUnsigned($packet, $offset);
 
         if ($this->capabilities & (self::CLIENT_PROTOCOL_41 | self::CLIENT_TRANSACTIONS)) {
-            $this->connInfo->statusFlags = DataTypes::decodeUnsigned16(\substr($packet, $off));
-            $off += 2;
-
-            $this->connInfo->warnings = DataTypes::decodeUnsigned16(\substr($packet, $off));
-            $off += 2;
+            $this->connInfo->statusFlags = DataType::decodeUnsigned16($packet, $offset);
+            $this->connInfo->warnings = DataType::decodeUnsigned16($packet, $offset);
         }
 
-        if ($this->capabilities & self::CLIENT_SESSION_TRACK) {
-            // Even though it seems required according to 14.1.3.1, there is no length encoded string, i.e. no trailing NULL byte ....???
-            if (\strlen($packet) > $off) {
-                $this->connInfo->statusInfo = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
+        if (!($this->capabilities & self::CLIENT_SESSION_TRACK)) {
+            $this->connInfo->statusInfo = \substr($packet, $offset);
+            return;
+        }
 
-                if ($this->connInfo->statusFlags & StatusFlags::SERVER_SESSION_STATE_CHANGED) {
-                    $sessionState = DataTypes::decodeString(\substr($packet, $off), $intlen, $sessionStateLen);
-                    $len = 0;
-                    while ($len < $sessionStateLen) {
-                        $data = DataTypes::decodeString(\substr($sessionState, $len + 1), $datalen, $intlen);
+        // Even though it seems required according to 14.1.3.1, there is no length encoded string,
+        // i.e. no trailing NULL byte ....???
+        if (\strlen($packet) <= $offset) {
+            $this->connInfo->statusInfo = "";
+            return;
+        }
 
-                        switch ($type = DataTypes::decodeUnsigned8(\substr($sessionState, $len))) {
-                            case SessionStateTypes::SESSION_TRACK_SYSTEM_VARIABLES:
-                                $var = DataTypes::decodeString($data, $varintlen, $strlen);
-                                $this->connInfo->sessionState[$type][$var] = DataTypes::decodeString(\substr($data, $varintlen + $strlen));
-                                break;
-                            case SessionStateTypes::SESSION_TRACK_SCHEMA:
-                            case SessionStateTypes::SESSION_TRACK_STATE_CHANGE:
-                            case SessionStateTypes::SESSION_TRACK_GTIDS:
-                            case SessionStateTypes::SESSION_TRACK_TRANSACTION_CHARACTERISTICS:
-                            case SessionStateTypes::SESSION_TRACK_TRANSACTION_STATE:
-                                $this->connInfo->sessionState[$type] = DataTypes::decodeString($data);
-                                break;
-                            default:
-                                throw new \Error("$type is not a valid mysql session state type");
-                        }
+        $this->connInfo->statusInfo = DataType::String->decodeText($packet, $offset);
 
-                        $len += 1 + $intlen + $datalen;
-                    }
-                }
-            } else {
-                $this->connInfo->statusInfo = "";
+        if (!StatusFlag::SessionStateChanged->inFlags($this->connInfo->statusFlags)) {
+            return;
+        }
+
+        $sessionState = DataType::String->decodeText($packet, $offset);
+
+        while (\strlen($packet) > $offset) {
+            $data = DataType::String->decodeText($sessionState, $offset);
+            $type = DataType::decodeUnsigned8($sessionState, $offset);
+
+            switch (SessionStateType::tryFrom($type)) {
+                case SessionStateType::SystemVariables:
+                    $var = DataType::String->decodeText($data, $offset);
+                    $this->connInfo->sessionState[$type][$var] = DataType::String->decodeText($data, $offset);
+                    break;
+
+                case SessionStateType::Schema:
+                case SessionStateType::StateChange:
+                case SessionStateType::Gtids:
+                case SessionStateType::TransactionCharacteristics:
+                case SessionStateType::TransactionState:
+                    $this->connInfo->sessionState[$type] = DataType::String->decodeText($data, $offset);
+                    break;
+
+                default:
+                    throw new \Error("$type is not a valid mysql session state type");
             }
-        } else {
-            $this->connInfo->statusInfo = \substr($packet, $off);
         }
     }
 
@@ -750,10 +736,10 @@ REGEX;
     /** @see 14.1.3.3 EOF-Packet */
     private function parseEof(string $packet): void
     {
+        $offset = 1;
         if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
-            $this->connInfo->warnings = DataTypes::decodeUnsigned16(\substr($packet, 1));
-
-            $this->connInfo->statusFlags = DataTypes::decodeUnsigned16(\substr($packet, 3));
+            $this->connInfo->warnings = DataType::decodeUnsigned16($packet, $offset);
+            $this->connInfo->statusFlags = DataType::decodeUnsigned16($packet, $offset);
         }
     }
 
@@ -768,49 +754,42 @@ REGEX;
     /** @see 14.2.5 Connection Phase Packets */
     private function handleHandshake(string $packet): void
     {
-        $off = 1;
+        $offset = 1;
 
         $protocol = \ord($packet);
         if ($protocol !== 0x0a) {
             throw new ConnectionException("Unsupported protocol version ".\ord($packet)." (Expected: 10)");
         }
 
-        $this->connInfo->serverVersion = DataTypes::decodeNullString(\substr($packet, $off), $len);
-        $off += $len + 1;
+        $this->connInfo->serverVersion = DataType::decodeNullTerminatedString($packet, $offset);
 
-        $this->connectionId = DataTypes::decodeUnsigned32(\substr($packet, $off));
-        $off += 4;
+        $this->connectionId = DataType::decodeUnsigned32($packet, $offset);
 
-        $this->authPluginData = \substr($packet, $off, 8);
-        $off += 8;
+        $this->authPluginData = \substr($packet, $offset, 8);
+        $offset += 8;
 
-        $off += 1; // filler byte
+        $offset += 1; // filler byte
 
-        $this->serverCapabilities = DataTypes::decodeUnsigned16(\substr($packet, $off));
-        $off += 2;
+        $this->serverCapabilities = DataType::decodeUnsigned16($packet, $offset);
 
-        if (\strlen($packet) > $off) {
-            $this->connInfo->charset = \ord(\substr($packet, $off));
-            $off += 1;
+        if (\strlen($packet) > $offset) {
+            $this->connInfo->charset = DataType::decodeUnsigned8($packet, $offset);
+            $this->connInfo->statusFlags = DataType::decodeUnsigned16($packet, $offset);
+            $this->serverCapabilities += DataType::decodeUnsigned16($packet, $offset) << 16;
 
-            $this->connInfo->statusFlags = DataTypes::decodeUnsigned16(\substr($packet, $off));
-            $off += 2;
-
-            $this->serverCapabilities += DataTypes::decodeUnsigned16(\substr($packet, $off)) << 16;
-            $off += 2;
-
-            $authPluginDataLen = $this->serverCapabilities & self::CLIENT_PLUGIN_AUTH ? \ord(\substr($packet, $off)) : 0;
-            $off += 1;
+            $authPluginDataLen = $this->serverCapabilities & self::CLIENT_PLUGIN_AUTH
+                ? DataType::decodeUnsigned8($packet, $offset)
+                : 0;
 
             if ($this->serverCapabilities & self::CLIENT_SECURE_CONNECTION) {
-                $off += 10;
+                $offset += 10;
 
                 $strlen = \max(13, $authPluginDataLen - 8);
-                $this->authPluginData .= \substr($packet, $off, $strlen);
-                $off += $strlen;
+                $this->authPluginData .= \substr($packet, $offset, $strlen);
+                $offset += $strlen;
 
                 if ($this->serverCapabilities & self::CLIENT_PLUGIN_AUTH) {
-                    $this->authPluginName = DataTypes::decodeNullString(\substr($packet, $off));
+                    $this->authPluginName = DataType::decodeNullTerminatedString($packet, $offset);
                 }
             }
         }
@@ -821,13 +800,9 @@ REGEX;
     /** @see 14.2.5 Connection Phase Packets */
     private function handleAuthSwitch($packet)
     {
-        $off = 1;
-
-        $this->authPluginName = DataTypes::decodeNullString(\substr($packet, $off));
-        $off += \strlen($this->authPluginName) + 1;
-
-        $this->authPluginData = \substr($packet, $off);
-
+        $offset = 1;
+        $this->authPluginName = DataType::decodeNullTerminatedString($packet, $offset);
+        $this->authPluginData = \substr($packet, $offset);
         $this->sendAuthSwitchResponse();
     }
 
@@ -865,14 +840,15 @@ REGEX;
         switch (\ord($packet)) {
             case self::OK_PACKET:
                 $this->parseOk($packet);
-                if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
+
+                if (StatusFlag::MoreResultsExist->inFlags($this->connInfo->statusFlags)) {
                     $result = new ResultProxy;
                     $result->affectedRows = $this->connInfo->affectedRows;
                     $result->insertId = $this->connInfo->insertId;
                     $this->getDeferred()->complete(new ConnectionResult($result));
                     $this->result = $result;
                     $result->updateState(ResultProxy::COLUMNS_FETCHED);
-                    $this->successfulResultsetFetch();
+                    $this->successfulResultFetch();
                 } else {
                     $this->parseCallback = null;
                     $this->getDeferred()->complete(new CommandResult(
@@ -898,7 +874,7 @@ REGEX;
         $this->getDeferred()->complete(new ConnectionResult($result = new ResultProxy));
         /* we need to resolve before assigning vars, so that a onResolve() handler won't have a partial result available */
         $this->result = $result;
-        $result->setColumns(DataTypes::decodeUnsigned($packet));
+        $result->setColumns(DataType::decodeUnsigned($packet));
     }
 
     /** @see 14.7.1 Binary Protocol Resultset */
@@ -929,15 +905,15 @@ REGEX;
 
     private function handleTextColumnDefinition(string $packet): void
     {
-        $this->handleColumnDefinition($packet, "handleTextResultSetRow");
+        $this->handleColumnDefinition($packet, $this->handleTextResultSetRow(...));
     }
 
     private function handleBinaryColumnDefinition(string $packet): void
     {
-        $this->handleColumnDefinition($packet, "handleBinaryResultSetRow");
+        $this->handleColumnDefinition($packet, $this->handleBinaryResultSetRow(...));
     }
 
-    private function handleColumnDefinition(string $packet, string $cbMethod): void
+    private function handleColumnDefinition(string $packet, \Closure $parseCallback): void
     {
         if (!$this->result->columnsToFetch--) {
             $this->result->updateState(ResultProxy::COLUMNS_FETCHED);
@@ -945,7 +921,7 @@ REGEX;
                 $this->parseCallback = null;
                 $this->handleError($packet);
             } else {
-                $cb = $this->parseCallback = $this->{$cbMethod}(...);
+                $cb = $this->parseCallback = $parseCallback;
                 if ($this->capabilities & self::CLIENT_DEPRECATE_EOF) {
                     $cb($packet);
                 } else {
@@ -993,74 +969,67 @@ REGEX;
     /** @see 14.6.4.1.1.2 Column Defintion */
     private function parseColumnDefinition(string $packet): array
     {
-        $off = 0;
-
+        $offset = 0;
         $column = [];
 
         if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
-            $column["catalog"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
-            $column["schema"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
-            $column["table"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
-            $column["original_table"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
-            $column["name"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
-            $column["original_name"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
-            $fixlen = DataTypes::decodeUnsignedOff($packet, $off);
+            $column["catalog"] = DataType::String->decodeText($packet, $offset);
+            $column["schema"] = DataType::String->decodeText($packet, $offset);
+            $column["table"] = DataType::String->decodeText($packet, $offset);
+            $column["original_table"] = DataType::String->decodeText($packet, $offset);
+            $column["name"] = DataType::String->decodeText($packet, $offset);
+            $column["original_name"] = DataType::String->decodeText($packet, $offset);
+            $fixLength = DataType::decodeUnsigned($packet, $offset);
 
-            $len = 0;
-            $column["charset"] = DataTypes::decodeUnsigned16(\substr($packet, $off + $len));
-            $len += 2;
-            $column["columnlen"] = DataTypes::decodeUnsigned32(\substr($packet, $off + $len));
-            $len += 4;
-            $column["type"] = \ord($packet[$off + $len]);
-            $len += 1;
-            $column["flags"] = DataTypes::decodeUnsigned16(\substr($packet, $off + $len));
-            $len += 2;
-            $column["decimals"] = \ord($packet[$off + $len]);
-            //$len += 1;
+            $column["charset"] = DataType::decodeUnsigned16($packet, $offset);
+            $column["columnlen"] = DataType::decodeUnsigned32($packet, $offset);
+            $column["type"] = DataType::decodeUnsigned8($packet, $offset);
+            $column["flags"] = DataType::decodeUnsigned16($packet, $offset);
+            $column["decimals"] = DataType::decodeUnsigned8($packet, $offset);
 
-            $off += $fixlen;
+            $offset += $fixLength;
         } else {
-            $column["table"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
-            $column["name"] = DataTypes::decodeStringOff(DataTypes::MYSQL_TYPE_STRING, $packet, $off);
+            $column["table"] = DataType::String->decodeText($packet, $offset);
+            $column["name"] = DataType::String->decodeText($packet, $offset);
 
-            $collen = DataTypes::decodeUnsignedOff($packet, $off);
-            $column["columnlen"] = DataTypes::decodeIntByLen(\substr($packet, $off), $collen);
-            $off += $collen;
+            $columnLength = DataType::decodeUnsigned($packet, $offset);
+            $column["columnlen"] = DataType::decodeIntByLength($packet, $columnLength, $offset);
 
-            $typelen = DataTypes::decodeUnsignedOff($packet, $off);
-            $column["type"] = DataTypes::decodeIntByLen(\substr($packet, $off), $typelen);
-            $off += $typelen;
-
-            $len = 1;
-            $flaglen = $this->capabilities & self::CLIENT_LONG_FLAG ? DataTypes::decodeUnsigned(\substr($packet, $off, 9), $len) : \ord($packet[$off]);
-            $off += $len;
-
-            if ($flaglen > 2) {
-                $len = 2;
-                $column["flags"] = DataTypes::decodeUnsigned16(\substr($packet, $off, 4));
-            } else {
-                $len = 1;
-                $column["flags"] = \ord($packet[$off]);
+            $typeLength = DataType::decodeUnsigned($packet, $offset);
+            $column["type"] = $type = DataType::decodeIntByLength($packet, $typeLength, $offset);
+            if ($type & 0x80) {
+                throw new \Exception($column["name"]);
             }
-            $column["decimals"] = \ord($packet[$off + $len]);
-            $off += $flaglen;
+
+            $flagLength = $this->capabilities & self::CLIENT_LONG_FLAG
+                ? DataType::decodeUnsigned($packet, $offset)
+                : \ord($packet[$offset]);
+
+            if ($flagLength > 2) {
+                $column["flags"] = DataType::decodeUnsigned16($packet, $offset);
+            } else {
+                $column["flags"] = DataType::decodeUnsigned8($packet, $offset);
+            }
+
+            $column["decimals"] = DataType::decodeUnsigned8($packet, $offset);
         }
 
-        if ($off < \strlen($packet)) {
-            $column["defaults"] = DataTypes::decodeString(\substr($packet, $off));
+        if ($offset < \strlen($packet)) {
+            $column["defaults"] = DataType::String->decodeText($packet, $offset);
         }
 
         return $column;
     }
 
-    private function successfulResultsetFetch(): void
+    private function successfulResultFetch(): void
     {
         $result = $this->result;
         $deferred = &$result->next;
         if (!$deferred) {
             $deferred = new DeferredFuture;
         }
-        if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
+
+        if (StatusFlag::MoreResultsExist->inFlags($this->connInfo->statusFlags)) {
             $this->parseCallback = $this->handleQuery(...);
             $this->addDeferred($deferred);
         } else {
@@ -1070,75 +1039,83 @@ REGEX;
             $deferred->complete();
             $this->ready();
         }
+
         $result->updateState(ResultProxy::ROWS_FETCHED);
     }
 
     /** @see 14.6.4.1.1.3 Resultset Row */
     private function handleTextResultSetRow(string $packet): void
     {
-        $packettype = \ord($packet);
-        if ($packettype === self::EOF_PACKET) {
+        $packetType = \ord($packet);
+        if ($packetType === self::EOF_PACKET) {
             if ($this->capabilities & self::CLIENT_DEPRECATE_EOF) {
                 $this->parseOk($packet);
             } else {
                 $this->parseEof($packet);
             }
-            $this->successfulResultsetFetch();
+            $this->successfulResultFetch();
             return;
-        } elseif ($packettype === self::ERR_PACKET) {
+        }
+
+        if ($packetType === self::ERR_PACKET) {
             $this->handleError($packet);
             return;
         }
 
-        $off = 0;
+        $offset = 0;
         $columns = $this->result->columns;
 
         $fields = [];
-        for ($i = 0; $off < \strlen($packet); ++$i) {
-            if (\ord($packet[$off]) === 0xfb) {
+        for ($i = 0; $offset < \strlen($packet); ++$i) {
+            if (\ord($packet[$offset]) === 0xfb) {
                 $fields[] = null;
-                $off += 1;
+                $offset += 1;
             } else {
-                $fields[] = DataTypes::decodeStringOff($columns[$i]["type"], $packet, $off);
+                $type = DataType::from($columns[$i]["type"]);
+                $flags = $columns[$i]["flags"];
+                $fields[] = $type->decodeText($packet, $offset, $flags);
             }
         }
+
         $this->result->rowFetched($fields);
     }
 
     /** @see 14.7.2 Binary Protocol Resultset Row */
     private function handleBinaryResultSetRow(string $packet): void
     {
-        $packettype = \ord($packet);
-        if ($packettype === self::EOF_PACKET) {
+        $packetType = \ord($packet);
+        if ($packetType === self::EOF_PACKET) {
             $this->parseEof($packet);
-            $this->successfulResultsetFetch();
+            $this->successfulResultFetch();
             return;
-        } elseif ($packettype === self::ERR_PACKET) {
+        } elseif ($packetType === self::ERR_PACKET) {
             $this->handleError($packet);
             return;
         }
 
-        $off = 1; // skip first byte
+        $offset = 1; // skip first byte
 
         $columnCount = $this->result->columnCount;
         $columns = $this->result->columns;
         $fields = [];
 
         for ($i = 0; $i < $columnCount; $i++) {
-            if (\ord($packet[$off + (($i + 2) >> 3)]) & (1 << (($i + 2) % 8))) {
+            if (\ord($packet[$offset + (($i + 2) >> 3)]) & (1 << (($i + 2) % 8))) {
                 $fields[$i] = null;
             }
         }
-        $off += ($columnCount + 9) >> 3;
+        $offset += ($columnCount + 9) >> 3;
 
-        for ($i = 0; $off < \strlen($packet); $i++) {
+        for ($i = 0; $offset < \strlen($packet); $i++) {
             while (\array_key_exists($i, $fields)) {
                 $i++;
             }
-            $fields[$i] = DataTypes::decodeBinary($columns[$i]["type"], \substr($packet, $off), $len);
-            $off += $len;
+
+            $type = DataType::from($columns[$i]["type"]);
+            $flags = $columns[$i]["flags"];
+            $fields[$i] = $type->decodeBinary($packet, $offset, $flags);
         }
-        \ksort($fields);
+
         $this->result->rowFetched($fields);
     }
 
@@ -1154,20 +1131,16 @@ REGEX;
             default:
                 throw new ConnectionException("Unexpected value for first byte of COM_STMT_PREPARE Response");
         }
-        $off = 1;
 
-        $stmtId = DataTypes::decodeUnsigned32(\substr($packet, $off));
-        $off += 4;
+        $offset = 1;
 
-        $columns = DataTypes::decodeUnsigned16(\substr($packet, $off));
-        $off += 2;
+        $stmtId = DataType::decodeUnsigned32($packet, $offset);
+        $columns = DataType::decodeUnsigned16($packet, $offset);
+        $params = DataType::decodeUnsigned16($packet, $offset);
 
-        $params = DataTypes::decodeUnsigned16(\substr($packet, $off));
-        $off += 2;
+        $offset += 1; // filler
 
-        $off += 1; // filler
-
-        $this->connInfo->warnings = DataTypes::decodeUnsigned16(\substr($packet, $off));
+        $this->connInfo->warnings = DataType::decodeUnsigned16($packet, $offset);
 
         $this->result = new ResultProxy;
         $this->result->columnsToFetch = $params;
@@ -1251,16 +1224,16 @@ REGEX;
     {
         $packet = "";
         do {
-            $len = \strlen($pending);
-            if ($len >= (1 << 24) - 1) {
+            $length = \strlen($pending);
+            if ($length >= (1 << 24) - 1) {
                 $out = \substr($pending, 0, (1 << 24) - 1);
                 $pending = \substr($pending, (1 << 24) - 1);
-                $len = (1 << 24) - 1;
+                $length = (1 << 24) - 1;
             } else {
                 $out = $pending;
                 $pending = "";
             }
-            $packet .= \substr_replace(\pack("V", $len), \chr(++$this->seqId), 3, 1) . $out; // expects $len < (1 << 24) - 1
+            $packet .= \substr_replace(\pack("V", $length), \chr(++$this->seqId), 3, 1) . $out; // expects $length < (1 << 24) - 1
         } while ($pending !== "");
 
         return $packet;
@@ -1272,47 +1245,48 @@ REGEX;
             return "";
         }
 
-        $len = \strlen($packet);
+        $length = \strlen($packet);
         $deflated = \zlib_encode($packet, ZLIB_ENCODING_DEFLATE);
 
-        if ($len < \strlen($deflated)) {
+        if ($length < \strlen($deflated)) {
             return \substr_replace(\pack("V", \strlen($packet)), \chr(++$this->compressionId), 3, 1) . "\0\0\0" . $packet;
         }
 
-        return \substr_replace(\pack("V", \strlen($deflated)), \chr(++$this->compressionId), 3, 1) . \substr(\pack("V", $len), 0, 3) . $deflated;
+        return \substr_replace(\pack("V", \strlen($deflated)), \chr(++$this->compressionId), 3, 1)
+            . \substr(\pack("V", $length), 0, 3) . $deflated;
     }
 
     /** @see 14.4 Compression */
     private function parseCompression(): \Generator
     {
         $inflated = "";
-        $buf = "";
+        $buffer = "";
 
         while (true) {
-            while (\strlen($buf) < 7) {
-                $buf .= yield $inflated;
+            while (\strlen($buffer) < 7) {
+                $buffer .= yield $inflated;
                 $inflated = "";
             }
 
-            $size = DataTypes::decodeUnsigned24($buf);
-            $this->compressionId = \ord($buf[3]);
-            $uncompressed = DataTypes::decodeUnsigned24(\substr($buf, 4, 3));
+            $size = DataType::decodeUnsigned24($buffer);
+            $this->compressionId = \ord($buffer[3]);
+            $uncompressed = DataType::decodeUnsigned24(\substr($buffer, 4, 3));
 
-            $buf = \substr($buf, 7);
+            $buffer = \substr($buffer, 7);
 
             if ($size > 0) {
-                while (\strlen($buf) < $size) {
-                    $buf .= yield $inflated;
+                while (\strlen($buffer) < $size) {
+                    $buffer .= yield $inflated;
                     $inflated = "";
                 }
 
                 if ($uncompressed === 0) {
-                    $inflated .= \substr($buf, 0, $size);
+                    $inflated .= \substr($buffer, 0, $size);
                 } else {
-                    $inflated .= \zlib_decode(\substr($buf, 0, $size), $uncompressed);
+                    $inflated .= \zlib_decode(\substr($buffer, 0, $size), $uncompressed);
                 }
 
-                $buf = \substr($buf, $size);
+                $buffer = \substr($buffer, $size);
             }
         }
     }
@@ -1323,36 +1297,36 @@ REGEX;
      */
     private function parseMysql(): \Generator
     {
-        $buf = "";
+        $buffer = "";
         $parsed = [];
 
         while (true) {
             $packet = "";
 
             do {
-                while (\strlen($buf) < 4) {
-                    $buf .= yield $parsed;
+                while (\strlen($buffer) < 4) {
+                    $buffer .= yield $parsed;
                     $parsed = [];
                 }
 
-                $len = DataTypes::decodeUnsigned24($buf);
-                $this->seqId = \ord($buf[3]);
-                $buf = \substr($buf, 4);
+                $length = DataType::decodeUnsigned24($buffer);
+                $this->seqId = \ord($buffer[3]);
+                $buffer = \substr($buffer, 4);
 
-                while (\strlen($buf) < ($len & 0xffffff)) {
-                    $buf .= yield $parsed;
+                while (\strlen($buffer) < ($length & 0xffffff)) {
+                    $buffer .= yield $parsed;
                     $parsed = [];
                 }
 
-                $lastIn = $len !== 0xffffff;
+                $lastIn = $length !== 0xffffff;
                 if ($lastIn) {
-                    $size = $len % 0xffffff;
+                    $size = $length % 0xffffff;
                 } else {
                     $size = 0xffffff;
                 }
 
-                $packet .= \substr($buf, 0, $size);
-                $buf = \substr($buf, $size);
+                $packet .= \substr($buffer, 0, $size);
+                $buffer = \substr($buffer, $size);
             } while (!$lastIn);
 
             if (\strlen($packet) > 0) {
@@ -1398,7 +1372,8 @@ REGEX;
                                 case 3: // success
                                     return; // expecting OK afterwards
                                 case 4: // fast auth failure
-                                    if ($this->capabilities & self::CLIENT_SSL || $this->config->getHost()[0] === "/" /* unix domain socket, information not trivially available from $this->socket */) {
+                                    /* unix domain socket, information not trivially available from $this->socket */
+                                    if ($this->capabilities & self::CLIENT_SSL || $this->config->getHost()[0] === "/") {
                                         $this->write($this->config->getPassword() . "\0");
                                     } else {
                                         $this->write("\x02");
@@ -1411,7 +1386,9 @@ REGEX;
                             }
                             break;
                         default:
-                            throw new ConnectionException("Unexpected EXTRA_AUTH_PACKET in authentication phase for method {$this->authPluginName}");
+                            throw new ConnectionException(
+                                "Unexpected EXTRA_AUTH_PACKET in authentication phase for method {$this->authPluginName}"
+                            );
                     }
                     break;
             }
@@ -1455,7 +1432,13 @@ REGEX;
 
     private function sha256Auth(string $pass, string $scramble, string $key): string
     {
-        \openssl_public_encrypt("$pass\0" ^ \str_repeat($scramble, \ceil(\strlen($pass) / \strlen($scramble))), $auth, $key, OPENSSL_PKCS1_OAEP_PADDING);
+        \openssl_public_encrypt(
+            "$pass\0" ^ \str_repeat($scramble, \ceil(\strlen($pass) / \strlen($scramble))),
+            $auth,
+            $key,
+            OPENSSL_PKCS1_OAEP_PADDING,
+        );
+
         return $auth;
     }
 
@@ -1473,9 +1456,9 @@ REGEX;
                 if (\strlen($packet) === 1) {
                     break;
                 }
-                $len = \strpos($packet, "\0");
-                $pluginName = \substr($packet, 0, $len); // @TODO mysql_native_pass only now...
-                $authPluginData = \substr($packet, $len + 1);
+                $length = \strpos($packet, "\0");
+                $pluginName = \substr($packet, 0, $length); // @TODO mysql_native_pass only now...
+                $authPluginData = \substr($packet, $length + 1);
                 $this->sendPacket($this->secureAuth($this->config->getPassword(), $authPluginData));
                 break;
             case self::ERR_PACKET:
@@ -1529,7 +1512,7 @@ REGEX;
 
         $auth = $this->getAuthData();
         if ($this->capabilities & self::CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA) {
-            $payload .= DataTypes::encodeInt(\strlen($auth));
+            $payload .= DataType::encodeInt(\strlen($auth));
             $payload .= $auth;
         } elseif ($this->capabilities & self::CLIENT_SECURE_CONNECTION) {
             $payload .= \chr(\strlen($auth));
@@ -1570,9 +1553,13 @@ REGEX;
                 case "caching_sha2_password":
                     return $this->sha2Auth($this->config->getPassword(), $this->authPluginData);
                 case "mysql_old_password":
-                    throw new ConnectionException("mysql_old_password is outdated and insecure. Intentionally not implemented!");
+                    throw new ConnectionException(
+                        "mysql_old_password is outdated and insecure. Intentionally not implemented!"
+                    );
                 default:
-                    throw new ConnectionException("Invalid (or unimplemented?) auth method requested by server: {$this->authPluginName}");
+                    throw new ConnectionException(
+                        "Invalid (or unimplemented?) auth method requested by server: {$this->authPluginName}"
+                    );
             }
         }
 
