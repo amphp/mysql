@@ -10,21 +10,12 @@ use Revolt\EventLoop;
 
 final class Connection implements Link
 {
-    public const REFRESH_GRANT = 0x01;
-    public const REFRESH_LOG = 0x02;
-    public const REFRESH_TABLES = 0x04;
-    public const REFRESH_HOSTS = 0x08;
-    public const REFRESH_STATUS = 0x10;
-    public const REFRESH_THREADS = 0x20;
-    public const REFRESH_SLAVE = 0x40;
-    public const REFRESH_MASTER = 0x80;
-
-    private Internal\Processor $processor;
+    private readonly Internal\Processor $processor;
 
     private ?DeferredFuture $busy = null;
 
     /** @var \Closure():void Function used to release connection after a transaction has completed. */
-    private \Closure $release;
+    private readonly \Closure $release;
 
     public static function initialize(
         EncryptableSocket $socket,
@@ -43,7 +34,7 @@ final class Connection implements Link
         $busy = &$this->busy;
         $this->release = static function () use (&$busy): void {
             \assert($busy instanceof DeferredFuture);
-            $busy->complete(null);
+            $busy->complete();
             $busy = null;
         };
     }
@@ -85,14 +76,6 @@ final class Connection implements Link
     public function useDb(string $db): void
     {
         $this->processor->useDb($db)->await();
-    }
-
-    /**
-     * @param int $subcommand int one of the self::REFRESH_* constants
-     */
-    public function refresh(int $subcommand): void
-    {
-        $this->processor->refresh($subcommand)->await();
     }
 
     public function query(string $sql): Result

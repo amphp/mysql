@@ -519,7 +519,7 @@ REGEX;
     }
 
     /**
-     * @param $subcommand int one of the self::REFRESH_* constants
+     * @param int $subcommand
      * @see 14.6.8 COM_REFRESH
      */
     public function refresh(int $subcommand): Future
