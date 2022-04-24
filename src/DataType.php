@@ -274,29 +274,18 @@ enum DataType: int
 
     public static function decodeUnsigned(string $string, int &$offset = 0): int
     {
-        $int = \ord($string[$offset]);
+        $int = self::decodeUnsigned8($string, $offset);
         if ($int < 0xfb) {
-            $offset += 1;
             return $int;
         }
 
-        if ($int === 0xfc) {
-            $offset += 3;
-            return self::decodeUnsigned16(\substr($string, $offset - 2, 2));
-        }
-
-        if ($int === 0xfd) {
-            $offset += 4;
-            return self::decodeUnsigned24(\substr($string, $offset - 3, 3));
-        }
-
-        if ($int === 0xfe) {
-            $offset += 9;
-            return self::decodeUnsigned64(\substr($string, $offset - 8, 8));
-        }
-
-        // If that happens connection is borked...
-        throw new SqlException("$int is not in ranges [0x00, 0xfa] or [0xfc, 0xfe]");
+        return match ($int) {
+            0xfc => self::decodeUnsigned16($string, $offset),
+            0xfd => self::decodeUnsigned24($string, $offset),
+            0xfe => self::decodeUnsigned64($string, $offset),
+            // If this happens connection is borked...
+            default => throw new SqlException("$int is not in ranges [0x00, 0xfa] or [0xfc, 0xfe]"),
+        };
     }
 
     public static function decodeIntByLength(string $string, int $length, int &$offset = 0): int
