@@ -71,7 +71,7 @@ jobs:
       - name: Run static analysis
         run: vendor/bin/psalm.phar
 
-      - name: Run style fixer
-        env:
-          PHP_CS_FIXER_IGNORE_ENV: 1
-        run: vendor/bin/php-cs-fixer --diff --dry-run -v fix
+#      - name: Run style fixer
+#        env:
+#          PHP_CS_FIXER_IGNORE_ENV: 1
+#        run: vendor/bin/php-cs-fixer --diff --dry-run -v fix
