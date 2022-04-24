@@ -7,11 +7,11 @@ use Amp\Mysql\ColumnDefinition;
 
 final class ResultProxy
 {
-    public int $columnCount;
+    public int $columnCount = 0;
     /** @var list<ColumnDefinition> */
     public array $columns = [];
     public array $params = [];
-    public int $columnsToFetch;
+    public int $columnsToFetch = 0;
     public array $rows = [];
     public int $fetchedRows = 0;
     public int $userFetched = 0;

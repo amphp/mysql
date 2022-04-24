@@ -59,7 +59,7 @@ final class ConnectionTransaction implements Transaction
 
     public function getLastUsedAt(): int
     {
-        return $this->processor->getLastUsedAt();
+        return $this->processor?->getLastUsedAt() ?? 0;
     }
 
     /**
@@ -106,6 +106,8 @@ final class ConnectionTransaction implements Transaction
 
     /**
      * @throws TransactionError If the transaction has been committed or rolled back.
+     *
+     * @psalm-suppress InvalidReturnStatement, InvalidReturnType
      */
     public function prepare(string $sql): Statement
     {

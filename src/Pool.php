@@ -11,6 +11,10 @@ use Amp\Sql\TransactionIsolation;
 
 final class Pool extends ConnectionPool implements Link
 {
+    /**
+     * @param positive-int $maxConnections
+     * @param positive-int $idleTimeout
+     */
     public function __construct(
         MysqlConfig $config,
         int $maxConnections = self::DEFAULT_MAX_CONNECTIONS,
@@ -44,6 +48,8 @@ final class Pool extends ConnectionPool implements Link
 
     /**
      * Changes return type to this library's Result type.
+     *
+     * @psalm-suppress LessSpecificReturnStatement, MoreSpecificReturnType
      */
     public function query(string $sql): Result
     {
@@ -52,6 +58,8 @@ final class Pool extends ConnectionPool implements Link
 
     /**
      * Changes return type to this library's Statement type.
+     *
+     * @psalm-suppress LessSpecificReturnStatement, MoreSpecificReturnType
      */
     public function prepare(string $sql): Statement
     {
@@ -60,6 +68,8 @@ final class Pool extends ConnectionPool implements Link
 
     /**
      * Changes return type to this library's Result type.
+     *
+     * @psalm-suppress LessSpecificReturnStatement, MoreSpecificReturnType
      */
     public function execute(string $sql, array $params = []): Result
     {
@@ -68,6 +78,8 @@ final class Pool extends ConnectionPool implements Link
 
     /**
      * Changes return type to this library's Transaction type.
+     *
+     * @psalm-suppress LessSpecificReturnStatement, MoreSpecificReturnType
      */
     public function beginTransaction(TransactionIsolation $isolation = TransactionIsolation::Committed): Transaction
     {

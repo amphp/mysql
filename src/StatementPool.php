@@ -32,6 +32,9 @@ final class StatementPool extends SqlStatementPool implements Statement
         return new PooledResult($result, $release);
     }
 
+    /**
+     * @psalm-suppress LessSpecificReturnStatement, MoreSpecificReturnType
+     */
     public function execute(array $params = []): Result
     {
         return parent::execute($params);
@@ -39,10 +42,6 @@ final class StatementPool extends SqlStatementPool implements Statement
 
     public function bind(int|string $paramId, mixed $data): void
     {
-        if (!\is_int($paramId) && !\is_string($paramId)) {
-            throw new \TypeError("Invalid parameter ID type");
-        }
-
         $this->params[$paramId] = $data;
     }
 
@@ -54,8 +53,9 @@ final class StatementPool extends SqlStatementPool implements Statement
     public function getColumnDefinitions(): ?array
     {
         $statement = $this->pop();
-        $fields = $statement->getColumnDefinitions();
+        \assert($statement instanceof Statement);
+        $columns = $statement->getColumnDefinitions();
         $this->push($statement);
-        return $fields;
+        return $columns;
     }
 }

@@ -4,7 +4,7 @@ namespace Amp\Mysql;
 
 use Amp\Cancellation;
 use Amp\DeferredFuture;
-use Amp\Socket\Socket;
+use Amp\Socket\EncryptableSocket;
 use Amp\Sql\TransactionIsolation;
 use Revolt\EventLoop;
 
@@ -23,11 +23,11 @@ final class Connection implements Link
 
     private ?DeferredFuture $busy = null;
 
-    /** @var \Closure Function used to release connection after a transaction has completed. */
+    /** @var \Closure():void Function used to release connection after a transaction has completed. */
     private \Closure $release;
 
     public static function initialize(
-        Socket $socket,
+        EncryptableSocket $socket,
         MysqlConfig $config,
         ?Cancellation $cancellation = null,
     ): self {

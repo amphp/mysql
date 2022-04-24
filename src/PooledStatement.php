@@ -9,6 +9,9 @@ final class PooledStatement extends SqlPooledStatement implements Statement
 {
     private readonly Statement $statement;
 
+    /**
+     * @param \Closure():void $release
+     */
     public function __construct(Statement $statement, \Closure $release)
     {
         parent::__construct($statement, $release);

@@ -14,7 +14,7 @@ final class ConnectionState
     public ?int $errorCode = null;
     public ?string $errorState = null; // begins with "#"
 
-    public string $serverVersion;
+    public string $serverVersion = '';
 
-    public int $charset;
+    public int $charset = 0;
 }

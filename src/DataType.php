@@ -96,10 +96,10 @@ enum DataType: int
             case self::Bit:
             case self::Decimal:
             case self::NewDecimal:
-                return $this->decodeText($string, $offset);
+                return self::decodeString($string, $offset);
 
             case self::Json:
-                $data = $this->decodeText($string, $offset);
+                $data = self::decodeString($string, $offset);
                 return self::decodeJson($data);
 
             case self::LongLong:
@@ -163,13 +163,13 @@ enum DataType: int
                         throw new SqlException("Unexpected string length for date in binary protocol: " . ($length - 1));
                 }
 
-                return \str_pad($year, 2, "0", \STR_PAD_LEFT)
-                    . "-" . \str_pad($month, 2, "0", \STR_PAD_LEFT)
-                    . "-" . \str_pad($day, 2, "0", \STR_PAD_LEFT)
-                    . " " . \str_pad($hour, 2, "0", \STR_PAD_LEFT)
-                    . ":" . \str_pad($minute, 2, "0", \STR_PAD_LEFT)
-                    . ":" . \str_pad($second, 2, "0", \STR_PAD_LEFT)
-                    . "." . \str_pad($microsecond, 5, "0", \STR_PAD_LEFT);
+                return \str_pad((string) $year, 2, "0", \STR_PAD_LEFT)
+                    . "-" . \str_pad((string) $month, 2, "0", \STR_PAD_LEFT)
+                    . "-" . \str_pad((string) $day, 2, "0", \STR_PAD_LEFT)
+                    . " " . \str_pad((string) $hour, 2, "0", \STR_PAD_LEFT)
+                    . ":" . \str_pad((string) $minute, 2, "0", \STR_PAD_LEFT)
+                    . ":" . \str_pad((string) $second, 2, "0", \STR_PAD_LEFT)
+                    . "." . \str_pad((string) $microsecond, 5, "0", \STR_PAD_LEFT);
 
             case self::Time:
                 $string = \substr($string, $offset, 13);
@@ -192,11 +192,11 @@ enum DataType: int
                         throw new SqlException("Unexpected string length for time in binary protocol: " . ($length - 1));
                 }
 
-                return ($negative ? "" : "-") . \str_pad($day, 2, "0", \STR_PAD_LEFT)
-                    . "d " . \str_pad($hour, 2, "0", \STR_PAD_LEFT)
-                    . ":" . \str_pad($minute, 2, "0", \STR_PAD_LEFT)
-                    . ":" . \str_pad($second, 2, "0", \STR_PAD_LEFT)
-                    . "." . \str_pad($microsecond, 5, "0", \STR_PAD_LEFT);
+                return ($negative ? "" : "-") . \str_pad((string) $day, 2, "0", \STR_PAD_LEFT)
+                    . "d " . \str_pad((string) $hour, 2, "0", \STR_PAD_LEFT)
+                    . ":" . \str_pad((string) $minute, 2, "0", \STR_PAD_LEFT)
+                    . ":" . \str_pad((string) $second, 2, "0", \STR_PAD_LEFT)
+                    . "." . \str_pad((string) $microsecond, 5, "0", \STR_PAD_LEFT);
 
             case self::Null:
                 return null;
@@ -254,13 +254,25 @@ enum DataType: int
 
     public static function decodeNullTerminatedString(string $string, int &$offset = 0): string
     {
-        $length = \strpos($string, "\0", $offset) - $offset;
+        $length = \strpos($string, "\0", $offset);
+        if ($length === false) {
+            throw new \ValueError('Null not found in string');
+        }
+
+        $length -= $offset;
         $result = \substr($string, $offset, $length);
         $offset += $length + 1;
         return $result;
     }
 
-    public static function decodeUnsigned(string $string, int &$offset = 0): int|string
+    public static function decodeString(string $string, int &$offset = 0): string
+    {
+        $length = self::decodeUnsigned($string, $offset);
+        $offset += $length;
+        return \substr($string, $offset - $length, $length);
+    }
+
+    public static function decodeUnsigned(string $string, int &$offset = 0): int
     {
         $int = \ord($string[$offset]);
         if ($int < 0xfb) {
@@ -366,7 +378,20 @@ enum DataType: int
         return \unpack("V", $string)[1];
     }
 
-    public static function decodeUnsigned32(string $string, int &$offset = 0): int|string
+    public static function decodeUnsigned32(string $string, int &$offset = 0): int
+    {
+        $string = \substr($string, $offset, 4);
+        $offset += 4;
+
+        $result = \unpack("V", $string)[1];
+        if ($result < 0) {
+            throw new \RuntimeException('Expecting a non-negative integer');
+        }
+
+        return $result;
+    }
+
+    public static function decodeUnsigned32WithGmp(string $string, int &$offset = 0): int|string
     {
         $string = \substr($string, $offset, 4);
         $offset += 4;
@@ -380,7 +405,19 @@ enum DataType: int
         return \gmp_strval(\gmp_import(\substr($string, 0, 4), 1, \GMP_LSW_FIRST));
     }
 
-    public static function decodeInt64(string $string, int &$offset = 0): int|string
+    public static function decodeInt64(string $string, int &$offset = 0): int
+    {
+        $string = \substr($string, $offset, 8);
+        $offset += 8;
+
+        if (\PHP_INT_SIZE > 4) {
+            return \unpack("P", $string)[1];
+        }
+
+        throw new \RuntimeException('64-bit integers are not supported by 32-bit builds of PHP');
+    }
+
+    public static function decodeInt64WithGmp(string $string, int &$offset = 0): int|string
     {
         $string = \substr($string, $offset, 8);
         $offset += 8;
@@ -394,7 +431,24 @@ enum DataType: int
         return \gmp_strval(\gmp_import(\substr($string, 0, 8), 1, \GMP_LSW_FIRST));
     }
 
-    public static function decodeUnsigned64(string $string, int &$offset = 0): int|string
+    public static function decodeUnsigned64(string $string, int &$offset = 0): int
+    {
+        if (\PHP_INT_SIZE <= 4) {
+            throw new \RuntimeException('64-bit integers are not supported by 32-bit builds of PHP');
+        }
+
+        $string = \substr($string, $offset, 8);
+        $offset += 8;
+
+        $result = \unpack("P", $string)[1];
+        if ($result < 0) {
+            throw new \RuntimeException('Expecting a non-negative integer');
+        }
+
+        return $result;
+    }
+
+    public static function decodeUnsigned64WithGmp(string $string, int &$offset = 0): string
     {
         $string = \substr($string, $offset, 8);
         $offset += 8;

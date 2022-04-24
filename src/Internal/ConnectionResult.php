@@ -84,7 +84,7 @@ final class ConnectionResult implements Result, \IteratorAggregate
         /* We need to increment the internal counter, else the next time fetch is called,
          * it'll simply return the row we fetch here instead of fetching a new row
          * since callback order on promises isn't defined, we can't do this via onResolve() */
-        $incRow = static function ($row) use ($result) {
+        $incRow = static function (?array $row) use ($result): ?array {
             unset($result->rows[$result->userFetched++]);
             return $row;
         };

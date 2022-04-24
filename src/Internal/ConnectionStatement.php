@@ -92,7 +92,7 @@ final class ConnectionStatement implements Statement
                 }
             }
 
-            $this->getProcessor()->bindParam($this->stmtId, $realId, $data);
+            $this->getProcessor()->bindParam($this->stmtId, $realId, (string) $data);
         } while (isset($array) && $i = \next($array));
 
         if (isset($this->prebound[$paramId])) {

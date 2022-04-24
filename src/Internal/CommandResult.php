@@ -41,6 +41,9 @@ final class CommandResult implements Result, \IteratorAggregate
         return $this->lastInsertId;
     }
 
+    /**
+     * @psalm-suppress LessSpecificReturnStatement, MoreSpecificReturnType
+     */
     public function getNextResult(): ?Result
     {
         return $this->delegate->getNextResult();

@@ -55,11 +55,11 @@ REGEX;
 
     private int $lastUsedAt;
 
-    private int $connectionId;
-    private string $authPluginData;
+    private int $connectionId = 0;
+    private string $authPluginData = '';
     private int $capabilities = 0;
     private int $serverCapabilities = 0;
-    private string $authPluginName;
+    private string $authPluginName = '';
     private ConnectionState $connInfo;
     private int $refcount = 1;
 
@@ -150,7 +150,7 @@ REGEX;
 
     private function addDeferred(DeferredFuture $deferred): void
     {
-        \assert($this->socket, "The connection has been closed");
+        \assert($this->socket !== null, "The connection has been closed");
         $this->deferreds[] = $deferred;
         $this->socket->reference();
     }
@@ -189,7 +189,7 @@ REGEX;
     private function read(): void
     {
         try {
-            while (($bytes = $this->socket->read()) !== null) {
+            while ($this->socket !== null && ($bytes = $this->socket->read()) !== null) {
                 // @codeCoverageIgnoreStart
                 \assert((function () use ($bytes) {
                     if (\defined("MYSQL_DEBUG")) {
@@ -211,10 +211,6 @@ REGEX;
 
                 $this->processData($bytes);
                 $bytes = null; // Free last data read.
-
-                if (!$this->socket) { // Connection closed.
-                    break;
-                }
             }
         } catch (\Throwable $exception) {
             // $exception used as previous exception below.
@@ -316,6 +312,7 @@ REGEX;
     public function useDb(string $db): Future
     {
         return $this->startCommand(function () use ($db): void {
+            /** @psalm-suppress PropertyTypeCoercion */
             $this->config = $this->config->withDatabase($db);
             $this->sendPacket("\x02$db");
         });
@@ -404,10 +401,14 @@ REGEX;
         });
     }
 
-    /** @see 14.7.6 COM_STMT_EXECUTE */
-    // prebound params: null-bit set, type MYSQL_TYPE_LONG_BLOB, no value
-    // $params is by-ref, because the actual result object might not yet have been filled completely with data upon
-    // call of this method ...
+    /** @see 14.7.6 COM_STMT_EXECUTE
+     * prebound params: null-bit set, type MYSQL_TYPE_LONG_BLOB, no value
+     * $params is by-ref, because the actual result object might not yet have been filled completely with data upon
+     * call of this method ...
+     *
+     * @param array<int, mixed> $prebound
+     * @param array<int, mixed> $data
+     */
     public function execute(int $stmtId, string $query, array &$params, array $prebound, array $data = []): Future
     {
         $deferred = new DeferredFuture;
@@ -417,7 +418,7 @@ REGEX;
             $payload .= \chr(0); // cursor flag // @TODO cursor types?!
             $payload .= DataType::encodeInt32(1);
             $paramCount = \count($params);
-            $bound = !empty($data) || !empty($prebound);
+            $bound = (!empty($data) || !empty($prebound)) ? 1 : 0;
             $types = "";
             $values = "";
             if ($paramCount) {
@@ -641,7 +642,7 @@ REGEX;
                 'Could not connect to %s: %s %s',
                 $this->config->getConnectionString(),
                 $this->connInfo->errorState ?? 'Unknown state',
-                $this->connInfo->errorMsg ?? 'Unknown error',
+                $this->connInfo->errorMsg,
             )));
             return;
         }
@@ -657,10 +658,10 @@ REGEX;
         // normal error
         $exception = new QueryError(\sprintf(
             'MySQL error (%d): %s %s',
-            $this->connInfo->errorCode ?? 0,
+            $this->connInfo->errorCode,
             $this->connInfo->errorState ?? 'Unknown state',
-            $this->connInfo->errorMsg ?? 'Unknown error',
-        ), $this->query);
+            $this->connInfo->errorMsg,
+        ), $this->query ?? '');
 
         $this->result = null;
         $this->query = null;
@@ -670,7 +671,11 @@ REGEX;
         $this->ready();
     }
 
-    /** @see 14.1.3.1 OK-Packet */
+    /**
+     * @see 14.1.3.1 OK-Packet
+     *
+     * @psalm-suppress TypeDoesNotContainType Psalm seems to be having trouble with enums.
+     */
     private function parseOk(string $packet): void
     {
         $offset = 1;
@@ -695,22 +700,22 @@ REGEX;
             return;
         }
 
-        $this->connInfo->statusInfo = DataType::String->decodeText($packet, $offset);
+        $this->connInfo->statusInfo = DataType::decodeString($packet, $offset);
 
         if (!StatusFlag::SessionStateChanged->inFlags($this->connInfo->statusFlags)) {
             return;
         }
 
-        $sessionState = DataType::String->decodeText($packet, $offset);
+        $sessionState = DataType::decodeString($packet, $offset);
 
         while (\strlen($packet) > $offset) {
-            $data = DataType::String->decodeText($sessionState, $offset);
+            $data = DataType::decodeString($sessionState, $offset);
             $type = DataType::decodeUnsigned8($sessionState, $offset);
 
             switch (SessionStateType::tryFrom($type)) {
                 case SessionStateType::SystemVariables:
-                    $var = DataType::String->decodeText($data, $offset);
-                    $this->connInfo->sessionState[$type][$var] = DataType::String->decodeText($data, $offset);
+                    $var = DataType::decodeString($data, $offset);
+                    $this->connInfo->sessionState[$type][$var] = DataType::decodeString($data, $offset);
                     break;
 
                 case SessionStateType::Schema:
@@ -718,7 +723,7 @@ REGEX;
                 case SessionStateType::Gtids:
                 case SessionStateType::TransactionCharacteristics:
                 case SessionStateType::TransactionState:
-                    $this->connInfo->sessionState[$type] = DataType::String->decodeText($data, $offset);
+                    $this->connInfo->sessionState[$type] = DataType::decodeString($data, $offset);
                     break;
 
                 default:
@@ -747,7 +752,7 @@ REGEX;
     private function handleEof(string $packet): void
     {
         $this->parseEof($packet);
-        $exception = new SqlException($this->connInfo->errorMsg, $this->connInfo->errorCode);
+        $exception = new SqlException($this->connInfo->errorMsg ?? 'Unknown error', $this->connInfo->errorCode ?? 0);
         $this->getDeferred()->error($exception);
         $this->ready();
     }
@@ -799,7 +804,7 @@ REGEX;
     }
 
     /** @see 14.2.5 Connection Phase Packets */
-    private function handleAuthSwitch($packet)
+    private function handleAuthSwitch(string $packet): void
     {
         $offset = 1;
         $this->authPluginName = DataType::decodeNullTerminatedString($packet, $offset);
@@ -807,7 +812,7 @@ REGEX;
         $this->sendAuthSwitchResponse();
     }
 
-    private function sendAuthSwitchResponse()
+    private function sendAuthSwitchResponse(): void
     {
         $this->write($this->getAuthData());
     }
@@ -825,7 +830,7 @@ REGEX;
 
                 $fileHandle = File\openFile($filePath, 'r');
 
-                while ("" != ($chunk = $fileHandle->read())) {
+                while (null !== ($chunk = $fileHandle->read())) {
                     $this->sendPacket($chunk);
                 }
                 $this->sendPacket("");
@@ -916,6 +921,8 @@ REGEX;
 
     private function handleColumnDefinition(string $packet, \Closure $parseCallback): void
     {
+        \assert($this->result !== null, 'Connection result was in invalid state');
+
         if (!$this->result->columnsToFetch--) {
             $this->result->updateState(ResultProxy::COLUMNS_FETCHED);
             if (\ord($packet) === self::ERR_PACKET) {
@@ -938,6 +945,8 @@ REGEX;
 
     private function prepareParams(string $packet): void
     {
+        \assert($this->result !== null, 'Connection result was in invalid state');
+
         if (!$this->result->columnsToFetch--) {
             $this->result->columnsToFetch = $this->result->columnCount;
             if (!$this->result->columnsToFetch) {
@@ -953,6 +962,8 @@ REGEX;
 
     private function prepareFields(string $packet): void
     {
+        \assert($this->result !== null, 'Connection result was in invalid state');
+
         if (!$this->result->columnsToFetch--) {
             $this->parseCallback = null;
             $this->query = null;
@@ -974,12 +985,12 @@ REGEX;
         $column = [];
 
         if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
-            $column["catalog"] = DataType::String->decodeText($packet, $offset);
-            $column["schema"] = DataType::String->decodeText($packet, $offset);
-            $column["table"] = DataType::String->decodeText($packet, $offset);
-            $column["originalTable"] = DataType::String->decodeText($packet, $offset);
-            $column["name"] = DataType::String->decodeText($packet, $offset);
-            $column["originalName"] = DataType::String->decodeText($packet, $offset);
+            $column["catalog"] = DataType::decodeString($packet, $offset);
+            $column["schema"] = DataType::decodeString($packet, $offset);
+            $column["table"] = DataType::decodeString($packet, $offset);
+            $column["originalTable"] = DataType::decodeString($packet, $offset);
+            $column["name"] = DataType::decodeString($packet, $offset);
+            $column["originalName"] = DataType::decodeString($packet, $offset);
             $fixLength = DataType::decodeUnsigned($packet, $offset);
 
             $column["charset"] = DataType::decodeUnsigned16($packet, $offset);
@@ -990,8 +1001,8 @@ REGEX;
 
             $offset += $fixLength;
         } else {
-            $column["table"] = DataType::String->decodeText($packet, $offset);
-            $column["name"] = DataType::String->decodeText($packet, $offset);
+            $column["table"] = DataType::decodeString($packet, $offset);
+            $column["name"] = DataType::decodeString($packet, $offset);
 
             $columnLength = DataType::decodeUnsigned($packet, $offset);
             $column["length"] = DataType::decodeIntByLength($packet, $columnLength, $offset);
@@ -1013,14 +1024,17 @@ REGEX;
         }
 
         if ($offset < \strlen($packet)) {
-            $column["defaults"] = DataType::String->decodeText($packet, $offset);
+            $column["defaults"] = DataType::decodeString($packet, $offset);
         }
 
+        /** @psalm-suppress InvalidScalarArgument */
         return new ColumnDefinition(...$column);
     }
 
     private function successfulResultFetch(): void
     {
+        \assert($this->result !== null, 'Connection result was in invalid state');
+
         $result = $this->result;
         $deferred = &$result->next;
         if (!$deferred) {
@@ -1060,6 +1074,8 @@ REGEX;
             return;
         }
 
+        \assert($this->result !== null, 'Connection result was in invalid state');
+
         $offset = 0;
         $fields = [];
         for ($i = 0; $offset < \strlen($packet); ++$i) {
@@ -1067,7 +1083,7 @@ REGEX;
                 $fields[] = null;
                 $offset += 1;
             } else {
-                $column = $this->result->columns[$i];
+                $column = $this->result->columns[$i] ?? throw new \RuntimeException("Definition missing for column $i");
                 $fields[] = $column->type->decodeText($packet, $offset, $column->flags);
             }
         }
@@ -1088,6 +1104,8 @@ REGEX;
             return;
         }
 
+        \assert($this->result !== null, 'Connection result was in invalid state');
+
         $offset = 1; // skip first byte
         $fields = [];
         for ($i = 0; $i < $this->result->columnCount; $i++) {
@@ -1102,7 +1120,7 @@ REGEX;
                 $i++;
             }
 
-            $column = $this->result->columns[$i];
+            $column = $this->result->columns[$i] ?? throw new \RuntimeException("Definition missing for column $i");
             $fields[$i] = $column->type->decodeBinary($packet, $offset, $column->flags);
         }
 
@@ -1136,6 +1154,7 @@ REGEX;
         $this->result->columnsToFetch = $params;
         $this->result->columnCount = $columns;
         $this->refcount++;
+        \assert($this->query !== null, 'Invalid value for connection query');
         $this->getDeferred()->complete(new ConnectionStatement($this, $this->query, $stmtId, $this->named, $this->result));
         $this->named = [];
         if ($params) {
@@ -1202,6 +1221,7 @@ REGEX;
             $packet = $this->compressPacket($packet);
         }
 
+        \assert($this->socket !== null, 'The connection was closed during a call to write');
         $this->socket->write($packet);
     }
 
@@ -1371,7 +1391,7 @@ REGEX;
                                     break;
                                 case 0x2d: // certificate
                                     $pubkey = \substr($packet, 1);
-                                    $this->write($this->sha256Auth($this->config->getPassword(), $this->authPluginData, $pubkey));
+                                    $this->write($this->sha256Auth($this->config->getPassword() ?? '', $this->authPluginData, $pubkey));
                                     break;
                             }
                             break;
@@ -1416,14 +1436,14 @@ REGEX;
 
     private function secureAuth(string $pass, string $scramble): string
     {
-        $hash = \sha1($pass, 1);
-        return $hash ^ \sha1(\substr($scramble, 0, 20) . \sha1($hash, 1), 1);
+        $hash = \sha1($pass, true);
+        return $hash ^ \sha1(\substr($scramble, 0, 20) . \sha1($hash, true), true);
     }
 
     private function sha256Auth(string $pass, string $scramble, string $key): string
     {
         \openssl_public_encrypt(
-            "$pass\0" ^ \str_repeat($scramble, \ceil(\strlen($pass) / \strlen($scramble))),
+            "$pass\0" ^ \str_repeat($scramble, (int) \ceil(\strlen($pass) / \strlen($scramble))),
             $auth,
             $key,
             OPENSSL_PKCS1_OAEP_PADDING,
@@ -1446,10 +1466,10 @@ REGEX;
                 if (\strlen($packet) === 1) {
                     break;
                 }
-                $length = \strpos($packet, "\0");
+                $length = (int) \strpos($packet, "\0");
                 $pluginName = \substr($packet, 0, $length); // @TODO mysql_native_pass only now...
                 $authPluginData = \substr($packet, $length + 1);
-                $this->sendPacket($this->secureAuth($this->config->getPassword(), $authPluginData));
+                $this->sendPacket($this->secureAuth($this->config->getPassword() ?? '', $authPluginData));
                 break;
             case self::ERR_PACKET:
                 $this->handleError($packet);
@@ -1486,7 +1506,7 @@ REGEX;
                 try {
                     $this->write($payload);
 
-                    $this->socket->setupTls();
+                    $this->socket?->setupTls();
 
                     $this->sendHandshake(true);
                 } catch (\Throwable $e) {
@@ -1522,8 +1542,10 @@ REGEX;
         $this->write($payload);
     }
 
-    private function getAuthData(): ?string
+    private function getAuthData(): string
     {
+        $password = $this->config->getPassword() ?? "";
+
         if ($this->config->getPassword() == "") {
             return "";
         }
@@ -1531,17 +1553,17 @@ REGEX;
         if ($this->capabilities & self::CLIENT_PLUGIN_AUTH) {
             switch ($this->authPluginName) {
                 case "mysql_native_password":
-                    return $this->secureAuth($this->config->getPassword(), $this->authPluginData);
+                    return $this->secureAuth($password, $this->authPluginData);
                 case "mysql_clear_password":
-                    return $this->config->getPassword();
+                    return $password;
                 case "sha256_password":
                     $key = $this->config->getKey();
-                    if ($key !== null) {
-                        return $this->sha256Auth($this->config->getPassword(), $this->authPluginData, $key);
+                    if ($key !== '') {
+                        return $this->sha256Auth($password, $this->authPluginData, $key);
                     }
                     return "\x01";
                 case "caching_sha2_password":
-                    return $this->sha2Auth($this->config->getPassword(), $this->authPluginData);
+                    return $this->sha2Auth($password, $this->authPluginData);
                 case "mysql_old_password":
                     throw new ConnectionException(
                         "mysql_old_password is outdated and insecure. Intentionally not implemented!"
@@ -1553,7 +1575,7 @@ REGEX;
             }
         }
 
-        return $this->secureAuth($this->config->getPassword(), $this->authPluginData);
+        return $this->secureAuth($password, $this->authPluginData);
     }
 
     /** @see 14.1.2 MySQL Packet */

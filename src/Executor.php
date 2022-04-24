@@ -12,7 +12,7 @@ interface Executor extends SqlExecutor
     public function query(string $sql): Result;
 
     /**
-     * @return Result Result object specific to this library.
+     * @return Statement Statement object specific to this library.
      */
     public function prepare(string $sql): Statement;
 

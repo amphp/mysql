@@ -33,6 +33,9 @@ function connect(MysqlConfig $config): Connection
 /**
  * Create a pool using the global Connector instance.
  *
+ * @param positive-int $maxConnections
+ * @param positive-int $idleTimeout
+ *
  * @throws \Error If the connection string does not contain a host, user, and password.
  */
 function pool(

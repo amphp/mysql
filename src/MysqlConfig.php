@@ -47,16 +47,16 @@ final class MysqlConfig extends SqlConfig
         }
 
         return new self(
-            $parts['host'],
-            (int) ($parts['port'] ?? self::DEFAULT_PORT),
-            $parts['user'] ?? null,
-            $parts['password'] ?? null,
-            $parts['db'] ?? null,
-            $context,
-            $parts['charset'] ?? self::DEFAULT_CHARSET,
-            $parts['collate'] ?? self::DEFAULT_COLLATE,
-            ($parts['compression'] ?? '') === 'on',
-            ($parts['local-infile'] ?? '') === 'on'
+            host: $parts['host'],
+            port: (int) ($parts['port'] ?? self::DEFAULT_PORT),
+            user: $parts['user'] ?? null,
+            password: $parts['password'] ?? null,
+            database: $parts['db'] ?? null,
+            context: $context,
+            charset: $parts['charset'] ?? self::DEFAULT_CHARSET,
+            collate: $parts['collate'] ?? self::DEFAULT_COLLATE,
+            useCompression: ($parts['compression'] ?? '') === 'on',
+            useLocalInfile: ($parts['local-infile'] ?? '') === 'on'
         );
     }
 
