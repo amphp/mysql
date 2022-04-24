@@ -29,8 +29,8 @@ final class PooledResult extends SqlPooledResult implements Result
         return $this->result->getLastInsertId();
     }
 
-    public function getFields(): ?array
+    public function getColumnDefinitions(): ?array
     {
-        return $this->result->getFields();
+        return $this->result->getColumnDefinitions();
     }
 }

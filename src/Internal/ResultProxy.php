@@ -3,10 +3,12 @@
 namespace Amp\Mysql\Internal;
 
 use Amp\DeferredFuture;
+use Amp\Mysql\ColumnDefinition;
 
 final class ResultProxy
 {
     public int $columnCount;
+    /** @var list<ColumnDefinition> */
     public array $columns = [];
     public array $params = [];
     public int $columnsToFetch;

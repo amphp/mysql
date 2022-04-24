@@ -46,7 +46,7 @@ final class CommandResult implements Result, \IteratorAggregate
         return $this->delegate->getNextResult();
     }
 
-    public function getFields(): ?array
+    public function getColumnDefinitions(): ?array
     {
         return null; // Command results do not have a field list.
     }

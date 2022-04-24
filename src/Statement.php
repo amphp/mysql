@@ -16,7 +16,10 @@ interface Statement extends SqlStatement
      */
     public function bind(int|string $paramId, mixed $data): void;
 
-    public function getFields(): ?array;
+    /**
+     * @return list<ColumnDefinition>|null
+     */
+    public function getColumnDefinitions(): ?array;
 
     /**
      * Reset statement to state just after preparing.

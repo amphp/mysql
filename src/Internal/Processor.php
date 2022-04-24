@@ -6,6 +6,7 @@ use Amp\Cancellation;
 use Amp\DeferredFuture;
 use Amp\File;
 use Amp\Future;
+use Amp\Mysql\ColumnDefinition;
 use Amp\Mysql\DataType;
 use Amp\Mysql\InitializationException;
 use Amp\Mysql\MysqlConfig;
@@ -967,7 +968,7 @@ REGEX;
     }
 
     /** @see 14.6.4.1.1.2 Column Defintion */
-    private function parseColumnDefinition(string $packet): array
+    private function parseColumnDefinition(string $packet): ColumnDefinition
     {
         $offset = 0;
         $column = [];
@@ -976,14 +977,14 @@ REGEX;
             $column["catalog"] = DataType::String->decodeText($packet, $offset);
             $column["schema"] = DataType::String->decodeText($packet, $offset);
             $column["table"] = DataType::String->decodeText($packet, $offset);
-            $column["original_table"] = DataType::String->decodeText($packet, $offset);
+            $column["originalTable"] = DataType::String->decodeText($packet, $offset);
             $column["name"] = DataType::String->decodeText($packet, $offset);
-            $column["original_name"] = DataType::String->decodeText($packet, $offset);
+            $column["originalName"] = DataType::String->decodeText($packet, $offset);
             $fixLength = DataType::decodeUnsigned($packet, $offset);
 
             $column["charset"] = DataType::decodeUnsigned16($packet, $offset);
-            $column["columnlen"] = DataType::decodeUnsigned32($packet, $offset);
-            $column["type"] = DataType::decodeUnsigned8($packet, $offset);
+            $column["length"] = DataType::decodeUnsigned32($packet, $offset);
+            $column["type"] = DataType::from(DataType::decodeUnsigned8($packet, $offset));
             $column["flags"] = DataType::decodeUnsigned16($packet, $offset);
             $column["decimals"] = DataType::decodeUnsigned8($packet, $offset);
 
@@ -993,17 +994,14 @@ REGEX;
             $column["name"] = DataType::String->decodeText($packet, $offset);
 
             $columnLength = DataType::decodeUnsigned($packet, $offset);
-            $column["columnlen"] = DataType::decodeIntByLength($packet, $columnLength, $offset);
+            $column["length"] = DataType::decodeIntByLength($packet, $columnLength, $offset);
 
             $typeLength = DataType::decodeUnsigned($packet, $offset);
-            $column["type"] = $type = DataType::decodeIntByLength($packet, $typeLength, $offset);
-            if ($type & 0x80) {
-                throw new \Exception($column["name"]);
-            }
+            $column["type"] = DataType::from(DataType::decodeIntByLength($packet, $typeLength, $offset));
 
             $flagLength = $this->capabilities & self::CLIENT_LONG_FLAG
                 ? DataType::decodeUnsigned($packet, $offset)
-                : \ord($packet[$offset]);
+                : DataType::decodeUnsigned8($packet, $offset);
 
             if ($flagLength > 2) {
                 $column["flags"] = DataType::decodeUnsigned16($packet, $offset);
@@ -1018,7 +1016,7 @@ REGEX;
             $column["defaults"] = DataType::String->decodeText($packet, $offset);
         }
 
-        return $column;
+        return new ColumnDefinition(...$column);
     }
 
     private function successfulResultFetch(): void
@@ -1063,17 +1061,14 @@ REGEX;
         }
 
         $offset = 0;
-        $columns = $this->result->columns;
-
         $fields = [];
         for ($i = 0; $offset < \strlen($packet); ++$i) {
             if (\ord($packet[$offset]) === 0xfb) {
                 $fields[] = null;
                 $offset += 1;
             } else {
-                $type = DataType::from($columns[$i]["type"]);
-                $flags = $columns[$i]["flags"];
-                $fields[] = $type->decodeText($packet, $offset, $flags);
+                $column = $this->result->columns[$i];
+                $fields[] = $column->type->decodeText($packet, $offset, $column->flags);
             }
         }
 
@@ -1094,26 +1089,21 @@ REGEX;
         }
 
         $offset = 1; // skip first byte
-
-        $columnCount = $this->result->columnCount;
-        $columns = $this->result->columns;
         $fields = [];
-
-        for ($i = 0; $i < $columnCount; $i++) {
+        for ($i = 0; $i < $this->result->columnCount; $i++) {
             if (\ord($packet[$offset + (($i + 2) >> 3)]) & (1 << (($i + 2) % 8))) {
                 $fields[$i] = null;
             }
         }
-        $offset += ($columnCount + 9) >> 3;
+        $offset += ($this->result->columnCount + 9) >> 3;
 
         for ($i = 0; $offset < \strlen($packet); $i++) {
             while (\array_key_exists($i, $fields)) {
                 $i++;
             }
 
-            $type = DataType::from($columns[$i]["type"]);
-            $flags = $columns[$i]["flags"];
-            $fields[$i] = $type->decodeBinary($packet, $offset, $flags);
+            $column = $this->result->columns[$i];
+            $fields[$i] = $column->type->decodeBinary($packet, $offset, $column->flags);
         }
 
         $this->result->rowFetched($fields);

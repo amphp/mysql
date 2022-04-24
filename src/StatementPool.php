@@ -51,10 +51,10 @@ final class StatementPool extends SqlStatementPool implements Statement
         $this->params = [];
     }
 
-    public function getFields(): ?array
+    public function getColumnDefinitions(): ?array
     {
         $statement = $this->pop();
-        $fields = $statement->getFields();
+        $fields = $statement->getColumnDefinitions();
         $this->push($statement);
         return $fields;
     }

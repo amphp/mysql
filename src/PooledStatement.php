@@ -34,9 +34,9 @@ final class PooledStatement extends SqlPooledStatement implements Statement
         $this->statement->bind($paramId, $data);
     }
 
-    public function getFields(): ?array
+    public function getColumnDefinitions(): ?array
     {
-        return $this->statement->getFields();
+        return $this->statement->getColumnDefinitions();
     }
 
     public function reset(): void

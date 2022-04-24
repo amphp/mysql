@@ -128,7 +128,7 @@ final class ConnectionResult implements Result, \IteratorAggregate
         return $this->result->insertId;
     }
 
-    public function getFields(): ?array
+    public function getColumnDefinitions(): ?array
     {
         if ($this->result->state >= ResultProxy::COLUMNS_FETCHED) {
             return $this->result->columns;

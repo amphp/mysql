@@ -144,7 +144,7 @@ final class ConnectionStatement implements Statement
             ->await();
     }
 
-    public function getFields(): ?array
+    public function getColumnDefinitions(): ?array
     {
         if ($this->result->state >= ResultProxy::COLUMNS_FETCHED) {
             return $this->result->columns;

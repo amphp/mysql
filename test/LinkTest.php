@@ -2,6 +2,7 @@
 
 namespace Amp\Mysql\Test;
 
+use Amp\Mysql\ColumnDefinition;
 use Amp\Mysql\DataType;
 use Amp\Mysql\Link;
 use Amp\Mysql\Result;
@@ -79,7 +80,7 @@ abstract class LinkTest extends AsyncTestCase
         $this->assertSame([[6]], $got);
         $this->assertInstanceOf(Result::class, $resultset = $resultset->getNextResult());
 
-        $fields = $resultset->getFields();
+        $fields = $resultset->getColumnDefinitions();
 
         $got = [];
         foreach ($resultset as $row) {
@@ -88,11 +89,11 @@ abstract class LinkTest extends AsyncTestCase
         $this->assertSame([["d" => 5, "c" => 5], ["d" => 6, "c" => 6]], $got);
 
         $this->assertCount(2, $fields);
-        $this->assertSame($fields[0]["original_name"], "b");
-        $this->assertSame($fields[0]["name"], "d");
-        $this->assertSame($fields[0]["type"], DataType::Long->value);
-        $this->assertSame($fields[1]["name"], "c");
-        $this->assertSame($fields[1]["type"], DataType::LongLong->value);
+        $this->assertSame($fields[0]->originalName, "b");
+        $this->assertSame($fields[0]->name, "d");
+        $this->assertSame($fields[0]->type, DataType::Long);
+        $this->assertSame($fields[1]->name, "c");
+        $this->assertSame($fields[1]->type, DataType::LongLong);
 
         $this->assertNull($resultset->getNextResult());
     }
@@ -101,23 +102,25 @@ abstract class LinkTest extends AsyncTestCase
     {
         $db = $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test;useCompression=true");
 
-        $stmt = $db->prepare("SELECT * FROM main WHERE a = ? OR b = :num");
+        $stmt = $db->prepare("SELECT id as no, a, b FROM main as table_alias WHERE a = ? OR b = :num");
         $base = [
             "catalog" => "def",
             "schema" => "test",
-            "table" => "main",
-            "original_table" => "main",
+            "table" => "table_alias",
+            "originalTable" => "main",
             "charset" => 63,
-            "columnlen" => 11,
-            "type" => 3,
+            "length" => 11,
+            "type" => DataType::from(3),
             "flags" => 0,
             "decimals" => 0,
         ];
-        $this->assertEquals($stmt->getFields(), [
-            \array_merge($base, ["name" => "id", "original_name" => "id", "flags" => 16899]),
-            \array_merge($base, ["name" => "a", "original_name" => "a"]),
-            \array_merge($base + ["name" => "b", "original_name" => "b"]),
+
+        $this->assertEquals($stmt->getColumnDefinitions(), [
+            new ColumnDefinition(...\array_merge($base, ["name" => "no", "originalName" => "id", "flags" => 16899])),
+            new ColumnDefinition(...\array_merge($base, ["name" => "a", "originalName" => "a"])),
+            new ColumnDefinition(...\array_merge($base + ["name" => "b", "originalName" => "b"])),
         ]);
+
         $stmt->bind("num", 5);
         $result = $stmt->execute([2]);
         $this->assertInstanceOf(Result::class, $result);
