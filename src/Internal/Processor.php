@@ -60,10 +60,10 @@ REGEX;
     private int $capabilities = 0;
     private int $serverCapabilities = 0;
     private string $authPluginName = '';
-    private ConnectionState $connInfo;
+    private ConnectionMetadata $metadata;
     private int $refcount = 1;
 
-    private int $connectionState = self::UNCONNECTED;
+    private ConnectionState $connectionState = ConnectionState::Unconnected;
 
     private const MAX_PACKET_SIZE = 0xffffff;
     private const MAX_UNCOMPRESSED_BUFLEN = 0xfffffb;
@@ -92,28 +92,22 @@ REGEX;
     private const EOF_PACKET = 0xfe;
     private const ERR_PACKET = 0xff;
 
-    private const UNCONNECTED = 0;
-    private const ESTABLISHED = 1;
-    private const READY = 2;
-    private const CLOSING = 3;
-    private const CLOSED = 4;
-
     public function __construct(EncryptableSocket $socket, MysqlConfig $config)
     {
         $this->socket = $socket;
-        $this->connInfo = new ConnectionState;
+        $this->metadata = new ConnectionMetadata;
         $this->config = $config;
         $this->lastUsedAt = \time();
     }
 
     public function isAlive(): bool
     {
-        return $this->connectionState <= self::READY;
+        return $this->connectionState <= ConnectionState::Ready;
     }
 
     public function isReady(): bool
     {
-        return $this->connectionState === self::READY;
+        return $this->connectionState === ConnectionState::Ready;
     }
 
     public function unreference(): void
@@ -255,7 +249,7 @@ REGEX;
             || $this->parseCallback
             || !empty($this->onReady)
             || !empty($this->deferreds)
-            || $this->connectionState !== self::READY
+            || $this->connectionState !== ConnectionState::Ready
         ) {
             $this->onReady[] = $callback;
         } else {
@@ -263,9 +257,9 @@ REGEX;
         }
     }
 
-    public function getConnInfo(): ConnectionState
+    public function getMetadata(): ConnectionMetadata
     {
-        return clone $this->connInfo;
+        return clone $this->metadata;
     }
 
     public function getConnectionId(): int
@@ -280,7 +274,7 @@ REGEX;
 
     protected function startCommand(\Closure $callback): Future
     {
-        if ($this->connectionState > self::READY) {
+        if ($this->connectionState > ConnectionState::Ready) {
             throw new \Error("The connection has been closed");
         }
 
@@ -468,7 +462,7 @@ REGEX;
     {
         $payload = "\x19" . DataType::encodeInt32($stmtId);
         $this->appendTask(function () use ($payload): void {
-            if ($this->connectionState === self::READY) {
+            if ($this->connectionState === ConnectionState::Ready) {
                 $this->resetIds();
                 $this->sendPacket($payload);
                 $this->resetIds(); // does not expect a reply - must be reset immediately
@@ -624,25 +618,25 @@ REGEX;
     {
         $offset = 1;
 
-        $this->connInfo->errorCode = DataType::decodeUnsigned16($packet, $offset);
+        $this->metadata->errorCode = DataType::decodeUnsigned16($packet, $offset);
 
         if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
-            $this->connInfo->errorState = \substr($packet, $offset, 6);
+            $this->metadata->errorState = \substr($packet, $offset, 6);
             $offset += 6;
         }
 
-        $this->connInfo->errorMsg = \substr($packet, $offset);
+        $this->metadata->errorMsg = \substr($packet, $offset);
 
         $this->parseCallback = null;
 
-        if ($this->connectionState < self::READY) {
+        if ($this->connectionState < ConnectionState::Ready) {
             // connection failure
             $this->close();
             $this->getDeferred()->error(new InitializationException(\sprintf(
                 'Could not connect to %s: %s %s',
                 $this->config->getConnectionString(),
-                $this->connInfo->errorState ?? 'Unknown state',
-                $this->connInfo->errorMsg,
+                $this->metadata->errorState ?? 'Unknown state',
+                $this->metadata->errorMsg,
             )));
             return;
         }
@@ -658,9 +652,9 @@ REGEX;
         // normal error
         $exception = new QueryError(\sprintf(
             'MySQL error (%d): %s %s',
-            $this->connInfo->errorCode,
-            $this->connInfo->errorState ?? 'Unknown state',
-            $this->connInfo->errorMsg,
+            $this->metadata->errorCode,
+            $this->metadata->errorState ?? 'Unknown state',
+            $this->metadata->errorMsg,
         ), $this->query ?? '');
 
         $this->result = null;
@@ -680,29 +674,29 @@ REGEX;
     {
         $offset = 1;
 
-        $this->connInfo->affectedRows = DataType::decodeUnsigned($packet, $offset);
-        $this->connInfo->insertId = DataType::decodeUnsigned($packet, $offset);
+        $this->metadata->affectedRows = DataType::decodeUnsigned($packet, $offset);
+        $this->metadata->insertId = DataType::decodeUnsigned($packet, $offset);
 
         if ($this->capabilities & (self::CLIENT_PROTOCOL_41 | self::CLIENT_TRANSACTIONS)) {
-            $this->connInfo->statusFlags = DataType::decodeUnsigned16($packet, $offset);
-            $this->connInfo->warnings = DataType::decodeUnsigned16($packet, $offset);
+            $this->metadata->statusFlags = DataType::decodeUnsigned16($packet, $offset);
+            $this->metadata->warnings = DataType::decodeUnsigned16($packet, $offset);
         }
 
         if (!($this->capabilities & self::CLIENT_SESSION_TRACK)) {
-            $this->connInfo->statusInfo = \substr($packet, $offset);
+            $this->metadata->statusInfo = \substr($packet, $offset);
             return;
         }
 
         // Even though it seems required according to 14.1.3.1, there is no length encoded string,
         // i.e. no trailing NULL byte ....???
         if (\strlen($packet) <= $offset) {
-            $this->connInfo->statusInfo = "";
+            $this->metadata->statusInfo = "";
             return;
         }
 
-        $this->connInfo->statusInfo = DataType::decodeString($packet, $offset);
+        $this->metadata->statusInfo = DataType::decodeString($packet, $offset);
 
-        if (!StatusFlag::SessionStateChanged->inFlags($this->connInfo->statusFlags)) {
+        if (!StatusFlag::SessionStateChanged->inFlags($this->metadata->statusFlags)) {
             return;
         }
 
@@ -715,7 +709,7 @@ REGEX;
             switch (SessionStateType::tryFrom($type)) {
                 case SessionStateType::SystemVariables:
                     $var = DataType::decodeString($data, $offset);
-                    $this->connInfo->sessionState[$type][$var] = DataType::decodeString($data, $offset);
+                    $this->metadata->sessionState[$type][$var] = DataType::decodeString($data, $offset);
                     break;
 
                 case SessionStateType::Schema:
@@ -723,7 +717,7 @@ REGEX;
                 case SessionStateType::Gtids:
                 case SessionStateType::TransactionCharacteristics:
                 case SessionStateType::TransactionState:
-                    $this->connInfo->sessionState[$type] = DataType::decodeString($data, $offset);
+                    $this->metadata->sessionState[$type] = DataType::decodeString($data, $offset);
                     break;
 
                 default:
@@ -735,7 +729,7 @@ REGEX;
     private function handleOk(string $packet): void
     {
         $this->parseOk($packet);
-        $this->getDeferred()->complete(new CommandResult($this->connInfo->affectedRows, $this->connInfo->insertId));
+        $this->getDeferred()->complete(new CommandResult($this->metadata->affectedRows, $this->metadata->insertId));
         $this->ready();
     }
 
@@ -744,15 +738,15 @@ REGEX;
     {
         $offset = 1;
         if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
-            $this->connInfo->warnings = DataType::decodeUnsigned16($packet, $offset);
-            $this->connInfo->statusFlags = DataType::decodeUnsigned16($packet, $offset);
+            $this->metadata->warnings = DataType::decodeUnsigned16($packet, $offset);
+            $this->metadata->statusFlags = DataType::decodeUnsigned16($packet, $offset);
         }
     }
 
     private function handleEof(string $packet): void
     {
         $this->parseEof($packet);
-        $exception = new SqlException($this->connInfo->errorMsg ?? 'Unknown error', $this->connInfo->errorCode ?? 0);
+        $exception = new SqlException($this->metadata->errorMsg ?? 'Unknown error', $this->metadata->errorCode ?? 0);
         $this->getDeferred()->error($exception);
         $this->ready();
     }
@@ -767,7 +761,7 @@ REGEX;
             throw new ConnectionException("Unsupported protocol version ".\ord($packet)." (Expected: 10)");
         }
 
-        $this->connInfo->serverVersion = DataType::decodeNullTerminatedString($packet, $offset);
+        $this->metadata->serverVersion = DataType::decodeNullTerminatedString($packet, $offset);
 
         $this->connectionId = DataType::decodeUnsigned32($packet, $offset);
 
@@ -779,8 +773,8 @@ REGEX;
         $this->serverCapabilities = DataType::decodeUnsigned16($packet, $offset);
 
         if (\strlen($packet) > $offset) {
-            $this->connInfo->charset = DataType::decodeUnsigned8($packet, $offset);
-            $this->connInfo->statusFlags = DataType::decodeUnsigned16($packet, $offset);
+            $this->metadata->charset = DataType::decodeUnsigned8($packet, $offset);
+            $this->metadata->statusFlags = DataType::decodeUnsigned16($packet, $offset);
             $this->serverCapabilities += DataType::decodeUnsigned16($packet, $offset) << 16;
 
             $authPluginDataLen = $this->serverCapabilities & self::CLIENT_PLUGIN_AUTH
@@ -847,10 +841,10 @@ REGEX;
             case self::OK_PACKET:
                 $this->parseOk($packet);
 
-                if (StatusFlag::MoreResultsExist->inFlags($this->connInfo->statusFlags)) {
+                if (StatusFlag::MoreResultsExist->inFlags($this->metadata->statusFlags)) {
                     $result = new ResultProxy;
-                    $result->affectedRows = $this->connInfo->affectedRows;
-                    $result->insertId = $this->connInfo->insertId;
+                    $result->affectedRows = $this->metadata->affectedRows;
+                    $result->insertId = $this->metadata->insertId;
                     $this->getDeferred()->complete(new ConnectionResult($result));
                     $this->result = $result;
                     $result->updateState(ResultProxy::COLUMNS_FETCHED);
@@ -858,8 +852,8 @@ REGEX;
                 } else {
                     $this->parseCallback = null;
                     $this->getDeferred()->complete(new CommandResult(
-                        $this->connInfo->affectedRows,
-                        $this->connInfo->insertId
+                        $this->metadata->affectedRows,
+                        $this->metadata->insertId
                     ));
                     $this->ready();
                 }
@@ -1041,7 +1035,7 @@ REGEX;
             $deferred = new DeferredFuture;
         }
 
-        if (StatusFlag::MoreResultsExist->inFlags($this->connInfo->statusFlags)) {
+        if (StatusFlag::MoreResultsExist->inFlags($this->metadata->statusFlags)) {
             $this->parseCallback = $this->handleQuery(...);
             $this->addDeferred($deferred);
         } else {
@@ -1148,7 +1142,7 @@ REGEX;
 
         $offset += 1; // filler
 
-        $this->connInfo->warnings = DataType::decodeUnsigned16($packet, $offset);
+        $this->metadata->warnings = DataType::decodeUnsigned16($packet, $offset);
 
         $this->result = new ResultProxy;
         $this->result->columnsToFetch = $params;
@@ -1176,17 +1170,17 @@ REGEX;
     {
         return $this->startCommand(function () {
             $this->sendPacket("\x01");
-            $this->connectionState = self::CLOSING;
+            $this->connectionState = ConnectionState::Closing;
         })->finally(fn () => $this->close());
     }
 
     public function close(): void
     {
-        if ($this->connectionState === self::CLOSING && $this->deferreds) {
+        if ($this->connectionState === ConnectionState::Closing && $this->deferreds) {
             \array_pop($this->deferreds)->complete();
         }
 
-        $this->connectionState = self::CLOSED;
+        $this->connectionState = ConnectionState::Closed;
 
         if ($this->socket) {
             $this->socket->close();
@@ -1217,7 +1211,7 @@ REGEX;
         })());
         // @codeCoverageIgnoreEnd
 
-        if (($this->capabilities & self::CLIENT_COMPRESS) && $this->connectionState >= self::READY) {
+        if (($this->capabilities & self::CLIENT_COMPRESS) && $this->connectionState >= ConnectionState::Ready) {
             $packet = $this->compressPacket($packet);
         }
 
@@ -1347,20 +1341,20 @@ REGEX;
 
     private function parsePayload(string $packet): void
     {
-        if ($this->connectionState === self::UNCONNECTED) {
+        if ($this->connectionState === ConnectionState::Unconnected) {
             $this->established();
-            $this->connectionState = self::ESTABLISHED;
+            $this->connectionState = ConnectionState::Established;
             $this->handleHandshake($packet);
             return;
         }
 
-        if ($this->connectionState === self::ESTABLISHED) {
+        if ($this->connectionState === ConnectionState::Established) {
             switch (\ord($packet)) {
                 case self::OK_PACKET:
                     if ($this->capabilities & self::CLIENT_COMPRESS) {
                         $this->processors = \array_merge([$this->parseCompression()], $this->processors);
                     }
-                    $this->connectionState = self::READY;
+                    $this->connectionState = ConnectionState::Ready;
                     $this->handleOk($packet);
                     break;
                 case self::ERR_PACKET:
@@ -1581,7 +1575,7 @@ REGEX;
     /** @see 14.1.2 MySQL Packet */
     protected function sendPacket(string $payload): void
     {
-        if ($this->connectionState !== self::READY) {
+        if ($this->connectionState !== ConnectionState::Ready) {
             throw new \Error("Connection not ready, cannot send any packets");
         }
 

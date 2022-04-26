@@ -2,7 +2,11 @@
 
 namespace Amp\Mysql\Internal;
 
-/** @see 14.1.3.4 Status Flags */
+/**
+ * @internal
+ *
+ * @see 14.1.3.4 Status Flags
+ */
 enum StatusFlag: int
 {
     case InTransaction = 0x0001; // a transaction is active
