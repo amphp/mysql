@@ -85,6 +85,22 @@ REGEX;
     private const CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA = 0x00200000;
     private const CLIENT_DEPRECATE_EOF = 0x01000000;
 
+    /* @see 14.1.3.4 Status Flags */
+    private const SERVER_STATUS_IN_TRANS = 0x0001; // a transaction is active
+    private const SERVER_STATUS_AUTOCOMMIT = 0x0002; // auto-commit is enabled
+    private const SERVER_MORE_RESULTS_EXISTS = 0x0008;
+    private const SERVER_STATUS_NO_GOOD_INDEX_USED = 0x0010;
+    private const SERVER_STATUS_NO_INDEX_USED = 0x0020;
+    private const SERVER_STATUS_CURSOR_EXISTS = 0x0040; // Used by Binary Protocol Resultset to signal that COM_STMT_FETCH has to be used to fetch the row-data.
+    private const SERVER_STATUS_LAST_ROW_SENT = 0x0080;
+    private const SERVER_STATUS_DB_DROPPED = 0x0100;
+    private const SERVER_STATUS_NO_BACKSLASH_ESCAPES = 0x0200;
+    private const SERVER_STATUS_METADATA_CHANGED = 0x0400;
+    private const SERVER_QUERY_WAS_SLOW = 0x0800;
+    private const SERVER_PS_OUT_PARAMS = 0x1000;
+    private const SERVER_STATUS_IN_TRANS_READONLY = 0x2000; // in a read-only transaction
+    private const SERVER_SESSION_STATE_CHANGED = 0x4000; // connection state information has changed
+
     private const OK_PACKET = 0x00;
     private const EXTRA_AUTH_PACKET = 0x01;
     private const LOCAL_INFILE_REQUEST = 0xfb;
@@ -696,7 +712,7 @@ REGEX;
 
         $this->metadata->statusInfo = DataType::decodeString($packet, $offset);
 
-        if (!StatusFlag::SessionStateChanged->inFlags($this->metadata->statusFlags)) {
+        if (!($this->metadata->statusFlags & self::SERVER_SESSION_STATE_CHANGED)) {
             return;
         }
 
@@ -841,7 +857,7 @@ REGEX;
             case self::OK_PACKET:
                 $this->parseOk($packet);
 
-                if (StatusFlag::MoreResultsExist->inFlags($this->metadata->statusFlags)) {
+                if ($this->metadata->statusFlags & self::SERVER_MORE_RESULTS_EXISTS) {
                     $result = new ResultProxy;
                     $result->affectedRows = $this->metadata->affectedRows;
                     $result->insertId = $this->metadata->insertId;
@@ -1035,7 +1051,7 @@ REGEX;
             $deferred = new DeferredFuture;
         }
 
-        if (StatusFlag::MoreResultsExist->inFlags($this->metadata->statusFlags)) {
+        if ($this->metadata->statusFlags & self::SERVER_MORE_RESULTS_EXISTS) {
             $this->parseCallback = $this->handleQuery(...);
             $this->addDeferred($deferred);
         } else {
