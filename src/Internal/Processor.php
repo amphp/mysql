@@ -650,6 +650,16 @@ REGEX;
         return $deferred->promise();
     }
 
+    /** @see 14.9.9 COM_REGISTER_SLAVE */
+    public function registerSlave(int $serverId): Promise
+    {
+        $payload = "\x15" . pack("VC3vV2", $serverId, 0, 0, 0, '', 0, 0);
+        
+        return $this->startCommand(function () use ($payload) {
+            $this->sendPacket($payload);
+        });
+    }
+
     private function established(): void
     {
         // @TODO flags to use?
