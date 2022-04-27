@@ -651,10 +651,20 @@ REGEX;
     }
 
     /** @see 14.9.9 COM_REGISTER_SLAVE */
-    public function registerSlave(int $serverId): Promise
+    public function registerSlave(Int $slaveId, String $hostname = '', String $user = '', String $password = '', Int $port = 0, Int $rank = 0, Int $masterId = 0): Promise
     {
-        $payload = "\x15" . pack("VC3vV2", $serverId, 0, 0, 0, '', 0, 0);
-        
+        $payload = "\x15";
+        $payload .= \pack("V", $slaveId);
+        $payload .= \pack('C', \strlen($hostname));
+        $payload .= $hostname;
+        $payload .= \pack('C', \strlen($user));
+        $payload .= $user;
+        $payload .= \pack('C', \strlen($password));
+        $payload .= $password;
+        $payload .= \pack("v", $port);
+        $payload .= \pack('V', $rank);
+        $payload .= \pack('V', $masterId);
+
         return $this->startCommand(function () use ($payload) {
             $this->sendPacket($payload);
         });
