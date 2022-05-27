@@ -529,7 +529,6 @@ REGEX;
     }
 
     /**
-     * @param int $subcommand
      * @see 14.6.8 COM_REFRESH
      */
     public function refresh(int $subcommand): Future

@@ -6,6 +6,7 @@ use Amp\Cancellation;
 use Amp\DeferredFuture;
 use Amp\Socket\EncryptableSocket;
 use Amp\Sql\TransactionIsolation;
+use Amp\Sql\TransactionIsolationLevel;
 use Revolt\EventLoop;
 
 final class Connection implements Link
@@ -87,8 +88,9 @@ final class Connection implements Link
         return $this->processor->query($sql)->await();
     }
 
-    public function beginTransaction(TransactionIsolation $isolation = TransactionIsolation::Committed): Transaction
-    {
+    public function beginTransaction(
+        TransactionIsolation $isolation = TransactionIsolationLevel::Committed
+    ): Transaction {
         while ($this->busy) {
             $this->busy->getFuture()->await();
         }
