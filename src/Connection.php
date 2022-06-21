@@ -43,9 +43,9 @@ final class Connection implements Link
     /**
      * @return bool False if the connection has been closed.
      */
-    public function isAlive(): bool
+    public function isClosed(): bool
     {
-        return $this->processor->isAlive();
+        return $this->processor->isClosed();
     }
 
     /**
@@ -69,9 +69,14 @@ final class Connection implements Link
     public function close(): void
     {
         // Send close command if connection is not already in a closed or closing state
-        if ($this->processor->isAlive()) {
+        if (!$this->processor->isClosed()) {
             $this->processor->sendClose()->await();
         }
+    }
+
+    public function onClose(\Closure $onClose): void
+    {
+        $this->processor->onClose($onClose);
     }
 
     public function useDb(string $db): void

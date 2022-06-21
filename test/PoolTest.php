@@ -51,7 +51,7 @@ class PoolTest extends LinkTest
 
         for ($i = 0; $i < $count; ++$i) {
             $processor = $this->createMock(Processor::class);
-            $processor->method('isAlive')->willReturn(true);
+            $processor->method('isClosed')->willReturn(false);
             $processor->method('sendClose')->willReturn(Future::complete(null));
             $processors[] = $processor;
         }
@@ -251,8 +251,8 @@ class PoolTest extends LinkTest
         }
 
         $processor = $this->createMock(Processor::class);
-        $processor->method('isAlive')
-            ->willReturnOnConsecutiveCalls(true, false);
+        $processor->method('isClosed')
+            ->willReturnOnConsecutiveCalls(false, true);
         $processor->expects($this->once())
             ->method('query')
             ->with($query)

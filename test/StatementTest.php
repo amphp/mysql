@@ -34,8 +34,8 @@ class StatementTest extends AsyncTestCase
         $paramId = 0;
         $named = [];
 
-        $this->processor->method('isAlive')
-            ->willReturn(true);
+        $this->processor->method('isClosed')
+            ->willReturn(false);
         $this->processor->expects($this->once())
             ->method('unreference');
         $this->processor->expects($this->once())

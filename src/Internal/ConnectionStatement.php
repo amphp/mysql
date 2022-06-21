@@ -24,6 +24,8 @@ final class ConnectionStatement implements Statement
 
     private int $lastUsedAt;
 
+    private readonly DeferredFuture $onClose;
+
     public function __construct(Processor $processor, string $query, int $stmtId, array $named, ResultProxy $result)
     {
         $this->processor = $processor;
@@ -32,6 +34,7 @@ final class ConnectionStatement implements Statement
         $this->result = $result;
         $this->numParamCount = $this->paramCount = $this->result->columnsToFetch;
         $this->byNamed = $named;
+        $this->onClose = new DeferredFuture();
 
         foreach ($named as $name => $ids) {
             foreach ($ids as $id) {
@@ -49,20 +52,29 @@ final class ConnectionStatement implements Statement
             throw new \Error("The statement has been closed");
         }
 
-        if (!$this->processor->isAlive()) {
+        if ($this->processor->isClosed()) {
             throw new ConnectionException("Connection went away");
         }
 
         return $this->processor;
     }
 
-    public function isAlive(): bool
+    public function isClosed(): bool
     {
-        if ($this->processor === null) {
-            return false;
-        }
+        return !$this->processor || $this->processor->isClosed();
+    }
 
-        return $this->processor->isAlive();
+    public function close(): void
+    {
+        if ($this->processor) {
+            self::shutdown($this->processor, $this->stmtId, $this->onClose);
+            $this->processor = null;
+        }
+    }
+
+    public function onClose(\Closure $onClose): void
+    {
+        $this->onClose->getFuture()->finally($onClose);
     }
 
     public function bind(int|string $paramId, mixed $data): void
@@ -169,13 +181,18 @@ final class ConnectionStatement implements Statement
         if ($this->processor) {
             $processor = $this->processor;
             $stmtId = $this->stmtId;
-            EventLoop::queue(static fn () => self::close($processor, $stmtId));
+            $onClose = $this->onClose;
+            EventLoop::queue(static fn () => self::shutdown($processor, $stmtId, $onClose));
         }
     }
 
-    private static function close(Processor $processor, int $stmtId): void
+    private static function shutdown(Processor $processor, int $stmtId, DeferredFuture $onClose): void
     {
-        $processor->closeStmt($stmtId);
-        $processor->unreference();
+        try {
+            $processor->closeStmt($stmtId);
+            $processor->unreference();
+        } finally {
+            $onClose->complete();
+        }
     }
 }

@@ -62,7 +62,6 @@ final class StatementPool extends SqlStatementPool implements Statement
     public function getColumnDefinitions(): ?array
     {
         $statement = $this->pop();
-        \assert($statement instanceof Statement);
         $columns = $statement->getColumnDefinitions();
         $this->push($statement);
         return $columns;

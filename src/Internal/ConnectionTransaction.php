@@ -2,11 +2,13 @@
 
 namespace Amp\Mysql\Internal;
 
+use Amp\DeferredFuture;
 use Amp\Mysql\PooledResult;
 use Amp\Mysql\PooledStatement;
 use Amp\Mysql\Result;
 use Amp\Mysql\Statement;
 use Amp\Mysql\Transaction;
+use Amp\Sql\SqlException;
 use Amp\Sql\TransactionError;
 use Amp\Sql\TransactionIsolation;
 use Revolt\EventLoop;
@@ -23,6 +25,8 @@ final class ConnectionTransaction implements Transaction
     private readonly \Closure $release;
 
     private int $refCount = 1;
+
+    private readonly DeferredFuture $onClose;
 
     /**
      * @param \Closure():void $release
@@ -43,18 +47,31 @@ final class ConnectionTransaction implements Transaction
                 $release();
             }
         };
+
+        $this->onClose = new DeferredFuture();
+        $this->onClose($this->release);
     }
 
     public function __destruct()
     {
-        if ($this->processor && $this->processor->isAlive()) {
-            $processor = $this->processor;
-            $release = $this->release;
-            EventLoop::queue(static function () use ($processor, $release): void {
-                $processor->query("ROLLBACK");
-                $release();
-            });
+        if ($this->onClose->isComplete()) {
+            return;
         }
+
+        $this->onClose->complete();
+
+        if (!$this->processor || $this->processor->isClosed()) {
+            return;
+        }
+
+        $processor = $this->processor;
+        EventLoop::queue(static function () use ($processor): void {
+            try {
+                !$processor->isClosed() && $processor->query('ROLLBACK');
+            } catch (SqlException) {
+                // Ignore failure if connection closes during query.
+            }
+        });
     }
 
     public function getLastUsedAt(): int
@@ -72,9 +89,14 @@ final class ConnectionTransaction implements Transaction
         }
     }
 
-    public function isAlive(): bool
+    public function isClosed(): bool
     {
-        return $this->processor && $this->processor->isAlive();
+        return !$this->processor || $this->processor->isClosed();
+    }
+
+    public function onClose(\Closure $onClose): void
+    {
+        $this->onClose->getFuture()->finally($onClose);
     }
 
     /**
@@ -148,7 +170,7 @@ final class ConnectionTransaction implements Transaction
 
         $promise = $this->processor->query("COMMIT");
         $this->processor = null;
-        $promise->finally($this->release)->await();
+        $promise->finally($this->onClose->complete(...))->await();
     }
 
     /**
@@ -164,7 +186,7 @@ final class ConnectionTransaction implements Transaction
 
         $promise = $this->processor->query("ROLLBACK");
         $this->processor = null;
-        $promise->finally($this->release)->await();
+        $promise->finally($this->onClose->complete(...))->await();
     }
 
     /**

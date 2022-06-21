@@ -34,7 +34,7 @@ class ConnectionTest extends LinkTest
 
         $db->close();
 
-        $this->assertFalse($db->isAlive());
+        $this->assertTrue($db->isClosed());
 
         $db->close(); // Should not throw an exception.
     }
