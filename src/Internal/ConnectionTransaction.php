@@ -13,6 +13,7 @@ use Amp\Sql\TransactionError;
 use Amp\Sql\TransactionIsolation;
 use Revolt\EventLoop;
 
+/** @internal */
 final class ConnectionTransaction implements Transaction
 {
     const SAVEPOINT_PREFIX = "amp_";

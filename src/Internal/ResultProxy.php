@@ -5,6 +5,7 @@ namespace Amp\Mysql\Internal;
 use Amp\DeferredFuture;
 use Amp\Mysql\ColumnDefinition;
 
+/** @internal */
 final class ResultProxy
 {
     public int $columnCount = 0;

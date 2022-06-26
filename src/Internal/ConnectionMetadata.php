@@ -2,6 +2,7 @@
 
 namespace Amp\Mysql\Internal;
 
+/** @internal */
 final class ConnectionMetadata
 {
     public int $affectedRows = 0;

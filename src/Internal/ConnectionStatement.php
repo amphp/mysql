@@ -8,6 +8,7 @@ use Amp\Mysql\Statement;
 use Amp\Sql\ConnectionException;
 use Revolt\EventLoop;
 
+/** @internal */
 final class ConnectionStatement implements Statement
 {
     private int $paramCount;

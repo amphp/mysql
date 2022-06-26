@@ -2,9 +2,7 @@
 
 namespace Amp\Mysql\Internal;
 
-/**
- * @internal
- */
+/** @internal */
 enum ConnectionState
 {
     case Unconnected;

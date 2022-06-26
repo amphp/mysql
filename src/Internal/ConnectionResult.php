@@ -10,6 +10,7 @@ use Amp\Pipeline\ConcurrentIterator;
 use Revolt\EventLoop;
 use function Amp\async;
 
+/** @internal */
 final class ConnectionResult implements Result, \IteratorAggregate
 {
     private readonly ResultProxy $result;

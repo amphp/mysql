@@ -6,6 +6,7 @@ use Amp\Future;
 use Amp\Mysql\Result;
 use Amp\Sql\Common\CommandResult as SqlCommandResult;
 
+/** @internal */
 final class CommandResult implements Result, \IteratorAggregate
 {
     private ?int $lastInsertId;
