@@ -3,10 +3,11 @@
 require 'support/bootstrap.php';
 
 use Amp\Future;
-use Amp\Mysql;
+use Amp\Mysql\MysqlConfig;
+use Amp\Mysql\MysqlPool;
 use function Amp\async;
 
-$db = Mysql\pool(Mysql\MysqlConfig::fromString("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME));
+$db = new MysqlPool(MysqlConfig::fromString("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME));
 
 $db->query("DROP TABLE IF EXISTS tmp");
 

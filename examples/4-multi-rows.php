@@ -4,10 +4,12 @@ require 'support/bootstrap.php';
 require 'support/generic-table.php';
 
 use Amp\Future;
-use Amp\Mysql;
+use Amp\Mysql\MysqlConfig;
+use Amp\Mysql\MysqlPool;
+use Amp\Mysql\MysqlResult;
 use function Amp\async;
 
-$db = Mysql\pool(Mysql\MysqlConfig::fromString("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME));
+$db = new MysqlPool(MysqlConfig::fromString("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME));
 
 /* create same table than in 3-generic-with-yield.php */
 createGenericTable($db);
@@ -19,8 +21,8 @@ $future[] = async(fn () => $db->execute("SELECT POW(a, ?) AS power FROM tmp", [2
 
 try {
     /**
-     * @var Mysql\MysqlResult $result1
-     * @var Mysql\MysqlResult $result2
+     * @var MysqlResult $result1
+     * @var MysqlResult $result2
      */
     [$result1, $result2] = Future\await($future); // Both queries execute simultaneously. Wait for both to finish here.
 } catch (\Throwable $e) {
