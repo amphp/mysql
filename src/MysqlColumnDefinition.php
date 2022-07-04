@@ -2,13 +2,13 @@
 
 namespace Amp\Mysql;
 
-final class ColumnDefinition
+final class MysqlColumnDefinition
 {
     public function __construct(
         public readonly string $table,
         public readonly string $name,
         public readonly int $length,
-        public readonly DataType $type,
+        public readonly MysqlDataType $type,
         public readonly int $flags,
         public readonly int $decimals,
         public readonly string $defaults = '',

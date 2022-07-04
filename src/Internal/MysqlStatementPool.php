@@ -2,25 +2,25 @@
 
 namespace Amp\Mysql\Internal;
 
-use Amp\Mysql\Result;
-use Amp\Mysql\Statement;
+use Amp\Mysql\MysqlResult;
+use Amp\Mysql\MysqlStatement;
 use Amp\Sql\Common\StatementPool as SqlStatementPool;
 use Amp\Sql\Result as SqlResult;
 
 /** @internal */
-final class StatementPool extends SqlStatementPool implements Statement
+final class MysqlStatementPool extends SqlStatementPool implements MysqlStatement
 {
     private array $params = [];
 
     /**
      * @psalm-suppress LessSpecificReturnStatement, MoreSpecificReturnType
      */
-    protected function pop(): Statement
+    protected function pop(): MysqlStatement
     {
         $statement = parent::pop();
 
         try {
-            \assert($statement instanceof Statement);
+            \assert($statement instanceof MysqlStatement);
 
             $statement->reset();
 
@@ -35,19 +35,19 @@ final class StatementPool extends SqlStatementPool implements Statement
         return $statement;
     }
 
-    protected function createResult(SqlResult $result, \Closure $release): Result
+    protected function createResult(SqlResult $result, \Closure $release): MysqlResult
     {
-        if (!$result instanceof Result) {
-            throw new \TypeError('Result object must be an instance of ' . Result::class);
+        if (!$result instanceof MysqlResult) {
+            throw new \TypeError('Result object must be an instance of ' . MysqlResult::class);
         }
 
-        return new PooledResult($result, $release);
+        return new MysqlPooledResult($result, $release);
     }
 
     /**
      * @psalm-suppress LessSpecificReturnStatement, MoreSpecificReturnType
      */
-    public function execute(array $params = []): Result
+    public function execute(array $params = []): MysqlResult
     {
         return parent::execute($params);
     }

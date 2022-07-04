@@ -3,13 +3,13 @@
 namespace Amp\Mysql\Internal;
 
 use Amp\DeferredFuture;
-use Amp\Mysql\Result;
-use Amp\Mysql\Statement;
+use Amp\Mysql\MysqlResult;
+use Amp\Mysql\MysqlStatement;
 use Amp\Sql\ConnectionException;
 use Revolt\EventLoop;
 
 /** @internal */
-final class ConnectionStatement implements Statement
+final class MysqlConnectionStatement implements MysqlStatement
 {
     private int $paramCount;
     private int $numParamCount;
@@ -19,15 +19,15 @@ final class ConnectionStatement implements Statement
     private int $stmtId;
     private array $prebound = [];
 
-    private ?Processor $processor;
+    private ?ConnectionProcessor $processor;
 
-    private readonly ResultProxy $result;
+    private readonly MysqlResultProxy $result;
 
     private int $lastUsedAt;
 
     private readonly DeferredFuture $onClose;
 
-    public function __construct(Processor $processor, string $query, int $stmtId, array $named, ResultProxy $result)
+    public function __construct(ConnectionProcessor $processor, string $query, int $stmtId, array $named, MysqlResultProxy $result)
     {
         $this->processor = $processor;
         $this->query = $query;
@@ -47,7 +47,7 @@ final class ConnectionStatement implements Statement
         $this->lastUsedAt = \time();
     }
 
-    private function getProcessor(): Processor
+    private function getProcessor(): ConnectionProcessor
     {
         if ($this->processor === null) {
             throw new \Error("The statement has been closed");
@@ -115,7 +115,7 @@ final class ConnectionStatement implements Statement
         }
     }
 
-    public function execute(array $params = []): Result
+    public function execute(array $params = []): MysqlResult
     {
         $this->lastUsedAt = \time();
 
@@ -159,16 +159,16 @@ final class ConnectionStatement implements Statement
 
     public function getColumnDefinitions(): ?array
     {
-        if ($this->result->state >= ResultProxy::COLUMNS_FETCHED) {
+        if ($this->result->state >= MysqlResultProxy::COLUMNS_FETCHED) {
             return $this->result->columns;
         }
 
-        if (isset($this->result->deferreds[ResultProxy::COLUMNS_FETCHED][0])) {
-            return $this->result->deferreds[ResultProxy::COLUMNS_FETCHED][0][0]->promise();
+        if (isset($this->result->deferreds[MysqlResultProxy::COLUMNS_FETCHED][0])) {
+            return $this->result->deferreds[MysqlResultProxy::COLUMNS_FETCHED][0][0]->promise();
         }
 
         $deferred = new DeferredFuture;
-        $this->result->deferreds[ResultProxy::COLUMNS_FETCHED][0] = [$deferred, &$this->result->columns, null];
+        $this->result->deferreds[MysqlResultProxy::COLUMNS_FETCHED][0] = [$deferred, &$this->result->columns, null];
         return $deferred->getFuture()->await();
     }
 
@@ -187,7 +187,7 @@ final class ConnectionStatement implements Statement
         }
     }
 
-    private static function shutdown(Processor $processor, int $stmtId, DeferredFuture $onClose): void
+    private static function shutdown(ConnectionProcessor $processor, int $stmtId, DeferredFuture $onClose): void
     {
         try {
             $processor->closeStmt($stmtId);

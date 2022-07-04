@@ -2,25 +2,25 @@
 
 namespace Amp\Mysql\Test;
 
-use Amp\Mysql\Internal\ConnectionStatement;
-use Amp\Mysql\Internal\Processor;
-use Amp\Mysql\Internal\ResultProxy;
+use Amp\Mysql\Internal\ConnectionProcessor;
+use Amp\Mysql\Internal\MysqlConnectionStatement;
+use Amp\Mysql\Internal\MysqlResultProxy;
 use Amp\PHPUnit\AsyncTestCase;
 use PHPUnit\Framework\MockObject\MockObject;
 
 class StatementTest extends AsyncTestCase
 {
-    /** @var MockObject&Processor */
-    protected Processor $processor;
+    /** @var MockObject&ConnectionProcessor */
+    protected ConnectionProcessor $processor;
 
-    protected ResultProxy $resultProxy;
+    protected MysqlResultProxy $resultProxy;
 
     public function setUp(): void
     {
         parent::setUp();
 
-        $this->processor = $this->createMock(Processor::class);
-        $this->resultProxy = new ResultProxy;
+        $this->processor = $this->createMock(ConnectionProcessor::class);
+        $this->resultProxy = new MysqlResultProxy;
     }
 
     /**
@@ -42,7 +42,7 @@ class StatementTest extends AsyncTestCase
             ->method('closeStmt');
 
         $this->resultProxy->columnsToFetch = 1;
-        $stmt = new ConnectionStatement($this->processor, $query, $stmtId, $named, $this->resultProxy);
+        $stmt = new MysqlConnectionStatement($this->processor, $query, $stmtId, $named, $this->resultProxy);
 
         // assert
         if ($expectedException) {

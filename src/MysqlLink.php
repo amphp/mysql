@@ -2,16 +2,16 @@
 
 namespace Amp\Mysql;
 
-use Amp\Sql\Link as SqlLink;
+use Amp\Sql\Link;
 use Amp\Sql\TransactionIsolation;
 use Amp\Sql\TransactionIsolationLevel;
 
-interface Link extends Executor, SqlLink
+interface MysqlLink extends MysqlExecutor, Link
 {
     /**
-     * @return Transaction Transaction object specific to this library.
+     * @return MysqlTransaction Transaction object specific to this library.
      */
     public function beginTransaction(
         TransactionIsolation $isolation = TransactionIsolationLevel::Committed
-    ): Transaction;
+    ): MysqlTransaction;
 }

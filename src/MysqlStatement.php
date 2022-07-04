@@ -2,11 +2,11 @@
 
 namespace Amp\Mysql;
 
-use Amp\Sql\Statement as SqlStatement;
+use Amp\Sql\Statement;
 
-interface Statement extends SqlStatement
+interface MysqlStatement extends Statement
 {
-    public function execute(array $params = []): Result;
+    public function execute(array $params = []): MysqlResult;
 
     /**
      * @param int|string $paramId Parameter ID or name.
@@ -17,7 +17,7 @@ interface Statement extends SqlStatement
     public function bind(int|string $paramId, mixed $data): void;
 
     /**
-     * @return list<ColumnDefinition>|null
+     * @return list<MysqlColumnDefinition>|null
      */
     public function getColumnDefinitions(): ?array;
 

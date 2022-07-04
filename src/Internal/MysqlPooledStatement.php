@@ -2,35 +2,35 @@
 
 namespace Amp\Mysql\Internal;
 
-use Amp\Mysql\Result;
-use Amp\Mysql\Statement;
+use Amp\Mysql\MysqlResult;
+use Amp\Mysql\MysqlStatement;
 use Amp\Sql\Common\PooledStatement as SqlPooledStatement;
 use Amp\Sql\Result as SqlResult;
 
 /** @internal */
-final class PooledStatement extends SqlPooledStatement implements Statement
+final class MysqlPooledStatement extends SqlPooledStatement implements MysqlStatement
 {
-    private readonly Statement $statement;
+    private readonly MysqlStatement $statement;
 
     /**
      * @param \Closure():void $release
      */
-    public function __construct(Statement $statement, \Closure $release)
+    public function __construct(MysqlStatement $statement, \Closure $release)
     {
         parent::__construct($statement, $release);
         $this->statement = $statement;
     }
 
-    protected function createResult(SqlResult $result, \Closure $release): Result
+    protected function createResult(SqlResult $result, \Closure $release): MysqlResult
     {
-        \assert($result instanceof Result);
-        return new PooledResult($result, $release);
+        \assert($result instanceof MysqlResult);
+        return new MysqlPooledResult($result, $release);
     }
 
     /**
      * Changes return type to this library's Result type.
      */
-    public function execute(array $params = []): Result
+    public function execute(array $params = []): MysqlResult
     {
         return $this->statement->execute($params);
     }

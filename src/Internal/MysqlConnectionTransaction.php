@@ -3,20 +3,20 @@
 namespace Amp\Mysql\Internal;
 
 use Amp\DeferredFuture;
-use Amp\Mysql\Result;
-use Amp\Mysql\Statement;
-use Amp\Mysql\Transaction;
+use Amp\Mysql\MysqlResult;
+use Amp\Mysql\MysqlStatement;
+use Amp\Mysql\MysqlTransaction;
 use Amp\Sql\SqlException;
 use Amp\Sql\TransactionError;
 use Amp\Sql\TransactionIsolation;
 use Revolt\EventLoop;
 
 /** @internal */
-final class ConnectionTransaction implements Transaction
+final class MysqlConnectionTransaction implements MysqlTransaction
 {
     const SAVEPOINT_PREFIX = "amp_";
 
-    private ?Processor $processor;
+    private ?ConnectionProcessor $processor;
 
     private readonly TransactionIsolation $isolation;
 
@@ -33,7 +33,7 @@ final class ConnectionTransaction implements Transaction
      * @throws \Error If the isolation level is invalid.
      */
     public function __construct(
-        Processor $processor,
+        ConnectionProcessor $processor,
         \Closure $release,
         TransactionIsolation $isolation
     ) {
@@ -114,7 +114,7 @@ final class ConnectionTransaction implements Transaction
     /**
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
-    public function query(string $sql): Result
+    public function query(string $sql): MysqlResult
     {
         if ($this->processor === null) {
             throw new TransactionError("The transaction has been committed or rolled back");
@@ -122,7 +122,7 @@ final class ConnectionTransaction implements Transaction
 
         $result = $this->processor->query($sql)->await();
         ++$this->refCount;
-        return new PooledResult($result, $this->release);
+        return new MysqlPooledResult($result, $this->release);
     }
 
     /**
@@ -130,20 +130,20 @@ final class ConnectionTransaction implements Transaction
      *
      * @psalm-suppress InvalidReturnStatement, InvalidReturnType
      */
-    public function prepare(string $sql): Statement
+    public function prepare(string $sql): MysqlStatement
     {
         if ($this->processor === null) {
             throw new TransactionError("The transaction has been committed or rolled back");
         }
 
         $statement = $this->processor->prepare($sql)->await();
-        return new PooledStatement($statement, $this->release);
+        return new MysqlPooledStatement($statement, $this->release);
     }
 
     /**
      * @throws TransactionError If the transaction has been committed or rolled back.
      */
-    public function execute(string $sql, array $params = []): Result
+    public function execute(string $sql, array $params = []): MysqlResult
     {
         if ($this->processor === null) {
             throw new TransactionError("The transaction has been committed or rolled back");
@@ -153,7 +153,7 @@ final class ConnectionTransaction implements Transaction
         $result = $statement->execute($params);
 
         ++$this->refCount;
-        return new PooledResult($result, $this->release);
+        return new MysqlPooledResult($result, $this->release);
     }
 
     /**

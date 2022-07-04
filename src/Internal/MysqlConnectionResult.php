@@ -4,22 +4,22 @@ namespace Amp\Mysql\Internal;
 
 use Amp\DeferredFuture;
 use Amp\Future;
-use Amp\Mysql\Result;
+use Amp\Mysql\MysqlResult;
 use Amp\Pipeline\ConcurrentIterableIterator;
 use Amp\Pipeline\ConcurrentIterator;
 use Revolt\EventLoop;
 use function Amp\async;
 
 /** @internal */
-final class ConnectionResult implements Result, \IteratorAggregate
+final class MysqlConnectionResult implements MysqlResult, \IteratorAggregate
 {
-    private readonly ResultProxy $result;
+    private readonly MysqlResultProxy $result;
 
     private readonly ConcurrentIterator $generator;
 
     private ?Future $nextResult = null;
 
-    public function __construct(ResultProxy $result)
+    public function __construct(MysqlResultProxy $result)
     {
         $this->result = $result;
         $this->generator = new ConcurrentIterableIterator(self::iterate($result));
@@ -30,7 +30,7 @@ final class ConnectionResult implements Result, \IteratorAggregate
         return $this->generator;
     }
 
-    private static function iterate(ResultProxy $result): \Generator
+    private static function iterate(MysqlResultProxy $result): \Generator
     {
         $next = self::fetchRow($result);
 
@@ -67,7 +67,7 @@ final class ConnectionResult implements Result, \IteratorAggregate
     /**
      * @return Future<array|null>
      */
-    private static function fetchRow(ResultProxy $result): Future
+    private static function fetchRow(MysqlResultProxy $result): Future
     {
         if ($result->userFetched < $result->fetchedRows) {
             $row = $result->rows[$result->userFetched];
@@ -76,7 +76,7 @@ final class ConnectionResult implements Result, \IteratorAggregate
             return Future::complete($row);
         }
 
-        if ($result->state === ResultProxy::ROWS_FETCHED) {
+        if ($result->state === MysqlResultProxy::ROWS_FETCHED) {
             return Future::complete();
         }
 
@@ -90,21 +90,21 @@ final class ConnectionResult implements Result, \IteratorAggregate
             return $row;
         };
 
-        $result->deferreds[ResultProxy::UNFETCHED][] = [$deferred, null, $incRow];
+        $result->deferreds[MysqlResultProxy::UNFETCHED][] = [$deferred, null, $incRow];
         return $deferred->getFuture();
     }
 
-    public function getNextResult(): ?Result
+    public function getNextResult(): ?MysqlResult
     {
         if ($this->nextResult) {
             return $this->nextResult->await();
         }
 
-        $this->nextResult = async(function (): ?Result {
+        $this->nextResult = async(function (): ?MysqlResult {
             $deferred = $this->result->next ?: $this->result->next = new DeferredFuture;
             $result = $deferred->getFuture()->await();
 
-            if ($result instanceof ResultProxy) {
+            if ($result instanceof MysqlResultProxy) {
                 return new self($result);
             }
 
@@ -131,12 +131,12 @@ final class ConnectionResult implements Result, \IteratorAggregate
 
     public function getColumnDefinitions(): ?array
     {
-        if ($this->result->state >= ResultProxy::COLUMNS_FETCHED) {
+        if ($this->result->state >= MysqlResultProxy::COLUMNS_FETCHED) {
             return $this->result->columns;
         }
 
         $deferred = new DeferredFuture;
-        $this->result->deferreds[ResultProxy::COLUMNS_FETCHED][] = [$deferred, &$this->result->columns, null];
+        $this->result->deferreds[MysqlResultProxy::COLUMNS_FETCHED][] = [$deferred, &$this->result->columns, null];
         return $deferred->getFuture()->await();
     }
 }

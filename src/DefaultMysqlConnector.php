@@ -12,7 +12,7 @@ final class DefaultMysqlConnector implements MysqlConnector
     {
     }
 
-    public function connect(SqlConfig $config, ?Cancellation $cancellation = null): Connection
+    public function connect(SqlConfig $config, ?Cancellation $cancellation = null): MysqlConnection
     {
         if (!$config instanceof MysqlConfig) {
             throw new \TypeError(\sprintf("Must provide an instance of %s to MySQL connectors", MysqlConfig::class));
@@ -21,6 +21,6 @@ final class DefaultMysqlConnector implements MysqlConnector
         $socket = ($this->connector ?? Socket\socketConnector())
             ->connect($config->getConnectionString(), $config->getConnectContext(), $cancellation);
 
-        return Connection::initialize($socket, $config, $cancellation);
+        return MysqlConnection::initialize($socket, $config, $cancellation);
     }
 }

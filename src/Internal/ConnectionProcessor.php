@@ -6,10 +6,10 @@ use Amp\Cancellation;
 use Amp\DeferredFuture;
 use Amp\File;
 use Amp\Future;
-use Amp\Mysql\ColumnDefinition;
-use Amp\Mysql\DataType;
 use Amp\Mysql\InitializationException;
+use Amp\Mysql\MysqlColumnDefinition;
 use Amp\Mysql\MysqlConfig;
+use Amp\Mysql\MysqlDataType;
 use Amp\Socket\EncryptableSocket;
 use Amp\Sql\ConnectionException;
 use Amp\Sql\QueryError;
@@ -23,7 +23,7 @@ use Revolt\EventLoop;
  */
 
 /** @internal */
-class Processor implements TransientResource
+class ConnectionProcessor implements TransientResource
 {
     const STATEMENT_PARAM_REGEX = <<<'REGEX'
 ~(["'`])(?:\\(?:\\|\1)|(?!\1).)*+\1(*SKIP)(*FAIL)|(\?)|:([a-zA-Z_][a-zA-Z0-9_]*)~ms
@@ -51,7 +51,7 @@ REGEX;
     /** @var array<int, \Closure():void> */
     private array $onReady = [];
 
-    private ?ResultProxy $result = null;
+    private ?MysqlResultProxy $result = null;
 
     private int $lastUsedAt;
 
@@ -60,7 +60,7 @@ REGEX;
     private int $capabilities = 0;
     private int $serverCapabilities = 0;
     private string $authPluginName = '';
-    private ConnectionMetadata $metadata;
+    private MysqlConnectionMetdata $metadata;
     private int $refcount = 1;
 
     private ConnectionState $connectionState = ConnectionState::Unconnected;
@@ -111,7 +111,7 @@ REGEX;
     public function __construct(EncryptableSocket $socket, MysqlConfig $config)
     {
         $this->socket = $socket;
-        $this->metadata = new ConnectionMetadata();
+        $this->metadata = new MysqlConnectionMetdata();
         $this->config = $config;
         $this->lastUsedAt = \time();
     }
@@ -283,7 +283,7 @@ REGEX;
         }
     }
 
-    public function getMetadata(): ConnectionMetadata
+    public function getMetadata(): MysqlConnectionMetdata
     {
         return clone $this->metadata;
     }
@@ -411,8 +411,8 @@ REGEX;
     public function bindParam(int $stmtId, int $paramId, string $data): void
     {
         $payload = "\x18";
-        $payload .= DataType::encodeInt32($stmtId);
-        $payload .= DataType::encodeInt16($paramId);
+        $payload .= MysqlDataType::encodeInt32($stmtId);
+        $payload .= MysqlDataType::encodeInt16($paramId);
         $payload .= $data;
         $this->appendTask(function () use ($payload) {
             $this->resetIds();
@@ -434,9 +434,9 @@ REGEX;
         $deferred = new DeferredFuture;
         $this->appendTask(function () use ($stmtId, $query, &$params, $prebound, $data, $deferred): void {
             $payload = "\x17";
-            $payload .= DataType::encodeInt32($stmtId);
+            $payload .= MysqlDataType::encodeInt32($stmtId);
             $payload .= \chr(0); // cursor flag // @TODO cursor types?!
-            $payload .= DataType::encodeInt32(1);
+            $payload .= MysqlDataType::encodeInt32(1);
             $paramCount = \count($params);
             $bound = (!empty($data) || !empty($prebound)) ? 1 : 0;
             $types = "";
@@ -455,10 +455,10 @@ REGEX;
                         $bound = 1;
                     }
 
-                    /** @var DataType $type */
-                    [$type, $value] = DataType::encodeBinary($param);
+                    /** @var MysqlDataType $type */
+                    [$type, $value] = MysqlDataType::encodeBinary($param);
                     if (isset($prebound[$paramId])) {
-                        $types .= \chr(DataType::LongBlob->value);
+                        $types .= \chr(MysqlDataType::LongBlob->value);
                     } else {
                         $types .= \chr($type->value);
                     }
@@ -486,7 +486,7 @@ REGEX;
     /** @see 14.7.7 COM_STMT_CLOSE */
     public function closeStmt(int $stmtId): void
     {
-        $payload = "\x19" . DataType::encodeInt32($stmtId);
+        $payload = "\x19" . MysqlDataType::encodeInt32($stmtId);
         $this->appendTask(function () use ($payload): void {
             if ($this->connectionState === ConnectionState::Ready) {
                 $this->resetIds();
@@ -578,7 +578,7 @@ REGEX;
     public function killProcess(int $process): Future
     {
         return $this->startCommand(function () use ($process): void {
-            $this->sendPacket("\x0c" . DataType::encodeInt32($process));
+            $this->sendPacket("\x0c" . MysqlDataType::encodeInt32($process));
         });
     }
 
@@ -593,7 +593,7 @@ REGEX;
     /** @see 14.7.8 COM_STMT_RESET */
     public function resetStmt(int $stmtId): Future
     {
-        $payload = "\x1a" . DataType::encodeInt32($stmtId);
+        $payload = "\x1a" . MysqlDataType::encodeInt32($stmtId);
         $deferred = new DeferredFuture;
         $this->appendTask(function () use ($payload, $deferred): void {
             $this->resetIds();
@@ -606,7 +606,7 @@ REGEX;
     /** @see 14.8.4 COM_STMT_FETCH */
     public function fetchStmt(int $stmtId): Future
     {
-        $payload = "\x1c" . DataType::encodeInt32($stmtId) . DataType::encodeInt32(1);
+        $payload = "\x1c" . MysqlDataType::encodeInt32($stmtId) . MysqlDataType::encodeInt32(1);
         $deferred = new DeferredFuture;
         $this->appendTask(function () use ($payload, $deferred): void {
             $this->resetIds();
@@ -643,7 +643,7 @@ REGEX;
     {
         $offset = 1;
 
-        $this->metadata->errorCode = DataType::decodeUnsigned16($packet, $offset);
+        $this->metadata->errorCode = MysqlDataType::decodeUnsigned16($packet, $offset);
 
         if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
             $this->metadata->errorState = \substr($packet, $offset, 6);
@@ -699,12 +699,12 @@ REGEX;
     {
         $offset = 1;
 
-        $this->metadata->affectedRows = DataType::decodeUnsigned($packet, $offset);
-        $this->metadata->insertId = DataType::decodeUnsigned($packet, $offset);
+        $this->metadata->affectedRows = MysqlDataType::decodeUnsigned($packet, $offset);
+        $this->metadata->insertId = MysqlDataType::decodeUnsigned($packet, $offset);
 
         if ($this->capabilities & (self::CLIENT_PROTOCOL_41 | self::CLIENT_TRANSACTIONS)) {
-            $this->metadata->statusFlags = DataType::decodeUnsigned16($packet, $offset);
-            $this->metadata->warnings = DataType::decodeUnsigned16($packet, $offset);
+            $this->metadata->statusFlags = MysqlDataType::decodeUnsigned16($packet, $offset);
+            $this->metadata->warnings = MysqlDataType::decodeUnsigned16($packet, $offset);
         }
 
         if (!($this->capabilities & self::CLIENT_SESSION_TRACK)) {
@@ -719,22 +719,22 @@ REGEX;
             return;
         }
 
-        $this->metadata->statusInfo = DataType::decodeString($packet, $offset);
+        $this->metadata->statusInfo = MysqlDataType::decodeString($packet, $offset);
 
         if (!($this->metadata->statusFlags & self::SERVER_SESSION_STATE_CHANGED)) {
             return;
         }
 
-        $sessionState = DataType::decodeString($packet, $offset);
+        $sessionState = MysqlDataType::decodeString($packet, $offset);
 
         while (\strlen($packet) > $offset) {
-            $data = DataType::decodeString($sessionState, $offset);
-            $type = DataType::decodeUnsigned8($sessionState, $offset);
+            $data = MysqlDataType::decodeString($sessionState, $offset);
+            $type = MysqlDataType::decodeUnsigned8($sessionState, $offset);
 
             switch (SessionStateType::tryFrom($type)) {
                 case SessionStateType::SystemVariables:
-                    $var = DataType::decodeString($data, $offset);
-                    $this->metadata->sessionState[$type][$var] = DataType::decodeString($data, $offset);
+                    $var = MysqlDataType::decodeString($data, $offset);
+                    $this->metadata->sessionState[$type][$var] = MysqlDataType::decodeString($data, $offset);
                     break;
 
                 case SessionStateType::Schema:
@@ -742,7 +742,7 @@ REGEX;
                 case SessionStateType::Gtids:
                 case SessionStateType::TransactionCharacteristics:
                 case SessionStateType::TransactionState:
-                    $this->metadata->sessionState[$type] = DataType::decodeString($data, $offset);
+                    $this->metadata->sessionState[$type] = MysqlDataType::decodeString($data, $offset);
                     break;
 
                 default:
@@ -754,7 +754,7 @@ REGEX;
     private function handleOk(string $packet): void
     {
         $this->parseOk($packet);
-        $this->getDeferred()->complete(new CommandResult($this->metadata->affectedRows, $this->metadata->insertId));
+        $this->getDeferred()->complete(new MysqlCommandResult($this->metadata->affectedRows, $this->metadata->insertId));
         $this->ready();
     }
 
@@ -763,8 +763,8 @@ REGEX;
     {
         $offset = 1;
         if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
-            $this->metadata->warnings = DataType::decodeUnsigned16($packet, $offset);
-            $this->metadata->statusFlags = DataType::decodeUnsigned16($packet, $offset);
+            $this->metadata->warnings = MysqlDataType::decodeUnsigned16($packet, $offset);
+            $this->metadata->statusFlags = MysqlDataType::decodeUnsigned16($packet, $offset);
         }
     }
 
@@ -786,24 +786,24 @@ REGEX;
             throw new ConnectionException("Unsupported protocol version ".\ord($packet)." (Expected: 10)");
         }
 
-        $this->metadata->serverVersion = DataType::decodeNullTerminatedString($packet, $offset);
+        $this->metadata->serverVersion = MysqlDataType::decodeNullTerminatedString($packet, $offset);
 
-        $this->connectionId = DataType::decodeUnsigned32($packet, $offset);
+        $this->connectionId = MysqlDataType::decodeUnsigned32($packet, $offset);
 
         $this->authPluginData = \substr($packet, $offset, 8);
         $offset += 8;
 
         $offset += 1; // filler byte
 
-        $this->serverCapabilities = DataType::decodeUnsigned16($packet, $offset);
+        $this->serverCapabilities = MysqlDataType::decodeUnsigned16($packet, $offset);
 
         if (\strlen($packet) > $offset) {
-            $this->metadata->charset = DataType::decodeUnsigned8($packet, $offset);
-            $this->metadata->statusFlags = DataType::decodeUnsigned16($packet, $offset);
-            $this->serverCapabilities += DataType::decodeUnsigned16($packet, $offset) << 16;
+            $this->metadata->charset = MysqlDataType::decodeUnsigned8($packet, $offset);
+            $this->metadata->statusFlags = MysqlDataType::decodeUnsigned16($packet, $offset);
+            $this->serverCapabilities += MysqlDataType::decodeUnsigned16($packet, $offset) << 16;
 
             $authPluginDataLen = $this->serverCapabilities & self::CLIENT_PLUGIN_AUTH
-                ? DataType::decodeUnsigned8($packet, $offset)
+                ? MysqlDataType::decodeUnsigned8($packet, $offset)
                 : 0;
 
             if ($this->serverCapabilities & self::CLIENT_SECURE_CONNECTION) {
@@ -814,7 +814,7 @@ REGEX;
                 $offset += $strlen;
 
                 if ($this->serverCapabilities & self::CLIENT_PLUGIN_AUTH) {
-                    $this->authPluginName = DataType::decodeNullTerminatedString($packet, $offset);
+                    $this->authPluginName = MysqlDataType::decodeNullTerminatedString($packet, $offset);
                 }
             }
         }
@@ -826,7 +826,7 @@ REGEX;
     private function handleAuthSwitch(string $packet): void
     {
         $offset = 1;
-        $this->authPluginName = DataType::decodeNullTerminatedString($packet, $offset);
+        $this->authPluginName = MysqlDataType::decodeNullTerminatedString($packet, $offset);
         $this->authPluginData = \substr($packet, $offset);
         $this->sendAuthSwitchResponse();
     }
@@ -867,16 +867,16 @@ REGEX;
                 $this->parseOk($packet);
 
                 if ($this->metadata->statusFlags & self::SERVER_MORE_RESULTS_EXISTS) {
-                    $result = new ResultProxy;
+                    $result = new MysqlResultProxy;
                     $result->affectedRows = $this->metadata->affectedRows;
                     $result->insertId = $this->metadata->insertId;
-                    $this->getDeferred()->complete(new ConnectionResult($result));
+                    $this->getDeferred()->complete(new MysqlConnectionResult($result));
                     $this->result = $result;
-                    $result->updateState(ResultProxy::COLUMNS_FETCHED);
+                    $result->updateState(MysqlResultProxy::COLUMNS_FETCHED);
                     $this->successfulResultFetch();
                 } else {
                     $this->parseCallback = null;
-                    $this->getDeferred()->complete(new CommandResult(
+                    $this->getDeferred()->complete(new MysqlCommandResult(
                         $this->metadata->affectedRows,
                         $this->metadata->insertId
                     ));
@@ -896,17 +896,17 @@ REGEX;
         }
 
         $this->parseCallback = $this->handleTextColumnDefinition(...);
-        $this->getDeferred()->complete(new ConnectionResult($result = new ResultProxy));
+        $this->getDeferred()->complete(new MysqlConnectionResult($result = new MysqlResultProxy));
         /* we need to resolve before assigning vars, so that a onResolve() handler won't have a partial result available */
         $this->result = $result;
-        $result->setColumns(DataType::decodeUnsigned($packet));
+        $result->setColumns(MysqlDataType::decodeUnsigned($packet));
     }
 
     /** @see 14.7.1 Binary Protocol Resultset */
     private function handleExecute(string $packet): void
     {
         $this->parseCallback = $this->handleBinaryColumnDefinition(...);
-        $this->getDeferred()->complete(new ConnectionResult($result = new ResultProxy));
+        $this->getDeferred()->complete(new MysqlConnectionResult($result = new MysqlResultProxy));
         /* we need to resolve before assigning vars, so that a onResolve() handler won't have a partial result available */
         $this->result = $result;
         $result->setColumns(\ord($packet));
@@ -943,7 +943,7 @@ REGEX;
         \assert($this->result !== null, 'Connection result was in invalid state');
 
         if (!$this->result->columnsToFetch--) {
-            $this->result->updateState(ResultProxy::COLUMNS_FETCHED);
+            $this->result->updateState(MysqlResultProxy::COLUMNS_FETCHED);
             if (\ord($packet) === self::ERR_PACKET) {
                 $this->parseCallback = null;
                 $this->handleError($packet);
@@ -989,7 +989,7 @@ REGEX;
             $result = $this->result;
             $this->result = null;
             $this->ready();
-            $result->updateState(ResultProxy::COLUMNS_FETCHED);
+            $result->updateState(MysqlResultProxy::COLUMNS_FETCHED);
 
             return;
         }
@@ -998,56 +998,56 @@ REGEX;
     }
 
     /** @see 14.6.4.1.1.2 Column Defintion */
-    private function parseColumnDefinition(string $packet): ColumnDefinition
+    private function parseColumnDefinition(string $packet): MysqlColumnDefinition
     {
         $offset = 0;
         $column = [];
 
         if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
-            $column["catalog"] = DataType::decodeString($packet, $offset);
-            $column["schema"] = DataType::decodeString($packet, $offset);
-            $column["table"] = DataType::decodeString($packet, $offset);
-            $column["originalTable"] = DataType::decodeString($packet, $offset);
-            $column["name"] = DataType::decodeString($packet, $offset);
-            $column["originalName"] = DataType::decodeString($packet, $offset);
-            $fixLength = DataType::decodeUnsigned($packet, $offset);
+            $column["catalog"] = MysqlDataType::decodeString($packet, $offset);
+            $column["schema"] = MysqlDataType::decodeString($packet, $offset);
+            $column["table"] = MysqlDataType::decodeString($packet, $offset);
+            $column["originalTable"] = MysqlDataType::decodeString($packet, $offset);
+            $column["name"] = MysqlDataType::decodeString($packet, $offset);
+            $column["originalName"] = MysqlDataType::decodeString($packet, $offset);
+            $fixLength = MysqlDataType::decodeUnsigned($packet, $offset);
 
-            $column["charset"] = DataType::decodeUnsigned16($packet, $offset);
-            $column["length"] = DataType::decodeUnsigned32($packet, $offset);
-            $column["type"] = DataType::from(DataType::decodeUnsigned8($packet, $offset));
-            $column["flags"] = DataType::decodeUnsigned16($packet, $offset);
-            $column["decimals"] = DataType::decodeUnsigned8($packet, $offset);
+            $column["charset"] = MysqlDataType::decodeUnsigned16($packet, $offset);
+            $column["length"] = MysqlDataType::decodeUnsigned32($packet, $offset);
+            $column["type"] = MysqlDataType::from(MysqlDataType::decodeUnsigned8($packet, $offset));
+            $column["flags"] = MysqlDataType::decodeUnsigned16($packet, $offset);
+            $column["decimals"] = MysqlDataType::decodeUnsigned8($packet, $offset);
 
             $offset += $fixLength;
         } else {
-            $column["table"] = DataType::decodeString($packet, $offset);
-            $column["name"] = DataType::decodeString($packet, $offset);
+            $column["table"] = MysqlDataType::decodeString($packet, $offset);
+            $column["name"] = MysqlDataType::decodeString($packet, $offset);
 
-            $columnLength = DataType::decodeUnsigned($packet, $offset);
-            $column["length"] = DataType::decodeIntByLength($packet, $columnLength, $offset);
+            $columnLength = MysqlDataType::decodeUnsigned($packet, $offset);
+            $column["length"] = MysqlDataType::decodeIntByLength($packet, $columnLength, $offset);
 
-            $typeLength = DataType::decodeUnsigned($packet, $offset);
-            $column["type"] = DataType::from(DataType::decodeIntByLength($packet, $typeLength, $offset));
+            $typeLength = MysqlDataType::decodeUnsigned($packet, $offset);
+            $column["type"] = MysqlDataType::from(MysqlDataType::decodeIntByLength($packet, $typeLength, $offset));
 
             $flagLength = $this->capabilities & self::CLIENT_LONG_FLAG
-                ? DataType::decodeUnsigned($packet, $offset)
-                : DataType::decodeUnsigned8($packet, $offset);
+                ? MysqlDataType::decodeUnsigned($packet, $offset)
+                : MysqlDataType::decodeUnsigned8($packet, $offset);
 
             if ($flagLength > 2) {
-                $column["flags"] = DataType::decodeUnsigned16($packet, $offset);
+                $column["flags"] = MysqlDataType::decodeUnsigned16($packet, $offset);
             } else {
-                $column["flags"] = DataType::decodeUnsigned8($packet, $offset);
+                $column["flags"] = MysqlDataType::decodeUnsigned8($packet, $offset);
             }
 
-            $column["decimals"] = DataType::decodeUnsigned8($packet, $offset);
+            $column["decimals"] = MysqlDataType::decodeUnsigned8($packet, $offset);
         }
 
         if ($offset < \strlen($packet)) {
-            $column["defaults"] = DataType::decodeString($packet, $offset);
+            $column["defaults"] = MysqlDataType::decodeString($packet, $offset);
         }
 
         /** @psalm-suppress InvalidScalarArgument */
-        return new ColumnDefinition(...$column);
+        return new MysqlColumnDefinition(...$column);
     }
 
     private function successfulResultFetch(): void
@@ -1071,7 +1071,7 @@ REGEX;
             $this->ready();
         }
 
-        $result->updateState(ResultProxy::ROWS_FETCHED);
+        $result->updateState(MysqlResultProxy::ROWS_FETCHED);
     }
 
     /** @see 14.6.4.1.1.3 Resultset Row */
@@ -1161,20 +1161,20 @@ REGEX;
 
         $offset = 1;
 
-        $stmtId = DataType::decodeUnsigned32($packet, $offset);
-        $columns = DataType::decodeUnsigned16($packet, $offset);
-        $params = DataType::decodeUnsigned16($packet, $offset);
+        $stmtId = MysqlDataType::decodeUnsigned32($packet, $offset);
+        $columns = MysqlDataType::decodeUnsigned16($packet, $offset);
+        $params = MysqlDataType::decodeUnsigned16($packet, $offset);
 
         $offset += 1; // filler
 
-        $this->metadata->warnings = DataType::decodeUnsigned16($packet, $offset);
+        $this->metadata->warnings = MysqlDataType::decodeUnsigned16($packet, $offset);
 
-        $this->result = new ResultProxy;
+        $this->result = new MysqlResultProxy;
         $this->result->columnsToFetch = $params;
         $this->result->columnCount = $columns;
         $this->refcount++;
         \assert($this->query !== null, 'Invalid value for connection query');
-        $this->getDeferred()->complete(new ConnectionStatement($this, $this->query, $stmtId, $this->named, $this->result));
+        $this->getDeferred()->complete(new MysqlConnectionStatement($this, $this->query, $stmtId, $this->named, $this->result));
         $this->named = [];
         if ($params) {
             $this->parseCallback = $this->prepareParams(...);
@@ -1292,9 +1292,9 @@ REGEX;
                 $inflated = "";
             }
 
-            $size = DataType::decodeUnsigned24($buffer);
+            $size = MysqlDataType::decodeUnsigned24($buffer);
             $this->compressionId = \ord($buffer[3]);
-            $uncompressed = DataType::decodeUnsigned24(\substr($buffer, 4, 3));
+            $uncompressed = MysqlDataType::decodeUnsigned24(\substr($buffer, 4, 3));
 
             $buffer = \substr($buffer, 7);
 
@@ -1333,7 +1333,7 @@ REGEX;
                     $parsed = [];
                 }
 
-                $length = DataType::decodeUnsigned24($buffer);
+                $length = MysqlDataType::decodeUnsigned24($buffer);
                 $this->seqId = \ord($buffer[3]);
                 $buffer = \substr($buffer, 4);
 
@@ -1536,7 +1536,7 @@ REGEX;
 
         $auth = $this->getAuthData();
         if ($this->capabilities & self::CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA) {
-            $payload .= DataType::encodeInt(\strlen($auth));
+            $payload .= MysqlDataType::encodeInt(\strlen($auth));
             $payload .= $auth;
         } elseif ($this->capabilities & self::CLIENT_SECURE_CONNECTION) {
             $payload .= \chr(\strlen($auth));

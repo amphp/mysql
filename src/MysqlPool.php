@@ -11,7 +11,7 @@ use Amp\Sql\Transaction as SqlTransaction;
 use Amp\Sql\TransactionIsolation;
 use Amp\Sql\TransactionIsolationLevel;
 
-final class Pool extends ConnectionPool implements Link
+final class MysqlPool extends ConnectionPool implements MysqlLink
 {
     /**
      * @param positive-int $maxConnections
@@ -23,29 +23,29 @@ final class Pool extends ConnectionPool implements Link
         int $idleTimeout = self::DEFAULT_IDLE_TIMEOUT,
         ?MysqlConnector $connector = null,
     ) {
-        parent::__construct($config, $connector ?? connector(), $maxConnections, $idleTimeout);
+        parent::__construct($config, $connector ?? mysqlConnector(), $maxConnections, $idleTimeout);
     }
 
-    protected function createResult(SqlResult $result, \Closure $release): Result
+    protected function createResult(SqlResult $result, \Closure $release): MysqlResult
     {
-        \assert($result instanceof Result);
-        return new Internal\PooledResult($result, $release);
+        \assert($result instanceof MysqlResult);
+        return new Internal\MysqlPooledResult($result, $release);
     }
 
-    protected function createStatement(SqlStatement $statement, \Closure $release): Statement
+    protected function createStatement(SqlStatement $statement, \Closure $release): MysqlStatement
     {
-        \assert($statement instanceof Statement);
-        return new Internal\PooledStatement($statement, $release);
+        \assert($statement instanceof MysqlStatement);
+        return new Internal\MysqlPooledStatement($statement, $release);
     }
 
     protected function createStatementPool(SqlPool $pool, string $sql, \Closure $prepare): StatementPool
     {
-        return new Internal\StatementPool($pool, $sql, $prepare);
+        return new Internal\MysqlStatementPool($pool, $sql, $prepare);
     }
 
-    protected function createTransaction(SqlTransaction $transaction, \Closure $release): Transaction
+    protected function createTransaction(SqlTransaction $transaction, \Closure $release): MysqlTransaction
     {
-        return new Internal\PooledTransaction($transaction, $release);
+        return new Internal\MysqlPooledTransaction($transaction, $release);
     }
 
     /**
@@ -53,7 +53,7 @@ final class Pool extends ConnectionPool implements Link
      *
      * @psalm-suppress LessSpecificReturnStatement, MoreSpecificReturnType
      */
-    public function query(string $sql): Result
+    public function query(string $sql): MysqlResult
     {
         return parent::query($sql);
     }
@@ -63,7 +63,7 @@ final class Pool extends ConnectionPool implements Link
      *
      * @psalm-suppress LessSpecificReturnStatement, MoreSpecificReturnType
      */
-    public function prepare(string $sql): Statement
+    public function prepare(string $sql): MysqlStatement
     {
         return parent::prepare($sql);
     }
@@ -73,7 +73,7 @@ final class Pool extends ConnectionPool implements Link
      *
      * @psalm-suppress LessSpecificReturnStatement, MoreSpecificReturnType
      */
-    public function execute(string $sql, array $params = []): Result
+    public function execute(string $sql, array $params = []): MysqlResult
     {
         return parent::execute($sql, $params);
     }
@@ -85,7 +85,7 @@ final class Pool extends ConnectionPool implements Link
      */
     public function beginTransaction(
         TransactionIsolation $isolation = TransactionIsolationLevel::Committed
-    ): Transaction {
+    ): MysqlTransaction {
         return parent::beginTransaction($isolation);
     }
 }

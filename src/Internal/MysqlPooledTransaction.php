@@ -2,26 +2,26 @@
 
 namespace Amp\Mysql\Internal;
 
-use Amp\Mysql\Result;
-use Amp\Mysql\Statement;
-use Amp\Mysql\Transaction;
+use Amp\Mysql\MysqlResult;
+use Amp\Mysql\MysqlStatement;
+use Amp\Mysql\MysqlTransaction;
 use Amp\Sql\Common\PooledTransaction as SqlPooledTransaction;
 use Amp\Sql\Result as SqlResult;
 use Amp\Sql\Statement as SqlStatement;
 
 /** @internal */
-final class PooledTransaction extends SqlPooledTransaction implements Transaction
+final class MysqlPooledTransaction extends SqlPooledTransaction implements MysqlTransaction
 {
-    protected function createStatement(SqlStatement $statement, \Closure $release): Statement
+    protected function createStatement(SqlStatement $statement, \Closure $release): MysqlStatement
     {
-        \assert($statement instanceof Statement);
-        return new PooledStatement($statement, $release);
+        \assert($statement instanceof MysqlStatement);
+        return new MysqlPooledStatement($statement, $release);
     }
 
-    protected function createResult(SqlResult $result, \Closure $release): Result
+    protected function createResult(SqlResult $result, \Closure $release): MysqlResult
     {
-        \assert($result instanceof Result);
-        return new PooledResult($result, $release);
+        \assert($result instanceof MysqlResult);
+        return new MysqlPooledResult($result, $release);
     }
 
     /**
@@ -29,7 +29,7 @@ final class PooledTransaction extends SqlPooledTransaction implements Transactio
      *
      * @psalm-suppress LessSpecificReturnStatement, MoreSpecificReturnType
      */
-    public function query(string $sql): Result
+    public function query(string $sql): MysqlResult
     {
         return parent::query($sql);
     }
@@ -39,7 +39,7 @@ final class PooledTransaction extends SqlPooledTransaction implements Transactio
      *
      * @psalm-suppress LessSpecificReturnStatement, MoreSpecificReturnType
      */
-    public function prepare(string $sql): Statement
+    public function prepare(string $sql): MysqlStatement
     {
         return parent::prepare($sql);
     }
@@ -49,7 +49,7 @@ final class PooledTransaction extends SqlPooledTransaction implements Transactio
      *
      * @psalm-suppress LessSpecificReturnStatement, MoreSpecificReturnType
      */
-    public function execute(string $sql, array $params = []): Result
+    public function execute(string $sql, array $params = []): MysqlResult
     {
         return parent::execute($sql, $params);
     }

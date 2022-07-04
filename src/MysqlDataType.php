@@ -5,7 +5,7 @@ namespace Amp\Mysql;
 use Amp\Sql\SqlException;
 
 /** @see 14.6.4.1.1.1 Column Type */
-enum DataType: int
+enum MysqlDataType: int
 {
     case Decimal = 0x00;
     case Tiny = 0x01;
@@ -42,7 +42,7 @@ enum DataType: int
     private const ENCODED_JSON_PREFIX = "base64:type251:";
 
     /**
-     * @return array{DataType, string}
+     * @return array{self, string}
      *
      * @see 14.7.3 Binary Value
      */

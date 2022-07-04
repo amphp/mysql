@@ -2,14 +2,14 @@
 
 namespace Amp\Mysql\Test;
 
-use Amp\Mysql\Connection;
 use Amp\Mysql\DefaultMysqlConnector;
-use Amp\Mysql\Link;
 use Amp\Mysql\MysqlConfig;
+use Amp\Mysql\MysqlConnection;
+use Amp\Mysql\MysqlLink;
 
 class ConnectionTest extends LinkTest
 {
-    protected function getLink(string $connectionString): Link
+    protected function getLink(string $connectionString): MysqlLink
     {
         return (new DefaultMysqlConnector)->connect(MysqlConfig::fromString($connectionString));
     }
@@ -20,7 +20,7 @@ class ConnectionTest extends LinkTest
 
         $db = $connector->connect(MysqlConfig::fromString("host=".DB_HOST." user=".DB_USER." pass=".DB_PASS." db=test"));
 
-        $this->assertInstanceOf(Connection::class, $db);
+        $this->assertInstanceOf(MysqlConnection::class, $db);
 
         /* use an alternative charset... Default is utf8mb4_general_ci */
         $db->setCharset("latin1_general_ci");

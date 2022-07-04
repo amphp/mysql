@@ -3,9 +3,9 @@
 namespace Amp\Mysql\Bench;
 
 use Amp\Mysql\DefaultMysqlConnector;
-use Amp\Mysql\Connection;
+use Amp\Mysql\MysqlConnection;
 use Amp\Mysql\MysqlConfig;
-use Amp\Mysql\Pool as ConnectionPool;
+use Amp\Mysql\MysqlPool as ConnectionPool;
 use Amp\Mysql\ResultSet;
 use function Amp\call;
 use function Amp\Promise\wait;
@@ -23,7 +23,7 @@ class QueryBench extends AbstractBench
     /** @var  ConnectionPool */
     protected $connectionPool;
 
-    /** @var  Connection */
+    /** @var  MysqlConnection */
     protected $connection;
 
     /** @var  \PDO */

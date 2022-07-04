@@ -2,19 +2,19 @@
 
 namespace Amp\Mysql\Internal;
 
-use Amp\Mysql\Result;
+use Amp\Mysql\MysqlResult;
 use Amp\Sql\Common\PooledResult as SqlPooledResult;
 use Amp\Sql\Result as SqlResult;
 
 /** @internal */
-final class PooledResult extends SqlPooledResult implements Result
+final class MysqlPooledResult extends SqlPooledResult implements MysqlResult
 {
-    private readonly Result $result;
+    private readonly MysqlResult $result;
 
     /**
      * @param \Closure():void $release
      */
-    public function __construct(Result $result, \Closure $release)
+    public function __construct(MysqlResult $result, \Closure $release)
     {
         parent::__construct($result, $release);
         $this->result = $result;
@@ -22,7 +22,7 @@ final class PooledResult extends SqlPooledResult implements Result
 
     protected function newInstanceFrom(SqlResult $result, \Closure $release): self
     {
-        \assert($result instanceof Result);
+        \assert($result instanceof MysqlResult);
         return new self($result, $release);
     }
 

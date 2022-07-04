@@ -3,11 +3,11 @@
 namespace Amp\Mysql\Internal;
 
 use Amp\Future;
-use Amp\Mysql\Result;
+use Amp\Mysql\MysqlResult;
 use Amp\Sql\Common\CommandResult as SqlCommandResult;
 
 /** @internal */
-final class CommandResult implements Result, \IteratorAggregate
+final class MysqlCommandResult implements MysqlResult, \IteratorAggregate
 {
     private ?int $lastInsertId;
 
@@ -45,7 +45,7 @@ final class CommandResult implements Result, \IteratorAggregate
     /**
      * @psalm-suppress LessSpecificReturnStatement, MoreSpecificReturnType
      */
-    public function getNextResult(): ?Result
+    public function getNextResult(): ?MysqlResult
     {
         return $this->delegate->getNextResult();
     }

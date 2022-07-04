@@ -9,9 +9,9 @@ use Amp\Sql\TransactionIsolation;
 use Amp\Sql\TransactionIsolationLevel;
 use Revolt\EventLoop;
 
-final class Connection implements Link
+final class MysqlConnection implements MysqlLink
 {
-    private readonly Internal\Processor $processor;
+    private readonly Internal\ConnectionProcessor $processor;
 
     private ?DeferredFuture $busy = null;
 
@@ -23,12 +23,12 @@ final class Connection implements Link
         MysqlConfig $config,
         ?Cancellation $cancellation = null,
     ): self {
-        $processor = new Internal\Processor($socket, $config);
+        $processor = new Internal\ConnectionProcessor($socket, $config);
         $processor->connect($cancellation);
         return new self($processor);
     }
 
-    private function __construct(Internal\Processor $processor)
+    private function __construct(Internal\ConnectionProcessor $processor)
     {
         $this->processor = $processor;
 
@@ -84,7 +84,7 @@ final class Connection implements Link
         $this->processor->useDb($db)->await();
     }
 
-    public function query(string $sql): Result
+    public function query(string $sql): MysqlResult
     {
         while ($this->busy) {
             $this->busy->getFuture()->await();
@@ -95,7 +95,7 @@ final class Connection implements Link
 
     public function beginTransaction(
         TransactionIsolation $isolation = TransactionIsolationLevel::Committed
-    ): Transaction {
+    ): MysqlTransaction {
         while ($this->busy) {
             $this->busy->getFuture()->await();
         }
@@ -111,7 +111,7 @@ final class Connection implements Link
             throw $exception;
         }
 
-        return new Internal\ConnectionTransaction($this->processor, $this->release, $isolation);
+        return new Internal\MysqlConnectionTransaction($this->processor, $this->release, $isolation);
     }
 
     public function ping(): void
@@ -119,7 +119,7 @@ final class Connection implements Link
         $this->processor->ping()->await();
     }
 
-    public function prepare(string $sql): Statement
+    public function prepare(string $sql): MysqlStatement
     {
         while ($this->busy) {
             $this->busy->getFuture()->await();
@@ -128,7 +128,7 @@ final class Connection implements Link
         return $this->processor->prepare($sql)->await();
     }
 
-    public function execute(string $sql, array $params = []): Result
+    public function execute(string $sql, array $params = []): MysqlResult
     {
         $statement = $this->prepare($sql);
         return $statement->execute($params);

@@ -6,7 +6,7 @@ use Amp\Sql\Common\ConnectionPool;
 use Amp\Sql\SqlException;
 use Revolt\EventLoop;
 
-function connector(?MysqlConnector $connector = null): MysqlConnector
+function mysqlConnector(?MysqlConnector $connector = null): MysqlConnector
 {
     static $map;
     $map ??= new \WeakMap();
@@ -25,9 +25,9 @@ function connector(?MysqlConnector $connector = null): MysqlConnector
  * @throws SqlException If connecting fails.
  * @throws \Error If the connection string does not contain a host, user, and password.
  */
-function connect(MysqlConfig $config): Connection
+function connect(MysqlConfig $config): MysqlConnection
 {
-    return connector()->connect($config);
+    return mysqlConnector()->connect($config);
 }
 
 /**
@@ -42,6 +42,6 @@ function pool(
     MysqlConfig $config,
     int $maxConnections = ConnectionPool::DEFAULT_MAX_CONNECTIONS,
     int $idleTimeout = ConnectionPool::DEFAULT_IDLE_TIMEOUT,
-): Pool {
-    return new Pool($config, $maxConnections, $idleTimeout, connector());
+): MysqlPool {
+    return new MysqlPool($config, $maxConnections, $idleTimeout, mysqlConnector());
 }

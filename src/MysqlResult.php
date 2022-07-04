@@ -2,9 +2,9 @@
 
 namespace Amp\Mysql;
 
-use Amp\Sql\Result as SqlResult;
+use Amp\Sql\Result;
 
-interface Result extends SqlResult
+interface MysqlResult extends Result
 {
     /**
      * @return int|null Insert ID of the last auto increment row if applicable to the result or null if no ID
@@ -13,7 +13,7 @@ interface Result extends SqlResult
     public function getLastInsertId(): ?int;
 
     /**
-     * @return list<ColumnDefinition>|null
+     * @return list<MysqlColumnDefinition>|null
      */
     public function getColumnDefinitions(): ?array;
 }
