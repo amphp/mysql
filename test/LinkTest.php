@@ -3,6 +3,7 @@
 namespace Amp\Mysql\Test;
 
 use Amp\Mysql\MysqlColumnDefinition;
+use Amp\Mysql\MysqlConfig;
 use Amp\Mysql\MysqlDataType;
 use Amp\Mysql\MysqlLink;
 use Amp\Mysql\MysqlResult;
@@ -14,11 +15,21 @@ abstract class LinkTest extends AsyncTestCase
     /**
      * Returns the Link class to be tested.
      */
-    abstract protected function getLink(string $connectionString): MysqlLink;
+    abstract protected function getLink(bool $useCompression = false): MysqlLink;
+
+    protected function getConfig(bool $useCompression = false): MysqlConfig
+    {
+        $config = MysqlConfig::fromAuthority(DB_HOST, DB_USER, DB_PASS, 'test');
+        if ($useCompression) {
+            $config = $config->withCompression();
+        }
+
+        return $config;
+    }
 
     public function testQuery()
     {
-        $db = $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
+        $db = $this->getLink();
 
         $resultset = $db->execute("SELECT ? AS a", [M_PI]);
         $this->assertInstanceOf(MysqlResult::class, $resultset);
@@ -34,7 +45,7 @@ abstract class LinkTest extends AsyncTestCase
 
     public function testQueryFetchRow()
     {
-        $db = $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
+        $db = $this->getLink();
 
         $resultset = $db->query('SELECT a FROM main WHERE a < 4');
         $this->assertInstanceOf(MysqlResult::class, $resultset);
@@ -54,14 +65,14 @@ abstract class LinkTest extends AsyncTestCase
         $this->expectException(QueryError::class);
         $this->expectExceptionMessage('You have an error in your SQL syntax');
 
-        $db = $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
+        $db = $this->getLink();
 
         $db->query("SELECT & FROM main WHERE a = 1");
     }
 
     public function testMultiStmt()
     {
-        $db = $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test;useCompression=true");
+        $db = $this->getLink(true);
 
         $resultset = $db->query("SELECT a FROM main; SELECT b FROM main WHERE a = 5; SELECT b AS d, a + 1 AS c FROM main WHERE b > 4");
         $this->assertInstanceOf(MysqlResult::class, $resultset);
@@ -100,7 +111,7 @@ abstract class LinkTest extends AsyncTestCase
 
     public function testPrepared()
     {
-        $db = $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test;useCompression=true");
+        $db = $this->getLink(true);
 
         $stmt = $db->prepare("SELECT id as no, a, b FROM main as table_alias WHERE a = ? OR b = :num");
         $base = [
@@ -168,7 +179,7 @@ abstract class LinkTest extends AsyncTestCase
         $this->expectException(QueryError::class);
         $this->expectExceptionMessage('You have an error in your SQL syntax');
 
-        $db = $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
+        $db = $this->getLink();
 
         $statement = $db->prepare("SELECT & FROM main WHERE a = ?");
 
@@ -180,7 +191,7 @@ abstract class LinkTest extends AsyncTestCase
         $this->expectException(\Error::class);
         $this->expectExceptionMessage('Parameter 1 is not defined for this prepared statement');
 
-        $db = $this->getLink("host=" . DB_HOST . ";user=" . DB_USER . ";pass=" . DB_PASS . ";db=test");
+        $db = $this->getLink();
 
         $statement = $db->prepare("SELECT * FROM main WHERE a = ?");
 
@@ -194,7 +205,7 @@ abstract class LinkTest extends AsyncTestCase
         $this->expectException(\Error::class);
         $this->expectExceptionMessage('Parameter :b is not defined for this prepared statement');
 
-        $db = $this->getLink("host=" . DB_HOST . ";user=" . DB_USER . ";pass=" . DB_PASS . ";db=test");
+        $db = $this->getLink();
 
         $statement = $db->prepare("SELECT * FROM main WHERE a = :a");
 
@@ -208,7 +219,7 @@ abstract class LinkTest extends AsyncTestCase
         $this->expectException(\Error::class);
         $this->expectExceptionMessage('Parameter 1 for prepared statement missing');
 
-        $db = $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
+        $db = $this->getLink();
 
         $stmt = $db->prepare("SELECT * FROM main WHERE a = ? AND b = ?");
         $stmt->execute([1]);
@@ -216,7 +227,7 @@ abstract class LinkTest extends AsyncTestCase
 
     public function testExecute()
     {
-        $db = $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
+        $db = $this->getLink();
 
         $result = $db->execute("SELECT * FROM test.main WHERE a = ? OR b = ?", [2, 5]);
         $this->assertInstanceOf(MysqlResult::class, $result);
@@ -240,7 +251,7 @@ abstract class LinkTest extends AsyncTestCase
         $this->expectException(QueryError::class);
         $this->expectExceptionMessage('You have an error in your SQL syntax');
 
-        $db = $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
+        $db = $this->getLink();
 
         $db->execute("SELECT & FROM main WHERE a = ?", [1]);
 
@@ -252,7 +263,7 @@ abstract class LinkTest extends AsyncTestCase
         $this->expectException(\Error::class);
         $this->expectExceptionMessage('Parameter 1 for prepared statement missing');
 
-        $db = $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
+        $db = $this->getLink();
 
         $db->execute("SELECT * FROM main WHERE a = ? AND b = ?", [1]);
 
@@ -261,7 +272,7 @@ abstract class LinkTest extends AsyncTestCase
 
     public function testPreparedWithNegativeValue()
     {
-        $db = $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
+        $db = $this->getLink();
 
         $db->query("DROP TABLE IF EXISTS tmp");
 
@@ -279,7 +290,7 @@ abstract class LinkTest extends AsyncTestCase
 
     public function testTransaction()
     {
-        $db = $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
+        $db = $this->getLink();
 
         $transaction = $db->beginTransaction();
 
@@ -324,7 +335,7 @@ abstract class LinkTest extends AsyncTestCase
      */
     public function testInsertSelect()
     {
-        $db = $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
+        $db = $this->getLink();
 
         $a = 1;
 
@@ -350,7 +361,7 @@ abstract class LinkTest extends AsyncTestCase
 
     public function testJsonDecoding()
     {
-        $db = $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
+        $db = $this->getLink();
 
         $result = $db->execute("SELECT a FROM test.json");
 

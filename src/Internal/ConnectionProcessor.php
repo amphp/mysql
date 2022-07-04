@@ -192,11 +192,11 @@ REGEX;
         if ($this->config->getCharset() !== MysqlConfig::DEFAULT_CHARSET
             || $this->config->getCollation() !== MysqlConfig::DEFAULT_COLLATE
         ) {
-            $future = $future->map(function () {
+            $future = $future->map(function (): void {
                 $charset = $this->config->getCharset();
                 $collate = $this->config->getCollation();
 
-                $this->query("SET NAMES '$charset'" . ($collate === "" ? "" : " COLLATE '$collate'"));
+                $this->query("SET NAMES '$charset'" . ($collate === "" ? "" : " COLLATE '$collate'"))->await();
             });
         }
 

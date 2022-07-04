@@ -23,9 +23,9 @@ interface StatementOperation extends MysqlStatement
 
 class PoolTest extends LinkTest
 {
-    protected function getLink(string $connectionString): MysqlLink
+    protected function getLink(bool $useCompression = false): MysqlLink
     {
-        return new MysqlPool(MysqlConfig::fromString($connectionString));
+        return new MysqlPool($this->getConfig($useCompression));
     }
 
     protected function createPool(array $connections): MysqlPool

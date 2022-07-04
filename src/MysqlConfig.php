@@ -60,13 +60,32 @@ final class MysqlConfig extends SqlConfig
         );
     }
 
+    public static function fromAuthority(
+        string $authority,
+        string $user,
+        string $password,
+        ?string $database = null,
+        ?ConnectContext $context = null
+    ): self {
+        [$host, $port] = \explode(':', $authority, 2) + ['', (string) self::DEFAULT_PORT];
+
+        return new self(
+            host: $host,
+            port: (int) $port,
+            user: $user,
+            password: $password,
+            database: $database,
+            context: $context,
+        );
+    }
+
     public function __construct(
         string $host,
         int $port = self::DEFAULT_PORT,
-        string $user = null,
-        string $password = null,
-        string $database = null,
-        ConnectContext $context = null,
+        ?string $user = null,
+        ?string $password = null,
+        ?string $database = null,
+        ?ConnectContext $context = null,
         string $charset = self::DEFAULT_CHARSET,
         string $collate = self::DEFAULT_COLLATE,
         bool $useCompression = false,
@@ -85,7 +104,9 @@ final class MysqlConfig extends SqlConfig
 
     public function getConnectionString(): string
     {
-        return $this->getHost()[0] == "/" ? 'unix://' . $this->getHost() : 'tcp://' . $this->getHost() . ':' . $this->getPort();
+        return $this->getHost()[0] == "/"
+            ? 'unix://' . $this->getHost()
+            : 'tcp://' . $this->getHost() . ':' . $this->getPort();
     }
 
     public function isCompressionEnabled(): bool
@@ -148,7 +169,7 @@ final class MysqlConfig extends SqlConfig
         return $this->collate;
     }
 
-    public function withCharset(string $charset = self::DEFAULT_CHARSET, string $collate = self::DEFAULT_COLLATE): self
+    public function withCharset(string $charset, string $collate): self
     {
         $new = clone $this;
         $new->charset = $charset;

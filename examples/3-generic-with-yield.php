@@ -7,7 +7,7 @@ use Amp\Mysql\MysqlConfig;
 use Amp\Mysql\MysqlPool;
 use function Amp\async;
 
-$db = new MysqlPool(MysqlConfig::fromString("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME));
+$db = new MysqlPool(MysqlConfig::fromAuthority(DB_HOST, DB_USER, DB_PASS, DB_NAME));
 
 $db->query("DROP TABLE IF EXISTS tmp");
 

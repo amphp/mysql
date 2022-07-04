@@ -8,11 +8,10 @@ require 'support/bootstrap.php';
 
 use Amp\Mysql;
 
-/* If you want ssl, pass as second argument an array with ssl options (an empty options array is valid too); if null is passed, ssl is not enabled either */
-$config = Mysql\MysqlConfig::fromString("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=".DB_NAME);
+$config = Mysql\MysqlConfig::fromAuthority(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 
 /* use an alternative charset... Default is utf8mb4_general_ci */
-$config = $config->withCharset("latin1_general_ci");
+$config = $config->withCharset("ascii", "ascii_general_ci");
 
 $db = Mysql\connect($config);
 
