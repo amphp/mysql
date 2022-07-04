@@ -3,8 +3,6 @@
 namespace Amp\Mysql\Internal;
 
 use Amp\DeferredFuture;
-use Amp\Mysql\PooledResult;
-use Amp\Mysql\PooledStatement;
 use Amp\Mysql\Result;
 use Amp\Mysql\Statement;
 use Amp\Mysql\Transaction;

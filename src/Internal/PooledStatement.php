@@ -1,10 +1,13 @@
 <?php
 
-namespace Amp\Mysql;
+namespace Amp\Mysql\Internal;
 
+use Amp\Mysql\Result;
+use Amp\Mysql\Statement;
 use Amp\Sql\Common\PooledStatement as SqlPooledStatement;
 use Amp\Sql\Result as SqlResult;
 
+/** @internal */
 final class PooledStatement extends SqlPooledStatement implements Statement
 {
     private readonly Statement $statement;

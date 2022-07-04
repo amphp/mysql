@@ -3,6 +3,7 @@
 namespace Amp\Mysql;
 
 use Amp\Sql\Common\ConnectionPool;
+use Amp\Sql\Common\StatementPool;
 use Amp\Sql\Pool as SqlPool;
 use Amp\Sql\Result as SqlResult;
 use Amp\Sql\Statement as SqlStatement;
@@ -28,23 +29,23 @@ final class Pool extends ConnectionPool implements Link
     protected function createResult(SqlResult $result, \Closure $release): Result
     {
         \assert($result instanceof Result);
-        return new PooledResult($result, $release);
+        return new Internal\PooledResult($result, $release);
     }
 
     protected function createStatement(SqlStatement $statement, \Closure $release): Statement
     {
         \assert($statement instanceof Statement);
-        return new PooledStatement($statement, $release);
+        return new Internal\PooledStatement($statement, $release);
     }
 
     protected function createStatementPool(SqlPool $pool, string $sql, \Closure $prepare): StatementPool
     {
-        return new StatementPool($pool, $sql, $prepare);
+        return new Internal\StatementPool($pool, $sql, $prepare);
     }
 
     protected function createTransaction(SqlTransaction $transaction, \Closure $release): Transaction
     {
-        return new PooledTransaction($transaction, $release);
+        return new Internal\PooledTransaction($transaction, $release);
     }
 
     /**

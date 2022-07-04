@@ -1,10 +1,12 @@
 <?php
 
-namespace Amp\Mysql;
+namespace Amp\Mysql\Internal;
 
+use Amp\Mysql\Result;
 use Amp\Sql\Common\PooledResult as SqlPooledResult;
 use Amp\Sql\Result as SqlResult;
 
+/** @internal */
 final class PooledResult extends SqlPooledResult implements Result
 {
     private readonly Result $result;

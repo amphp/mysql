@@ -1,10 +1,13 @@
 <?php
 
-namespace Amp\Mysql;
+namespace Amp\Mysql\Internal;
 
+use Amp\Mysql\Result;
+use Amp\Mysql\Statement;
 use Amp\Sql\Common\StatementPool as SqlStatementPool;
 use Amp\Sql\Result as SqlResult;
 
+/** @internal */
 final class StatementPool extends SqlStatementPool implements Statement
 {
     private array $params = [];
