@@ -7,14 +7,14 @@ use Amp\Mysql\MysqlStatement;
 use Amp\Sql\Common\StatementPool as SqlStatementPool;
 use Amp\Sql\Result as SqlResult;
 
-/** @internal */
+/**
+ * @internal
+ * @extends SqlStatementPool<MysqlResult, MysqlStatement>
+ */
 final class MysqlStatementPool extends SqlStatementPool implements MysqlStatement
 {
     private array $params = [];
 
-    /**
-     * @psalm-suppress LessSpecificReturnStatement, MoreSpecificReturnType
-     */
     protected function pop(): MysqlStatement
     {
         $statement = parent::pop();
@@ -44,9 +44,6 @@ final class MysqlStatementPool extends SqlStatementPool implements MysqlStatemen
         return new MysqlPooledResult($result, $release);
     }
 
-    /**
-     * @psalm-suppress LessSpecificReturnStatement, MoreSpecificReturnType
-     */
     public function execute(array $params = []): MysqlResult
     {
         return parent::execute($params);

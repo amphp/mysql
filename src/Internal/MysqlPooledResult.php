@@ -3,11 +3,14 @@
 namespace Amp\Mysql\Internal;
 
 use Amp\Mysql\MysqlResult;
-use Amp\Sql\Common\PooledResult as SqlPooledResult;
-use Amp\Sql\Result as SqlResult;
+use Amp\Sql\Common\PooledResult;
+use Amp\Sql\Result;
 
-/** @internal */
-final class MysqlPooledResult extends SqlPooledResult implements MysqlResult
+/**
+ * @internal
+ * @extends PooledResult<MysqlResult>
+ */
+final class MysqlPooledResult extends PooledResult implements MysqlResult
 {
     private readonly MysqlResult $result;
 
@@ -20,10 +23,15 @@ final class MysqlPooledResult extends SqlPooledResult implements MysqlResult
         $this->result = $result;
     }
 
-    protected function newInstanceFrom(SqlResult $result, \Closure $release): self
+    protected function newInstanceFrom(Result $result, \Closure $release): self
     {
         \assert($result instanceof MysqlResult);
         return new self($result, $release);
+    }
+
+    public function getNextResult(): ?MysqlResult
+    {
+        return parent::getNextResult();
     }
 
     public function getLastInsertId(): ?int

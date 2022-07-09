@@ -2,7 +2,7 @@
 
 namespace Amp\Mysql\Bench;
 
-use Amp\Mysql\DefaultMysqlConnector;
+use Amp\Mysql\SocketMysqlConnector;
 use Amp\Mysql\MysqlConnection;
 use Amp\Mysql\MysqlConfig;
 use Amp\Mysql\MysqlPool as ConnectionPool;
@@ -38,7 +38,7 @@ class QueryBench extends AbstractBench
     public function init()
     {
         $config = MysqlConfig::fromString("host=$this->host;user=$this->user;pass=$this->pass");
-        $connector = new DefaultMysqlConnector;
+        $connector = new SocketMysqlConnector;
         $this->connectionPool = new ConnectionPool($config, $this->poolLimit, 10, $connector);
         $connectionPromise = $connector->connect($config);
         $this->connection = wait($connectionPromise);

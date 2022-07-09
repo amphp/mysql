@@ -4,6 +4,9 @@ namespace Amp\Mysql;
 
 use Amp\Sql\Executor;
 
+/**
+ * @extends Executor<MysqlResult, MysqlStatement>
+ */
 interface MysqlExecutor extends Executor
 {
     /**

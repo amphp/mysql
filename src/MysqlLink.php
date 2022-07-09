@@ -6,6 +6,9 @@ use Amp\Sql\Link;
 use Amp\Sql\TransactionIsolation;
 use Amp\Sql\TransactionIsolationLevel;
 
+/**
+ * @extends Link<MysqlResult, MysqlStatement, MysqlTransaction>
+ */
 interface MysqlLink extends MysqlExecutor, Link
 {
     /**

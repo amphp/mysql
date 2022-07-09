@@ -4,11 +4,14 @@ namespace Amp\Mysql\Internal;
 
 use Amp\Mysql\MysqlResult;
 use Amp\Mysql\MysqlStatement;
-use Amp\Sql\Common\PooledStatement as SqlPooledStatement;
+use Amp\Sql\Common\PooledStatement;
 use Amp\Sql\Result as SqlResult;
 
-/** @internal */
-final class MysqlPooledStatement extends SqlPooledStatement implements MysqlStatement
+/**
+ * @internal
+ * @extends PooledStatement<MysqlResult, MysqlStatement>
+ */
+final class MysqlPooledStatement extends PooledStatement implements MysqlStatement
 {
     private readonly MysqlStatement $statement;
 

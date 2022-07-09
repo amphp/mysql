@@ -6,7 +6,7 @@ use Amp\Cancellation;
 use Amp\Socket;
 use Amp\Sql\SqlConfig;
 
-final class DefaultMysqlConnector implements MysqlConnector
+final class SocketMysqlConnector implements MysqlConnector
 {
     public function __construct(private readonly ?Socket\SocketConnector $connector = null)
     {
@@ -21,6 +21,6 @@ final class DefaultMysqlConnector implements MysqlConnector
         $socket = ($this->connector ?? Socket\socketConnector())
             ->connect($config->getConnectionString(), $config->getConnectContext(), $cancellation);
 
-        return MysqlConnection::initialize($socket, $config, $cancellation);
+        return MysqlSocketConnection::initialize($socket, $config, $cancellation);
     }
 }

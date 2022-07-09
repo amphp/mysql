@@ -5,20 +5,23 @@ namespace Amp\Mysql\Internal;
 use Amp\Mysql\MysqlResult;
 use Amp\Mysql\MysqlStatement;
 use Amp\Mysql\MysqlTransaction;
-use Amp\Sql\Common\PooledTransaction as SqlPooledTransaction;
-use Amp\Sql\Result as SqlResult;
-use Amp\Sql\Statement as SqlStatement;
+use Amp\Sql\Common\PooledTransaction;
+use Amp\Sql\Result;
+use Amp\Sql\Statement;
 
-/** @internal */
-final class MysqlPooledTransaction extends SqlPooledTransaction implements MysqlTransaction
+/**
+ * @internal
+ * @extends PooledTransaction<MysqlResult, MysqlStatement, MysqlTransaction>
+ */
+final class MysqlPooledTransaction extends PooledTransaction implements MysqlTransaction
 {
-    protected function createStatement(SqlStatement $statement, \Closure $release): MysqlStatement
+    protected function createStatement(Statement $statement, \Closure $release): MysqlStatement
     {
         \assert($statement instanceof MysqlStatement);
         return new MysqlPooledStatement($statement, $release);
     }
 
-    protected function createResult(SqlResult $result, \Closure $release): MysqlResult
+    protected function createResult(Result $result, \Closure $release): MysqlResult
     {
         \assert($result instanceof MysqlResult);
         return new MysqlPooledResult($result, $release);
@@ -26,8 +29,6 @@ final class MysqlPooledTransaction extends SqlPooledTransaction implements Mysql
 
     /**
      * Changes return type to this library's Result type.
-     *
-     * @psalm-suppress LessSpecificReturnStatement, MoreSpecificReturnType
      */
     public function query(string $sql): MysqlResult
     {
@@ -36,8 +37,6 @@ final class MysqlPooledTransaction extends SqlPooledTransaction implements Mysql
 
     /**
      * Changes return type to this library's Statement type.
-     *
-     * @psalm-suppress LessSpecificReturnStatement, MoreSpecificReturnType
      */
     public function prepare(string $sql): MysqlStatement
     {
@@ -46,8 +45,6 @@ final class MysqlPooledTransaction extends SqlPooledTransaction implements Mysql
 
     /**
      * Changes return type to this library's Result type.
-     *
-     * @psalm-suppress LessSpecificReturnStatement, MoreSpecificReturnType
      */
     public function execute(string $sql, array $params = []): MysqlResult
     {

@@ -4,18 +4,19 @@ namespace Amp\Mysql\Internal;
 
 use Amp\Future;
 use Amp\Mysql\MysqlResult;
-use Amp\Sql\Common\CommandResult as SqlCommandResult;
+use Amp\Sql\Common\CommandResult;
 
 /** @internal */
 final class MysqlCommandResult implements MysqlResult, \IteratorAggregate
 {
     private ?int $lastInsertId;
 
-    private readonly SqlCommandResult $delegate;
+    /** @var CommandResult<null> */
+    private readonly CommandResult $delegate;
 
     public function __construct(int $affectedRows, int $lastInsertId)
     {
-        $this->delegate = new SqlCommandResult($affectedRows, Future::complete());
+        $this->delegate = new CommandResult($affectedRows, Future::complete());
         $this->lastInsertId = $lastInsertId ?: null; // Convert 0 to null
     }
 
@@ -42,9 +43,6 @@ final class MysqlCommandResult implements MysqlResult, \IteratorAggregate
         return $this->lastInsertId;
     }
 
-    /**
-     * @psalm-suppress LessSpecificReturnStatement, MoreSpecificReturnType
-     */
     public function getNextResult(): ?MysqlResult
     {
         return $this->delegate->getNextResult();

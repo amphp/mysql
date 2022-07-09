@@ -313,7 +313,7 @@ REGEX;
         return $deferred->getFuture();
     }
 
-    public function setCharset(string $charset, string $collate = ""): Future
+    public function setCharset(string $charset, string $collate): Future
     {
         if ($collate === "" && false !== $offset = \strpos($charset, "_")) {
             $collate = $charset;

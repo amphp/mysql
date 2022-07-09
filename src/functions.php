@@ -2,10 +2,17 @@
 
 namespace Amp\Mysql;
 
+use Amp\Sql\Common\RetrySqlConnector;
+use Amp\Sql\SqlConnector;
 use Amp\Sql\SqlException;
 use Revolt\EventLoop;
 
-function mysqlConnector(?MysqlConnector $connector = null): MysqlConnector
+/**
+ * @param SqlConnector<MysqlConfig, MysqlConnection>|null $connector
+ *
+ * @return SqlConnector<MysqlConfig, MysqlConnection>
+ */
+function mysqlConnector(?SqlConnector $connector = null): SqlConnector
 {
     static $map;
     $map ??= new \WeakMap();
@@ -15,7 +22,7 @@ function mysqlConnector(?MysqlConnector $connector = null): MysqlConnector
         return $map[$driver] = $connector;
     }
 
-    return $map[$driver] ??= new DefaultMysqlConnector;
+    return $map[$driver] ??= new RetrySqlConnector(new SocketMysqlConnector());
 }
 
 /**
