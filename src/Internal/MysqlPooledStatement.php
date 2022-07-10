@@ -35,7 +35,7 @@ final class MysqlPooledStatement extends PooledStatement implements MysqlStateme
      */
     public function execute(array $params = []): MysqlResult
     {
-        return $this->statement->execute($params);
+        return parent::execute($params);
     }
 
     public function bind(int|string $paramId, mixed $data): void

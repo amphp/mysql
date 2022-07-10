@@ -43,9 +43,9 @@ final class MysqlPool extends ConnectionPool implements MysqlLink
         return new Internal\MysqlPooledStatement($statement, $release);
     }
 
-    protected function createStatementPool(Pool $pool, string $sql, \Closure $prepare): StatementPool
+    protected function createStatementPool(string $sql, \Closure $prepare): MysqlStatement
     {
-        return new Internal\MysqlStatementPool($pool, $sql, $prepare);
+        return new Internal\MysqlStatementPool($this, $sql, $prepare);
     }
 
     protected function createTransaction(Transaction $transaction, \Closure $release): MysqlTransaction
