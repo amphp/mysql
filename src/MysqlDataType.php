@@ -145,17 +145,17 @@ enum MysqlDataType: int
                 switch ($length = \ord($string) + 1) {
                     case 12:
                         $microsecond = self::decodeUnsigned32(\substr($string, 8));
-                    // no break
+                        // no break
                     case 8:
                         $second = \ord($string[7]);
                         $minute = \ord($string[6]);
                         $hour = \ord($string[5]);
-                    // no break
+                        // no break
                     case 5:
                         $day = \ord($string[4]);
                         $month = \ord($string[3]);
                         $year = self::decodeUnsigned16(\substr($string, 1));
-                    // no break
+                        // no break
                     case 1:
                         break;
 
@@ -177,14 +177,14 @@ enum MysqlDataType: int
                 switch ($length = \ord($string) + 1) {
                     case 13:
                         $microsecond = self::decodeUnsigned32(\substr($string, 9));
-                    // no break
+                        // no break
                     case 9:
                         $second = \ord($string[8]);
                         $minute = \ord($string[7]);
                         $hour = \ord($string[6]);
                         $day = self::decodeUnsigned32(\substr($string, 2));
                         $negative = \ord($string[1]);
-                    // no break
+                        // no break
                     case 1:
                         break;
 

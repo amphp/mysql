@@ -9,7 +9,7 @@ use Amp\Sql\TransactionIsolation;
 use Amp\Sql\TransactionIsolationLevel;
 use Revolt\EventLoop;
 
-final class MysqlSocketConnection implements MysqlConnection
+final class SocketMysqlConnection implements MysqlConnection
 {
     private readonly Internal\ConnectionProcessor $processor;
 

@@ -11,8 +11,8 @@ use Amp\Mysql\MysqlConnector;
 use Amp\Mysql\MysqlLink;
 use Amp\Mysql\MysqlPool;
 use Amp\Mysql\MysqlResult;
-use Amp\Mysql\MysqlSocketConnection;
 use Amp\Mysql\MysqlStatement;
+use Amp\Mysql\SocketMysqlConnection;
 use Amp\Sql\Transaction as SqlTransaction;
 use PHPUnit\Framework\MockObject\MockObject;
 use function Amp\async;
@@ -62,9 +62,9 @@ class PoolTest extends LinkTest
 
     private function makeConnectionSet(array $processors): array
     {
-        return \array_map((function (ConnectionProcessor $processor): MysqlSocketConnection {
+        return \array_map((function (ConnectionProcessor $processor): SocketMysqlConnection {
             return new self($processor);
-        })->bindTo(null, MysqlSocketConnection::class), $processors);
+        })->bindTo(null, SocketMysqlConnection::class), $processors);
     }
 
     public function getConnectionCounts(): array

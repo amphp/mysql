@@ -21,6 +21,6 @@ final class SocketMysqlConnector implements MysqlConnector
         $socket = ($this->connector ?? Socket\socketConnector())
             ->connect($config->getConnectionString(), $config->getConnectContext(), $cancellation);
 
-        return MysqlSocketConnection::initialize($socket, $config, $cancellation);
+        return SocketMysqlConnection::initialize($socket, $config, $cancellation);
     }
 }
