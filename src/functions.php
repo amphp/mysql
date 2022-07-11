@@ -2,6 +2,7 @@
 
 namespace Amp\Mysql;
 
+use Amp\Cancellation;
 use Amp\Sql\Common\RetrySqlConnector;
 use Amp\Sql\SqlConnector;
 use Amp\Sql\SqlException;
@@ -31,7 +32,7 @@ function mysqlConnector(?SqlConnector $connector = null): SqlConnector
  * @throws SqlException If connecting fails.
  * @throws \Error If the connection string does not contain a host, user, and password.
  */
-function connect(MysqlConfig $config): MysqlConnection
+function connect(MysqlConfig $config, ?Cancellation $cancellation = null): MysqlConnection
 {
-    return mysqlConnector()->connect($config);
+    return mysqlConnector()->connect($config, $cancellation);
 }

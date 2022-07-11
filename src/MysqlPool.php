@@ -3,8 +3,6 @@
 namespace Amp\Mysql;
 
 use Amp\Sql\Common\ConnectionPool;
-use Amp\Sql\Common\StatementPool;
-use Amp\Sql\Pool;
 use Amp\Sql\Result;
 use Amp\Sql\SqlConnector;
 use Amp\Sql\Statement;
