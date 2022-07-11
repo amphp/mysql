@@ -5,8 +5,6 @@ namespace Amp\Mysql\Internal;
 use Amp\DeferredFuture;
 use Amp\Future;
 use Amp\Mysql\MysqlResult;
-use Amp\Pipeline\ConcurrentIterableIterator;
-use Amp\Pipeline\ConcurrentIterator;
 use Revolt\EventLoop;
 use function Amp\async;
 
@@ -15,14 +13,14 @@ final class MysqlConnectionResult implements MysqlResult, \IteratorAggregate
 {
     private readonly MysqlResultProxy $result;
 
-    private readonly ConcurrentIterator $generator;
+    private readonly \Generator $generator;
 
     private ?Future $nextResult = null;
 
     public function __construct(MysqlResultProxy $result)
     {
         $this->result = $result;
-        $this->generator = new ConcurrentIterableIterator(self::iterate($result));
+        $this->generator = self::iterate($result);
     }
 
     public function getIterator(): \Traversable
