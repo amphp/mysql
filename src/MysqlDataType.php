@@ -50,7 +50,8 @@ enum MysqlDataType: int
     {
         switch (\get_debug_type($param)) {
             case "bool":
-                return [self::Tiny, $param ? "\x01" : "\0"];
+                $encoded = $param ? "\x01" : "\0";
+                return [self::Tiny, $encoded];
 
             case "int":
                 if ($param >= -(1 << 15) && $param < (1 << 15)) {
