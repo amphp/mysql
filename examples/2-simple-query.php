@@ -3,9 +3,9 @@
 require 'support/bootstrap.php';
 
 use Amp\Mysql\MysqlConfig;
-use Amp\Mysql\MysqlPool;
+use Amp\Mysql\MysqlConnectionPool;
 
-$db = new MysqlPool(MysqlConfig::fromAuthority(DB_HOST, DB_USER, DB_PASS, DB_NAME));
+$db = new MysqlConnectionPool(MysqlConfig::fromAuthority(DB_HOST, DB_USER, DB_PASS, DB_NAME));
 
 $result = $db->query("SELECT 1 AS value");
 

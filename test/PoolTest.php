@@ -7,9 +7,9 @@ use Amp\Mysql\Internal\ConnectionProcessor;
 use Amp\Mysql\Internal\MysqlCommandResult;
 use Amp\Mysql\MysqlConfig;
 use Amp\Mysql\MysqlConnection;
+use Amp\Mysql\MysqlConnectionPool;
 use Amp\Mysql\MysqlConnector;
 use Amp\Mysql\MysqlLink;
-use Amp\Mysql\MysqlPool;
 use Amp\Mysql\MysqlResult;
 use Amp\Mysql\MysqlStatement;
 use Amp\Mysql\SocketMysqlConnection;
@@ -26,10 +26,10 @@ class PoolTest extends LinkTest
 {
     protected function getLink(bool $useCompression = false): MysqlLink
     {
-        return new MysqlPool($this->getConfig($useCompression));
+        return new MysqlConnectionPool($this->getConfig($useCompression));
     }
 
-    protected function createPool(array $connections): MysqlPool
+    protected function createPool(array $connections): MysqlConnectionPool
     {
         $connector = $this->createMock(MysqlConnector::class);
         $connector->method('connect')
@@ -40,7 +40,7 @@ class PoolTest extends LinkTest
 
         $config = MysqlConfig::fromString('host=host;user=user;password=password');
 
-        return new MysqlPool($config, \count($connections), MysqlPool::DEFAULT_IDLE_TIMEOUT, $connector);
+        return new MysqlConnectionPool($config, \count($connections), MysqlConnectionPool::DEFAULT_IDLE_TIMEOUT, $connector);
     }
 
     /**

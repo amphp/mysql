@@ -13,7 +13,7 @@ use Amp\Sql\TransactionIsolationLevel;
 /**
  * @extends ConnectionPool<MysqlConfig, MysqlConnection, MysqlResult, MysqlStatement, MysqlTransaction>
  */
-final class MysqlPool extends ConnectionPool implements MysqlLink
+final class MysqlConnectionPool extends ConnectionPool implements MysqlLink
 {
     /**
      * @param positive-int $maxConnections

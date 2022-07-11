@@ -5,7 +5,7 @@ namespace Amp\Mysql\Bench;
 use Amp\Mysql\SocketMysqlConnector;
 use Amp\Mysql\MysqlConnection;
 use Amp\Mysql\MysqlConfig;
-use Amp\Mysql\MysqlPool as ConnectionPool;
+use Amp\Mysql\MysqlConnectionPool as ConnectionPool;
 use Amp\Mysql\ResultSet;
 use function Amp\call;
 use function Amp\Promise\wait;

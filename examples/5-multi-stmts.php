@@ -4,9 +4,9 @@ require 'support/bootstrap.php';
 require 'support/generic-table.php';
 
 use Amp\Mysql\MysqlConfig;
-use Amp\Mysql\MysqlPool;
+use Amp\Mysql\MysqlConnectionPool;
 
-$db = new MysqlPool(MysqlConfig::fromAuthority(DB_HOST, DB_USER, DB_PASS, DB_NAME));
+$db = new MysqlConnectionPool(MysqlConfig::fromAuthority(DB_HOST, DB_USER, DB_PASS, DB_NAME));
 
 /* create same table than in 3-generic-with-yield.php */
 createGenericTable($db);
