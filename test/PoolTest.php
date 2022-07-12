@@ -126,7 +126,7 @@ class PoolTest extends LinkTest
                 $futures[] = async(fn () => $pool->query('SQL Query'));
             }
 
-            $results = Future\all($futures);
+            $results = Future\await($futures);
 
             foreach ($results as $result) {
                 $this->assertInstanceOf(MysqlResult::class, $result);
@@ -222,7 +222,7 @@ class PoolTest extends LinkTest
             for ($i = 0; $i < $count; ++$i) {
                 $futures[] = async(fn () => $pool->extractConnection());
             }
-            $results = Future\all($futures);
+            $results = Future\await($futures);
             foreach ($results as $result) {
                 $this->assertInstanceof(MysqlConnection::class, $result);
                 $result->query($query);
@@ -272,12 +272,12 @@ class PoolTest extends LinkTest
             for ($i = 0; $i < $count + 1; ++$i) {
                 $futures[] = async(fn () => $pool->query($query));
             }
-            Future\all($futures);
+            Future\await($futures);
             $futures = [];
             for ($i = 0; $i < $count; ++$i) {
                 $futures[] = async(fn () => $pool->query($query));
             }
-            Future\all($futures);
+            Future\await($futures);
         } finally {
             $pool->close();
         }
