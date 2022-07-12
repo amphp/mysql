@@ -2,6 +2,7 @@
 
 use Amp\Future;
 use Amp\Sql\Link;
+use function Amp\async;
 
 /* Create table and fill in a few rows for examples; for comments see 3-generic-with-yield.php */
 function createGenericTable(Link $db): void
@@ -14,8 +15,8 @@ function createGenericTable(Link $db): void
 
     $futures = [];
     foreach (\range(1, 5) as $num) {
-        $futures[] = \Amp\async(fn() => $statement->execute([$num, $num]));
+        $futures[] = async(fn () => $statement->execute([$num, $num]));
     }
 
-    Future\all($futures);
+    Future\await($futures);
 }
