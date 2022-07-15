@@ -25,7 +25,7 @@ class ConnectionTest extends LinkTest
         $this->assertInstanceOf(MysqlConnection::class, $db);
 
         /* use an alternative charset... Default is utf8mb4_general_ci */
-        $db->setCharset("latin1", "latin1_general_ci");
+        $db->useCharacterSet("latin1", "latin1_general_ci");
 
         $db->close();
     }

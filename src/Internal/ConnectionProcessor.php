@@ -313,7 +313,7 @@ REGEX;
         return $deferred->getFuture();
     }
 
-    public function setCharset(string $charset, string $collate): Future
+    public function useCharacterSet(string $charset, string $collate): Future
     {
         if ($collate === "" && false !== $offset = \strpos($charset, "_")) {
             $collate = $charset;
@@ -329,12 +329,12 @@ REGEX;
     }
 
     /** @see 14.6.3 COM_INIT_DB */
-    public function useDb(string $db): Future
+    public function useDatabase(string $database): Future
     {
-        return $this->startCommand(function () use ($db): void {
+        return $this->startCommand(function () use ($database): void {
             /** @psalm-suppress PropertyTypeCoercion */
-            $this->config = $this->config->withDatabase($db);
-            $this->sendPacket("\x02$db");
+            $this->config = $this->config->withDatabase($database);
+            $this->sendPacket("\x02$database");
         });
     }
 

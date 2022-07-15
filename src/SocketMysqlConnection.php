@@ -56,9 +56,9 @@ final class SocketMysqlConnection implements MysqlConnection
         return $this->processor->getLastUsedAt();
     }
 
-    public function setCharset(string $charset, string $collate): void
+    public function useCharacterSet(string $charset, string $collate): void
     {
-        $this->processor->setCharset($charset, $collate)->await();
+        $this->processor->useCharacterSet($charset, $collate)->await();
     }
 
     public function close(): void
@@ -74,9 +74,9 @@ final class SocketMysqlConnection implements MysqlConnection
         $this->processor->onClose($onClose);
     }
 
-    public function useDb(string $db): void
+    public function useDatabase(string $database): void
     {
-        $this->processor->useDb($db)->await();
+        $this->processor->useDatabase($database)->await();
     }
 
     public function query(string $sql): MysqlResult
