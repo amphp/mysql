@@ -7,7 +7,7 @@ use Amp\Sql\Result;
 interface MysqlResult extends Result
 {
     /**
-     * Changes return type to this library's Transaction type.
+     * Changes return type to this library's Result type.
      */
     public function getNextResult(): ?self;
 
