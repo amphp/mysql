@@ -657,7 +657,7 @@ REGEX;
         if ($this->connectionState < ConnectionState::Ready) {
             // connection failure
             $this->close();
-            $this->getDeferred()->error(new InitializationException(\sprintf(
+            $this->getDeferred()->error(new ConnectionException(\sprintf(
                 'Could not connect to %s: %s %s',
                 $this->config->getConnectionString(),
                 $this->metadata->errorState ?? 'Unknown state',
