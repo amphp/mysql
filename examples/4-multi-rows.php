@@ -19,15 +19,11 @@ $future = [];
 $future[] = async(fn () => $db->query("SELECT a * b FROM tmp"));
 $future[] = async(fn () => $db->execute("SELECT POW(a, ?) AS power FROM tmp", [2]));
 
-try {
-    /**
-     * @var MysqlResult $result1
-     * @var MysqlResult $result2
-     */
-    [$result1, $result2] = Future\await($future); // Both queries execute simultaneously. Wait for both to finish here.
-} catch (\Throwable $e) {
-    var_dump($e);
-}
+/**
+ * @var MysqlResult $result1
+ * @var MysqlResult $result2
+ */
+[$result1, $result2] = Future\await($future); // Both queries execute simultaneously. Wait for both to finish here.
 
 print "Query 1 Results:" . PHP_EOL;
 foreach ($result1 as $row) {
