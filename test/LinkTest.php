@@ -145,7 +145,7 @@ abstract class LinkTest extends AsyncTestCase
         $stmt = $db->prepare("SELECT * FROM main WHERE a = ? OR b = ?");
         $result = $stmt->execute([1, 8]);
         $this->assertInstanceOf(MysqlResult::class, $result);
-        $this->assertSame(3, $result->getColumnCount());
+        $this->assertSame(4, $result->getColumnCount());
         $got = [];
         foreach ($result as $row) {
             $got[] = \array_values($row);
@@ -155,7 +155,7 @@ abstract class LinkTest extends AsyncTestCase
         $stmt = $db->prepare("SELECT * FROM main WHERE a = :a OR b = ?");
         $result = $stmt->execute(["a" => 2, 5]);
         $this->assertInstanceOf(MysqlResult::class, $result);
-        $this->assertSame(3, $result->getColumnCount());
+        $this->assertSame(4, $result->getColumnCount());
         $got = [];
         foreach ($result as $row) {
             $got[] = \array_values($row);
@@ -236,9 +236,9 @@ abstract class LinkTest extends AsyncTestCase
             $got[] = \array_values($row);
         }
         $this->assertCount(2, $got);
-        $this->assertSame([[2, 2, 3], [4, 4, 5]], $got);
+        $this->assertSame([[2, 2, 3, '1970-01-01 00:00:00.00000'], [4, 4, 5, '1970-01-01 00:00:00.00000']], $got);
 
-        $result = $db->execute("INSERT INTO main (a, b) VALUES (:a, :b)", ["a" => 10, "b" => 11]);
+        $result = $db->execute("INSERT INTO main (a, b) VALUES (:a, :b)", ["a" => 10, "b" => 11, "c" => '1970-01-01 00:00:00']);
         $this->assertInstanceOf(MysqlResult::class, $result);
         $this->assertGreaterThan(5, $result->getLastInsertId());
 

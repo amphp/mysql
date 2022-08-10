@@ -6,8 +6,9 @@ function initialize(\mysqli $db): void
 {
     $db->query("CREATE DATABASE test");
 
-    $db->query("CREATE TABLE test.main (id INT NOT NULL AUTO_INCREMENT, a INT, b INT, PRIMARY KEY (id))");
-    $db->query("INSERT INTO test.main (a, b) VALUES (1, 2), (2, 3), (3, 4), (4, 5), (5, 6)");
+    $db->query("CREATE TABLE test.main (id INT NOT NULL AUTO_INCREMENT, a INT, b INT, c DATETIME, PRIMARY KEY (id))");
+    $epoch = date('1970-01-01 00:00:00');
+    $db->query("INSERT INTO test.main (a, b, c) VALUES (1, 2, '$epoch'), (2, 3, '$epoch'), (3, 4, '$epoch'), (4, 5, '$epoch'), (5, 6, '$epoch')");
 
     $db->query("CREATE TABLE test.json (a JSON)");
     $db->query("INSERT INTO test.json VALUES ('{\"key\": \"value\"}')");
