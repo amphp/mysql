@@ -163,7 +163,7 @@ enum MysqlDataType: int
                     default:
                         throw new SqlException("Unexpected string length for date in binary protocol: " . ($length - 1));
                 }
-
+                $offset += $length;
                 return \str_pad((string) $year, 2, "0", \STR_PAD_LEFT)
                     . "-" . \str_pad((string) $month, 2, "0", \STR_PAD_LEFT)
                     . "-" . \str_pad((string) $day, 2, "0", \STR_PAD_LEFT)
