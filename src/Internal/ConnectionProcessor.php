@@ -25,8 +25,24 @@ use Revolt\EventLoop;
 class ConnectionProcessor implements TransientResource
 {
     const STATEMENT_PARAM_REGEX = <<<'REGEX'
-~(["'`])(?:\\(?:\\|\1)|(?!\1).)*+\1(*SKIP)(*FAIL)|(\?)|:([a-zA-Z_][a-zA-Z0-9_]*)~ms
-REGEX;
+        [
+            # Skip all quoted groups.
+            (['"])(?:\\(?:\\|\1)|(?!\1).)*+\1(*SKIP)(*FAIL)
+            |
+            # Unnamed parameters.
+            (?<unnamed>
+                # Match all question marks except those surrounded by "operator"-class characters on either side.
+                (?<!(?<operators>[-+\\*/<>~!@#%^&|`?]))
+                \?
+                (?!\g<operators>|=)
+                |
+                :\?
+            )
+            |
+            # Named parameters.
+            (?<!:):(?<named>[a-zA-Z_][a-zA-Z0-9_]*)
+        ]msxS
+        REGEX;
 
     /** @var list<\Generator> */
     private array $processors = [];
@@ -349,14 +365,15 @@ REGEX;
             $this->query = $query;
             $this->parseCallback = $this->handlePrepare(...);
 
-            $query = \preg_replace_callback(self::STATEMENT_PARAM_REGEX, function ($m): string {
+            $query = \preg_replace_callback(self::STATEMENT_PARAM_REGEX, function (array $m): string {
                 static $index = 0;
-                if ($m[2] !== "?") {
-                    $this->named[$m[3]][] = $index;
+                if (isset($m['named'])) {
+                    $this->named[$m['named']][] = $index;
                 }
                 $index++;
                 return "?";
             }, $query);
+
             $this->sendPacket("\x16$query");
         });
     }
