@@ -9,6 +9,7 @@ use Amp\Mysql\MysqlLink;
 use Amp\Mysql\MysqlResult;
 use Amp\PHPUnit\AsyncTestCase;
 use Amp\Sql\QueryError;
+use Amp\Sql\Result;
 
 abstract class LinkTest extends AsyncTestCase
 {
@@ -107,6 +108,21 @@ abstract class LinkTest extends AsyncTestCase
         $this->assertSame($fields[1]->type, MysqlDataType::LongLong);
 
         $this->assertNull($resultset->getNextResult());
+    }
+
+    public function testQueryWithUnconsumedTupleResult()
+    {
+        $db = $this->getLink();
+
+        $result = $db->query("SELECT * FROM main");
+
+        $this->assertInstanceOf(Result::class, $result);
+
+        unset($result); // Force destruction of result object.
+
+        $result = $db->query("SELECT * FROM main");
+
+        $this->assertInstanceOf(Result::class, $result);
     }
 
     public function testPrepared()

@@ -159,17 +159,7 @@ final class MysqlConnectionStatement implements MysqlStatement
 
     public function getColumnDefinitions(): ?array
     {
-        if ($this->result->state >= MysqlResultProxy::COLUMNS_FETCHED) {
-            return $this->result->columns;
-        }
-
-        if (isset($this->result->deferreds[MysqlResultProxy::COLUMNS_FETCHED][0])) {
-            return $this->result->deferreds[MysqlResultProxy::COLUMNS_FETCHED][0][0]->promise();
-        }
-
-        $deferred = new DeferredFuture;
-        $this->result->deferreds[MysqlResultProxy::COLUMNS_FETCHED][0] = [$deferred, &$this->result->columns, null];
-        return $deferred->getFuture()->await();
+        return $this->result->getColumnDefinitions();
     }
 
     public function getLastUsedAt(): int

@@ -878,12 +878,12 @@ class ConnectionProcessor implements TransientResource
                 $this->parseOk($packet);
 
                 if ($this->metadata->statusFlags & self::SERVER_MORE_RESULTS_EXISTS) {
-                    $result = new MysqlResultProxy;
-                    $result->affectedRows = $this->metadata->affectedRows;
-                    $result->insertId = $this->metadata->insertId;
-                    $this->dequeueDeferred()->complete(new MysqlConnectionResult($result));
-                    $this->result = $result;
-                    $result->updateState(MysqlResultProxy::COLUMNS_FETCHED);
+                    $this->result = new MysqlResultProxy(
+                        affectedRows: $this->metadata->affectedRows,
+                        insertId: $this->metadata->insertId
+                    );
+                    $this->result->updateState(MysqlResultProxyState::ColumnsFetched);
+                    $this->dequeueDeferred()->complete(new MysqlConnectionResult($this->result));
                     $this->successfulResultFetch();
                 } else {
                     $this->parseCallback = null;
@@ -907,20 +907,16 @@ class ConnectionProcessor implements TransientResource
         }
 
         $this->parseCallback = $this->handleTextColumnDefinition(...);
-        $this->dequeueDeferred()->complete(new MysqlConnectionResult($result = new MysqlResultProxy));
-        /* we need to resolve before assigning vars, so that a onResolve() handler won't have a partial result available */
-        $this->result = $result;
-        $result->setColumns(MysqlDataType::decodeUnsigned($packet));
+        $this->result = new MysqlResultProxy(MysqlDataType::decodeUnsigned($packet));
+        $this->dequeueDeferred()->complete(new MysqlConnectionResult($this->result));
     }
 
     /** @see 14.7.1 Binary Protocol Resultset */
     private function handleExecute(string $packet): void
     {
         $this->parseCallback = $this->handleBinaryColumnDefinition(...);
-        $this->dequeueDeferred()->complete(new MysqlConnectionResult($result = new MysqlResultProxy));
-        /* we need to resolve before assigning vars, so that a onResolve() handler won't have a partial result available */
-        $this->result = $result;
-        $result->setColumns(\ord($packet));
+        $this->result = new MysqlResultProxy(\ord($packet));
+        $this->dequeueDeferred()->complete(new MysqlConnectionResult($this->result));
     }
 
     private function handleFieldList(string $packet): void
@@ -954,7 +950,7 @@ class ConnectionProcessor implements TransientResource
         \assert($this->result !== null, 'Connection result was in invalid state');
 
         if (!$this->result->columnsToFetch--) {
-            $this->result->updateState(MysqlResultProxy::COLUMNS_FETCHED);
+            $this->result->updateState(MysqlResultProxyState::ColumnsFetched);
             if (\ord($packet) === self::ERR_PACKET) {
                 $this->parseCallback = null;
                 $this->handleError($packet);
@@ -1000,7 +996,7 @@ class ConnectionProcessor implements TransientResource
             $result = $this->result;
             $this->result = null;
             $this->ready();
-            $result->updateState(MysqlResultProxy::COLUMNS_FETCHED);
+            $result->updateState(MysqlResultProxyState::ColumnsFetched);
 
             return;
         }
@@ -1074,12 +1070,13 @@ class ConnectionProcessor implements TransientResource
         } else {
             $this->parseCallback = null;
             $this->query = null;
-            $this->result = null;
             $deferred->complete();
             $this->ready();
         }
 
-        $result->updateState(MysqlResultProxy::ROWS_FETCHED);
+        $this->result = null;
+
+        $result->updateState(MysqlResultProxyState::Complete);
     }
 
     /** @see 14.6.4.1.1.3 Resultset Row */
@@ -1177,9 +1174,7 @@ class ConnectionProcessor implements TransientResource
 
         $this->metadata->warnings = MysqlDataType::decodeUnsigned16($packet, $offset);
 
-        $this->result = new MysqlResultProxy;
-        $this->result->columnsToFetch = $params;
-        $this->result->columnCount = $columns;
+        $this->result = new MysqlResultProxy($columns, $params);
         $this->refcount++;
         \assert($this->query !== null, 'Invalid value for connection query');
         $this->dequeueDeferred()->complete(new MysqlConnectionStatement($this, $this->query, $stmtId, $this->named, $this->result));

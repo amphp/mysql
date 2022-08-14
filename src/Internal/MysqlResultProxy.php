@@ -4,101 +4,88 @@ namespace Amp\Mysql\Internal;
 
 use Amp\DeferredFuture;
 use Amp\Mysql\MysqlColumnDefinition;
+use Amp\Pipeline\ConcurrentIterator;
+use Amp\Pipeline\Queue;
 
 /** @internal */
 final class MysqlResultProxy
 {
-    public int $columnCount = 0;
+    public int $columnsToFetch = 0;
+
     /** @var list<MysqlColumnDefinition> */
     public array $columns = [];
+
     public array $params = [];
-    public int $columnsToFetch = 0;
-    public array $rows = [];
-    public int $fetchedRows = 0;
-    public int $userFetched = 0;
 
-    public ?int $insertId = null;
+    private readonly Queue $rowQueue;
 
-    public ?int $affectedRows = null;
+    public readonly ConcurrentIterator $rowIterator;
 
-    public array $deferreds = [
-        self::UNFETCHED => [],
-        self::COLUMNS_FETCHED => [],
-        self::ROWS_FETCHED => []
-    ];
+    private ?DeferredFuture $columnDeferred = null;
 
-    public int $state = self::UNFETCHED;
+    private MysqlResultProxyState $state = MysqlResultProxyState::Initial;
 
     public ?DeferredFuture $next = null;
 
-    public const UNFETCHED = 0;
-    public const COLUMNS_FETCHED = 1;
-    public const ROWS_FETCHED = 2;
+    public function __construct(
+        public readonly int $columnCount = 0,
+        ?int $columnsToFetch = null,
+        public readonly ?int $affectedRows = null,
+        public readonly ?int $insertId = null,
+    ) {
+        $this->rowQueue = new Queue();
+        $this->rowIterator = $this->rowQueue->iterate();
 
-    public const SINGLE_ROW_FETCH = 255;
-
-    public ?\Throwable $exception = null;
-
-    public function setColumns(int $columns): void
-    {
-        $this->columnCount = $this->columnsToFetch = $columns;
+        $this->columnsToFetch = $columnsToFetch ?? $this->columnCount;
     }
 
-    public function updateState(int $state): void
+    public function getColumnDefinitions(): array
     {
+        if ($this->state === MysqlResultProxyState::Initial) {
+            $this->columnDeferred ??= new DeferredFuture();
+            $this->columnDeferred->getFuture()->await();
+        }
+
+        return $this->columns;
+    }
+
+    public function updateState(MysqlResultProxyState $state): void
+    {
+        if ($this->state === MysqlResultProxyState::Complete) {
+            throw new \RuntimeException('Result set already complete');
+        }
+
+        match ($state) {
+            MysqlResultProxyState::Complete => $this->rowQueue->complete(),
+            MysqlResultProxyState::ColumnsFetched => $this->columnsFetched(),
+            MysqlResultProxyState::Initial => throw new \RuntimeException('Cannot reset to initial state'),
+        };
+
         $this->state = $state;
-        if ($state === self::ROWS_FETCHED) {
-            $this->rowFetched(null);
-        }
-        if (empty($this->deferreds[$state])) {
-            return;
-        }
-        foreach ($this->deferreds[$state] as [$deferred, $rows, $cb]) {
-            \assert($deferred instanceof DeferredFuture);
-            $deferred->complete($cb ? $cb($rows) : $rows);
-        }
-        $this->deferreds[$state] = [];
     }
 
-    public function rowFetched(?array $row): void
+    private function columnsFetched(): void
     {
-        if ($row !== null) {
-            $this->rows[$this->fetchedRows++] = $row;
-        }
-        [$entry, , $cb] = \current($this->deferreds[self::UNFETCHED]);
-        if ($entry !== null) {
-            unset($this->deferreds[self::UNFETCHED][\key($this->deferreds[self::UNFETCHED])]);
-            \assert($entry instanceof DeferredFuture);
-            $entry->complete($cb && $row ? $cb($row) : $row);
-        }
+        $this->columnDeferred?->complete();
+        $this->columnDeferred = null;
+    }
+
+    public function rowFetched(array $row): void
+    {
+        $this->rowQueue->push($row);
     }
 
     public function error(\Throwable $e): void
     {
-        $this->exception = $e;
-
-        foreach ($this->deferreds as $deferreds) {
-            foreach ($deferreds as [$deferred]) {
-                \assert($deferred instanceof DeferredFuture);
-                $deferred->error($e);
-            }
+        if ($this->state === MysqlResultProxyState::Complete) {
+            return;
         }
 
-        $this->deferreds = [];
-    }
+        $this->state = MysqlResultProxyState::Complete;
 
-    /**
-     * @codeCoverageIgnore
-     */
-    public function __debugInfo(): array
-    {
-        $tmp = clone $this;
-        foreach ($tmp->deferreds as &$type) {
-            foreach ($type as &$entry) {
-                unset($entry[0], $entry[2]);
-            }
-        }
+        $this->rowQueue->error($e);
 
-        return (array) $tmp;
+        $this->columnDeferred?->error($e);
+        $this->columnDeferred = null;
     }
 }
