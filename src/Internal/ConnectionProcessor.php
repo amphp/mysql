@@ -28,7 +28,7 @@ class ConnectionProcessor implements TransientResource
 ~(["'`])(?:\\(?:\\|\1)|(?!\1).)*+\1(*SKIP)(*FAIL)|(\?)|:([a-zA-Z_][a-zA-Z0-9_]*)~ms
 REGEX;
 
-    /** @var \Generator[] */
+    /** @var list<\Generator> */
     private array $processors = [];
 
     private int $seqId = -1;
@@ -37,18 +37,20 @@ REGEX;
     private readonly EncryptableSocket $socket;
 
     private ?string $query = null;
-    public array $named = [];
+    private array $named = [];
 
     private ?\Closure $parseCallback = null;
     private ?\Closure $packetCallback = null;
 
-    public MysqlConfig $config;
+    private MysqlConfig $config;
 
-    /** @var DeferredFuture[] */
-    private array $deferreds = [];
+    private readonly MysqlConnectionMetdata $metadata;
 
-    /** @var array<int, \Closure():void> */
-    private array $onReady = [];
+    /** @var \SplQueue<DeferredFuture> */
+    private readonly \SplQueue $deferreds;
+
+    /** @var \SplQueue<\Closure():void> */
+    private readonly \SplQueue $onReady;
 
     private ?MysqlResultProxy $result = null;
 
@@ -59,7 +61,6 @@ REGEX;
     private int $capabilities = 0;
     private int $serverCapabilities = 0;
     private string $authPluginName = '';
-    private MysqlConnectionMetdata $metadata;
     private int $refcount = 1;
 
     private ConnectionState $connectionState = ConnectionState::Unconnected;
@@ -113,6 +114,9 @@ REGEX;
         $this->metadata = new MysqlConnectionMetdata();
         $this->config = $config;
         $this->lastUsedAt = \time();
+
+        $this->deferreds = new \SplQueue();
+        $this->onReady = new \SplQueue();
     }
 
     public function __destruct()
@@ -151,12 +155,12 @@ REGEX;
 
     private function ready(): void
     {
-        if (!empty($this->deferreds)) {
+        if (!$this->deferreds->isEmpty()) {
             return;
         }
 
-        if (!empty($this->onReady)) {
-            \array_shift($this->onReady)();
+        if (!$this->onReady->isEmpty()) {
+            $this->onReady->shift()();
             return;
         }
 
@@ -167,7 +171,7 @@ REGEX;
     private function enqueueDeferred(DeferredFuture $deferred): void
     {
         \assert(!$this->socket->isClosed(), "The connection has been closed");
-        $this->deferreds[] = $deferred;
+        $this->deferreds->push($deferred);
         $this->socket->reference();
     }
 
@@ -175,7 +179,7 @@ REGEX;
     {
         \assert(!$this->processors, self::class."::connect() must not be called twice");
 
-        $this->deferreds[] = $deferred = new DeferredFuture; // Will be resolved in sendHandshake().
+        $this->enqueueDeferred($deferred = new DeferredFuture()); // Will be resolved in sendHandshake().
 
         $this->processors = [$this->parseMysql()];
 
@@ -252,8 +256,8 @@ REGEX;
 
     private function dequeueDeferred(): DeferredFuture
     {
-        \assert($this->deferreds, 'Pending deferred not found when shifting from pending queue');
-        return \array_shift($this->deferreds);
+        \assert(!$this->deferreds->isEmpty(), 'Pending deferred not found when shifting from pending queue');
+        return $this->deferreds->shift();
     }
 
     /**
@@ -263,11 +267,11 @@ REGEX;
     {
         if ($this->packetCallback
             || $this->parseCallback
-            || !empty($this->onReady)
-            || !empty($this->deferreds)
+            || !$this->onReady->isEmpty()
+            || !$this->deferreds->isEmpty()
             || $this->connectionState !== ConnectionState::Ready
         ) {
-            $this->onReady[] = $callback;
+            $this->onReady->push($callback);
         } else {
             $callback();
         }
@@ -655,7 +659,7 @@ REGEX;
             return;
         }
 
-        if ($this->result === null && empty($this->deferreds)) {
+        if ($this->result === null && $this->deferreds->isEmpty()) {
             // connection killed without pending query or active result
             $this->free(new ConnectionException('Connection closed after receiving an unexpected error packet'));
             return;
@@ -673,6 +677,7 @@ REGEX;
 
         $this->result = null;
         $this->query = null;
+        $this->named = [];
 
         $deferred->error($exception);
 
@@ -1199,20 +1204,18 @@ REGEX;
     private function free(?\Throwable $exception = null): void
     {
         if ($this->connectionState === ConnectionState::Closing) {
-            \assert($this->deferreds, 'Closing deferred not found in array when in closing state');
-            \array_pop($this->deferreds)->complete();
+            \assert(!$this->deferreds->isEmpty(), 'Closing deferred not found in array when in closing state');
+            $this->deferreds->pop()->complete();
         }
 
         $this->connectionState = ConnectionState::Closed;
 
-        if ($this->deferreds || $this->result) {
+        if (!$this->deferreds->isEmpty() || $this->result) {
             $exception = new ConnectionException("Connection closed unexpectedly", 0, $exception ?? null);
 
-            foreach ($this->deferreds as $deferred) {
-                $deferred->error($exception);
+            while (!$this->deferreds->isEmpty()) {
+                $this->deferreds->shift()->error($exception);
             }
-
-            $this->deferreds = [];
 
             $this->result?->error($exception);
         }
@@ -1554,15 +1557,19 @@ REGEX;
         } else {
             $payload .= "$auth\0";
         }
+
         if ($this->capabilities & self::CLIENT_CONNECT_WITH_DB) {
             $payload .= "{$this->config->getDatabase()}\0";
         }
+
         if ($this->capabilities & self::CLIENT_PLUGIN_AUTH) {
             $payload .= "{$this->authPluginName}\0";
         }
+
         if ($this->capabilities & self::CLIENT_CONNECT_ATTRS) {
             // connection attributes?! 5.6.6+ only!
         }
+
         $this->write($payload);
     }
 
