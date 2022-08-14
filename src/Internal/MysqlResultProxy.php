@@ -73,13 +73,14 @@ final class MysqlResultProxy
 
     public function error(\Throwable $e): void
     {
-        foreach ($this->deferreds as $state) {
-            foreach ($this->deferreds[$state] as [$deferred]) {
+        foreach ($this->deferreds as $deferreds) {
+            foreach ($deferreds as [$deferred]) {
                 \assert($deferred instanceof DeferredFuture);
                 $deferred->error($e);
             }
-            $this->deferreds[$state] = [];
         }
+
+        $this->deferreds = [];
     }
 
     /**

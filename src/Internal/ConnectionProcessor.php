@@ -6,7 +6,6 @@ use Amp\Cancellation;
 use Amp\DeferredFuture;
 use Amp\File;
 use Amp\Future;
-use Amp\Mysql\InitializationException;
 use Amp\Mysql\MysqlColumnDefinition;
 use Amp\Mysql\MysqlConfig;
 use Amp\Mysql\MysqlDataType;
@@ -165,7 +164,7 @@ REGEX;
         $this->socket->unreference();
     }
 
-    private function addDeferred(DeferredFuture $deferred): void
+    private function enqueueDeferred(DeferredFuture $deferred): void
     {
         \assert(!$this->socket->isClosed(), "The connection has been closed");
         $this->deferreds[] = $deferred;
@@ -232,17 +231,7 @@ REGEX;
         } catch (\Throwable $exception) {
             // $exception used as previous exception below.
         } finally {
-            $this->close();
-        }
-
-        if (!empty($this->deferreds)) {
-            $exception = new ConnectionException("Connection closed unexpectedly", 0, $exception ?? null);
-
-            foreach ($this->deferreds as $deferred) {
-                $deferred->error($exception);
-            }
-
-            $this->deferreds = [];
+            $this->free($exception ?? null);
         }
     }
 
@@ -261,8 +250,9 @@ REGEX;
         }
     }
 
-    private function getDeferred(): DeferredFuture
+    private function dequeueDeferred(): DeferredFuture
     {
+        \assert($this->deferreds, 'Pending deferred not found when shifting from pending queue');
         return \array_shift($this->deferreds);
     }
 
@@ -300,14 +290,14 @@ REGEX;
 
     protected function startCommand(\Closure $callback): Future
     {
-        if ($this->connectionState > ConnectionState::Ready) {
+        if ($this->isClosed()) {
             throw new \Error("The connection has been closed");
         }
 
         $deferred = new DeferredFuture;
         $this->appendTask(function () use ($callback, $deferred) {
             $this->seqId = $this->compressionId = -1;
-            $this->addDeferred($deferred);
+            $this->enqueueDeferred($deferred);
             $callback();
         });
         return $deferred->getFuture();
@@ -475,7 +465,7 @@ REGEX;
             $this->query = $query;
 
             $this->resetIds();
-            $this->addDeferred($deferred);
+            $this->enqueueDeferred($deferred);
             $this->sendPacket($payload);
             // apparently LOAD DATA LOCAL INFILE requests are not supported via prepared statements
             $this->packetCallback = $this->handleExecute(...);
@@ -597,7 +587,7 @@ REGEX;
         $deferred = new DeferredFuture;
         $this->appendTask(function () use ($payload, $deferred): void {
             $this->resetIds();
-            $this->addDeferred($deferred);
+            $this->enqueueDeferred($deferred);
             $this->sendPacket($payload);
         });
         return $deferred->getFuture();
@@ -610,7 +600,7 @@ REGEX;
         $deferred = new DeferredFuture;
         $this->appendTask(function () use ($payload, $deferred): void {
             $this->resetIds();
-            $this->addDeferred($deferred);
+            $this->enqueueDeferred($deferred);
             $this->sendPacket($payload);
         });
         return $deferred->getFuture();
@@ -656,8 +646,7 @@ REGEX;
 
         if ($this->connectionState < ConnectionState::Ready) {
             // connection failure
-            $this->close();
-            $this->getDeferred()->error(new ConnectionException(\sprintf(
+            $this->free(new ConnectionException(\sprintf(
                 'Could not connect to %s: %s %s',
                 $this->config->getConnectionString(),
                 $this->metadata->errorState ?? 'Unknown state',
@@ -668,11 +657,11 @@ REGEX;
 
         if ($this->result === null && empty($this->deferreds)) {
             // connection killed without pending query or active result
-            $this->close();
+            $this->free(new ConnectionException('Connection closed after receiving an unexpected error packet'));
             return;
         }
 
-        $deferred = $this->result ?? $this->getDeferred();
+        $deferred = $this->result ?? $this->dequeueDeferred();
 
         // normal error
         $exception = new QueryError(\sprintf(
@@ -754,7 +743,7 @@ REGEX;
     private function handleOk(string $packet): void
     {
         $this->parseOk($packet);
-        $this->getDeferred()->complete(new MysqlCommandResult($this->metadata->affectedRows, $this->metadata->insertId));
+        $this->dequeueDeferred()->complete(new MysqlCommandResult($this->metadata->affectedRows, $this->metadata->insertId));
         $this->ready();
     }
 
@@ -772,7 +761,7 @@ REGEX;
     {
         $this->parseEof($packet);
         $exception = new SqlException($this->metadata->errorMsg ?? 'Unknown error', $this->metadata->errorCode ?? 0);
-        $this->getDeferred()->error($exception);
+        $this->dequeueDeferred()->error($exception);
         $this->ready();
     }
 
@@ -854,7 +843,7 @@ REGEX;
                 }
                 $this->sendPacket("");
             } catch (\Throwable $e) {
-                $this->getDeferred()->error(new ConnectionException("Failed to transfer a file to the server", 0, $e));
+                $this->dequeueDeferred()->error(new ConnectionException("Failed to transfer a file to the server", 0, $e));
             }
         });
     }
@@ -870,13 +859,13 @@ REGEX;
                     $result = new MysqlResultProxy;
                     $result->affectedRows = $this->metadata->affectedRows;
                     $result->insertId = $this->metadata->insertId;
-                    $this->getDeferred()->complete(new MysqlConnectionResult($result));
+                    $this->dequeueDeferred()->complete(new MysqlConnectionResult($result));
                     $this->result = $result;
                     $result->updateState(MysqlResultProxy::COLUMNS_FETCHED);
                     $this->successfulResultFetch();
                 } else {
                     $this->parseCallback = null;
-                    $this->getDeferred()->complete(new MysqlCommandResult(
+                    $this->dequeueDeferred()->complete(new MysqlCommandResult(
                         $this->metadata->affectedRows,
                         $this->metadata->insertId
                     ));
@@ -887,7 +876,7 @@ REGEX;
                 if ($this->config->isLocalInfileEnabled()) {
                     $this->handleLocalInfileRequest($packet);
                 } else {
-                    $this->getDeferred()->error(new ConnectionException("Unexpected LOCAL_INFILE_REQUEST packet"));
+                    $this->dequeueDeferred()->error(new ConnectionException("Unexpected LOCAL_INFILE_REQUEST packet"));
                 }
                 return;
             case self::ERR_PACKET:
@@ -896,7 +885,7 @@ REGEX;
         }
 
         $this->parseCallback = $this->handleTextColumnDefinition(...);
-        $this->getDeferred()->complete(new MysqlConnectionResult($result = new MysqlResultProxy));
+        $this->dequeueDeferred()->complete(new MysqlConnectionResult($result = new MysqlResultProxy));
         /* we need to resolve before assigning vars, so that a onResolve() handler won't have a partial result available */
         $this->result = $result;
         $result->setColumns(MysqlDataType::decodeUnsigned($packet));
@@ -906,7 +895,7 @@ REGEX;
     private function handleExecute(string $packet): void
     {
         $this->parseCallback = $this->handleBinaryColumnDefinition(...);
-        $this->getDeferred()->complete(new MysqlConnectionResult($result = new MysqlResultProxy));
+        $this->dequeueDeferred()->complete(new MysqlConnectionResult($result = new MysqlResultProxy));
         /* we need to resolve before assigning vars, so that a onResolve() handler won't have a partial result available */
         $this->result = $result;
         $result->setColumns(\ord($packet));
@@ -920,11 +909,11 @@ REGEX;
         } elseif (\ord($packet) === self::EOF_PACKET) {
             $this->parseCallback = null;
             $this->parseEof($packet);
-            $this->getDeferred()->complete(null);
+            $this->dequeueDeferred()->complete();
             $this->ready();
         } else {
-            $this->addDeferred($deferred = new DeferredFuture);
-            $this->getDeferred()->complete([$this->parseColumnDefinition($packet), $deferred]);
+            $this->enqueueDeferred($deferred = new DeferredFuture);
+            $this->dequeueDeferred()->complete([$this->parseColumnDefinition($packet), $deferred]);
         }
     }
 
@@ -1062,7 +1051,7 @@ REGEX;
 
         if ($this->metadata->statusFlags & self::SERVER_MORE_RESULTS_EXISTS) {
             $this->parseCallback = $this->handleQuery(...);
-            $this->addDeferred($deferred);
+            $this->enqueueDeferred($deferred);
         } else {
             $this->parseCallback = null;
             $this->query = null;
@@ -1102,7 +1091,10 @@ REGEX;
                 $fields[] = null;
                 $offset += 1;
             } else {
-                $column = $this->result->columns[$i] ?? throw new \RuntimeException("Definition missing for column $i");
+                $column = $this->result->columns[$i] ?? null;
+                if (!$column) {
+                    throw new \RuntimeException("Definition missing for column $i");
+                }
                 $fields[] = $column->type->decodeText($packet, $offset, $column->flags);
             }
         }
@@ -1174,7 +1166,7 @@ REGEX;
         $this->result->columnCount = $columns;
         $this->refcount++;
         \assert($this->query !== null, 'Invalid value for connection query');
-        $this->getDeferred()->complete(new MysqlConnectionStatement($this, $this->query, $stmtId, $this->named, $this->result));
+        $this->dequeueDeferred()->complete(new MysqlConnectionStatement($this, $this->query, $stmtId, $this->named, $this->result));
         $this->named = [];
         if ($params) {
             $this->parseCallback = $this->prepareParams(...);
@@ -1185,7 +1177,7 @@ REGEX;
 
     private function readStatistics(string $packet): void
     {
-        $this->getDeferred()->complete($packet);
+        $this->dequeueDeferred()->complete($packet);
         $this->parseCallback = null;
         $this->ready();
     }
@@ -1193,19 +1185,38 @@ REGEX;
     /** @see 14.6.2 COM_QUIT */
     public function sendClose(): Future
     {
-        return $this->startCommand(function () {
+        return $this->startCommand(function (): void {
             $this->sendPacket("\x01");
             $this->connectionState = ConnectionState::Closing;
-        })->finally(fn () => $this->close());
+        });
     }
 
     public function close(): void
     {
-        if ($this->connectionState === ConnectionState::Closing && $this->deferreds) {
+        $this->free();
+    }
+
+    private function free(?\Throwable $exception = null): void
+    {
+        if ($this->connectionState === ConnectionState::Closing) {
+            \assert($this->deferreds, 'Closing deferred not found in array when in closing state');
             \array_pop($this->deferreds)->complete();
         }
 
         $this->connectionState = ConnectionState::Closed;
+
+        if ($this->deferreds || $this->result) {
+            $exception = new ConnectionException("Connection closed unexpectedly", 0, $exception ?? null);
+
+            foreach ($this->deferreds as $deferred) {
+                $deferred->error($exception);
+            }
+
+            $this->deferreds = [];
+
+            $this->result?->error($exception);
+        }
+
         $this->socket->close();
         $this->processors = [];
     }
@@ -1524,8 +1535,7 @@ REGEX;
 
                     $this->sendHandshake(true);
                 } catch (\Throwable $e) {
-                    $this->close();
-                    $this->getDeferred()->error($e);
+                    $this->free($e);
                 }
             });
 
