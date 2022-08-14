@@ -162,11 +162,11 @@ class ConnectionProcessor implements TransientResource
 
     public function unreference(): void
     {
-        if (!--$this->refcount) {
-            $this->appendTask(function () {
-                $this->close();
-            });
+        if (--$this->refcount || $this->isClosed()) {
+            return;
         }
+
+        $this->sendClose()->ignore();
     }
 
     private function ready(): void
@@ -1066,10 +1066,7 @@ class ConnectionProcessor implements TransientResource
         \assert($this->result !== null, 'Connection result was in invalid state');
 
         $result = $this->result;
-        $deferred = &$result->next;
-        if (!$deferred) {
-            $deferred = new DeferredFuture;
-        }
+        $deferred = $result->next ??= new DeferredFuture();
 
         if ($this->metadata->statusFlags & self::SERVER_MORE_RESULTS_EXISTS) {
             $this->parseCallback = $this->handleQuery(...);
@@ -1113,10 +1110,7 @@ class ConnectionProcessor implements TransientResource
                 $fields[] = null;
                 $offset += 1;
             } else {
-                $column = $this->result->columns[$i] ?? null;
-                if (!$column) {
-                    throw new \RuntimeException("Definition missing for column $i");
-                }
+                $column = $this->result->columns[$i] ?? throw new \RuntimeException("Definition missing for column $i");
                 $fields[] = $column->type->decodeText($packet, $offset, $column->flags);
             }
         }

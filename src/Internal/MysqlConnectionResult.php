@@ -78,6 +78,10 @@ final class MysqlConnectionResult implements MysqlResult, \IteratorAggregate
             return Future::complete();
         }
 
+        if ($result->exception) {
+            throw $result->exception;
+        }
+
         $deferred = new DeferredFuture;
 
         /* We need to increment the internal counter, else the next time fetch is called,
@@ -99,7 +103,7 @@ final class MysqlConnectionResult implements MysqlResult, \IteratorAggregate
         }
 
         $this->nextResult = async(function (): ?MysqlResult {
-            $deferred = $this->result->next ?: $this->result->next = new DeferredFuture;
+            $deferred = $this->result->next ??= new DeferredFuture;
             $result = $deferred->getFuture()->await();
 
             if ($result instanceof MysqlResultProxy) {

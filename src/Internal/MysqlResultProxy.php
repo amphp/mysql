@@ -37,6 +37,8 @@ final class MysqlResultProxy
 
     public const SINGLE_ROW_FETCH = 255;
 
+    public ?\Throwable $exception = null;
+
     public function setColumns(int $columns): void
     {
         $this->columnCount = $this->columnsToFetch = $columns;
@@ -73,6 +75,8 @@ final class MysqlResultProxy
 
     public function error(\Throwable $e): void
     {
+        $this->exception = $e;
+
         foreach ($this->deferreds as $deferreds) {
             foreach ($deferreds as [$deferred]) {
                 \assert($deferred instanceof DeferredFuture);
