@@ -13,14 +13,14 @@ final class MysqlConnectionResult implements MysqlResult, \IteratorAggregate
 {
     private readonly MysqlResultProxy $result;
 
-    private readonly \Generator $iterator;
+    private readonly \Generator $generator;
 
     private ?Future $nextResult = null;
 
     public function __construct(MysqlResultProxy $result)
     {
         $this->result = $result;
-        $this->iterator = self::iterate($result);
+        $this->generator = self::iterate($result);
     }
 
     private static function iterate(MysqlResultProxy $result): \Generator
@@ -40,25 +40,25 @@ final class MysqlConnectionResult implements MysqlResult, \IteratorAggregate
 
     public function __destruct()
     {
-        if ($this->iterator->valid()) {
-            $iterator = $this->iterator;
-            EventLoop::queue(static function () use ($iterator): void {
-                try {
-                    // Discard remaining rows in the result set.
-                    while ($iterator->valid()) {
-                        $iterator->next();
-                    }
-                } catch (\Throwable) {
-                    // Ignore errors while discarding result.
-                }
-            });
+        EventLoop::queue(self::dispose(...), $this->generator);
+    }
+
+    private static function dispose(\Generator $generator): void
+    {
+        try {
+            // Discard remaining rows in the result set.
+            while ($generator->valid()) {
+                $generator->next();
+            }
+        } catch (\Throwable) {
+            // Ignore errors while discarding result.
         }
     }
 
     public function getIterator(): \Traversable
     {
         // Using a Generator to keep a reference to $this.
-        yield from $this->iterator;
+        yield from $this->generator;
     }
 
     public function getNextResult(): ?MysqlResult
