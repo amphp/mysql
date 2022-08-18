@@ -1131,24 +1131,22 @@ class ConnectionProcessor implements TransientResource
         \assert($this->result !== null, 'Connection result was in invalid state');
 
         $offset = 1; // skip first byte
-        $fields = [];
+        $fields = new \SplFixedArray($this->result->columnCount);
         for ($i = 0; $i < $this->result->columnCount; $i++) {
             if (\ord($packet[$offset + (($i + 2) >> 3)]) & (1 << (($i + 2) % 8))) {
-                $fields[$i] = null;
+                $fields[$i] = "\0"; //using a C null character since PHP doesn't think the index is set if we use PHP null instead. Seems to be  a SplFixedArray issue
             }
         }
         $offset += ($this->result->columnCount + 9) >> 3;
-
         for ($i = 0; $offset < \strlen($packet); $i++) {
-            while (\array_key_exists($i, $fields)) {
+            while ($fields->offsetExists($i)) {
                 $i++;
             }
 
             $column = $this->result->columns[$i] ?? throw new \RuntimeException("Definition missing for column $i");
             $fields[$i] = $column->type->decodeBinary($packet, $offset, $column->flags);
         }
-        ksort($fields);
-        $this->result->rowFetched($fields);
+        $this->result->rowFetched($fields->toArray());
     }
 
     /** @see 14.7.4.1 COM_STMT_PREPARE Response */
