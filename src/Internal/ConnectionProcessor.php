@@ -1147,7 +1147,7 @@ class ConnectionProcessor implements TransientResource
             $column = $this->result->columns[$i] ?? throw new \RuntimeException("Definition missing for column $i");
             $fields[$i] = $column->type->decodeBinary($packet, $offset, $column->flags);
         }
-
+        ksort($fields);
         $this->result->rowFetched($fields);
     }
 
