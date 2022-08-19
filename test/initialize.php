@@ -8,7 +8,7 @@ function initialize(\mysqli $db): void
 
     $db->query("CREATE TABLE test.main (id INT NOT NULL AUTO_INCREMENT, a INT, b INT, c DATETIME, PRIMARY KEY (id))");
 
-    $epoch = '1970-01-01 00:00:00';
+    $epoch = LinkTest::EPOCH;
     $db->query("INSERT INTO test.main (a, b, c) VALUES (1, 2, '$epoch'), (2, 3, '$epoch'), (3, 4, '$epoch'), (4, 5, '$epoch'), (5, 6, '$epoch')");
 
     $db->query("CREATE TABLE test.json (a JSON)");

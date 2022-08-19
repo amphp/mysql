@@ -43,9 +43,14 @@ final class MysqlPooledStatement extends PooledStatement implements MysqlStateme
         $this->statement->bind($paramId, $data);
     }
 
-    public function getColumnDefinitions(): ?array
+    public function getColumnDefinitions(): array
     {
         return $this->statement->getColumnDefinitions();
+    }
+
+    public function getParameterDefinitions(): array
+    {
+        return $this->statement->getParameterDefinitions();
     }
 
     public function reset(): void

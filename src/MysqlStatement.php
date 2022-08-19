@@ -17,9 +17,14 @@ interface MysqlStatement extends Statement
     public function bind(int|string $paramId, mixed $data): void;
 
     /**
-     * @return list<MysqlColumnDefinition>|null
+     * @return list<MysqlColumnDefinition>
      */
-    public function getColumnDefinitions(): ?array;
+    public function getColumnDefinitions(): array;
+
+    /**
+     * @return list<MysqlColumnDefinition>
+     */
+    public function getParameterDefinitions(): array;
 
     /**
      * Reset statement to state just after preparing.

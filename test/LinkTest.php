@@ -13,6 +13,8 @@ use Amp\Sql\Result;
 
 abstract class LinkTest extends AsyncTestCase
 {
+    public const EPOCH = '1970-01-01 00:00:00';
+
     /**
      * Returns the Link class to be tested.
      */
@@ -129,7 +131,8 @@ abstract class LinkTest extends AsyncTestCase
     {
         $db = $this->getLink(true);
 
-        $stmt = $db->prepare("SELECT id as no, a, b FROM main as table_alias WHERE a = ? OR b = :num");
+        $stmt = $db->prepare("SELECT id AS no, a AS d, b, c FROM main AS table_alias WHERE b = :num AND c = ?");
+
         $base = [
             "catalog" => "def",
             "schema" => "test",
@@ -137,26 +140,45 @@ abstract class LinkTest extends AsyncTestCase
             "originalTable" => "main",
             "charset" => 63,
             "length" => 11,
-            "type" => MysqlDataType::from(3),
+            "type" => MysqlDataType::Long,
             "flags" => 0,
             "decimals" => 0,
         ];
 
         $this->assertEquals($stmt->getColumnDefinitions(), [
             new MysqlColumnDefinition(...\array_merge($base, ["name" => "no", "originalName" => "id", "flags" => 16899])),
-            new MysqlColumnDefinition(...\array_merge($base, ["name" => "a", "originalName" => "a"])),
-            new MysqlColumnDefinition(...\array_merge($base + ["name" => "b", "originalName" => "b"])),
+            new MysqlColumnDefinition(...\array_merge($base, ["name" => "d", "originalName" => "a"])),
+            new MysqlColumnDefinition(...\array_merge($base, ["name" => "b", "originalName" => "b"])),
+            new MysqlColumnDefinition(...\array_merge($base, ["name" => "c", "originalName" => "c", "type" => MysqlDataType::Datetime, "length" => 19, "flags" => 128])),
+        ]);
+
+        $base = [
+            "name" => "?",
+            "catalog" => "def",
+            "schema" => "",
+            "table" => "",
+            "originalTable" => "",
+            "originalName" => "",
+            "charset" => 63,
+            "length" => 21,
+            "flags" => 0,
+            "decimals" => 0,
+        ];
+
+        $this->assertEquals($stmt->getParameterDefinitions(), [
+            new MysqlColumnDefinition(...\array_merge($base, ["type" => MysqlDataType::LongLong, "flags" => 128])),
+            new MysqlColumnDefinition(...\array_merge($base, ["type" => MysqlDataType::Datetime, "length" => 104, "decimals" => 6, "charset" => 45])),
         ]);
 
         $stmt->bind("num", 5);
-        $result = $stmt->execute([2]);
+        $result = $stmt->execute([self::EPOCH]);
         $this->assertInstanceOf(MysqlResult::class, $result);
-        $this->assertSame(3, $result->getColumnCount());
+        $this->assertSame(4, $result->getColumnCount());
         $got = [];
         foreach ($result as $row) {
             $got[] = \array_values($row);
         }
-        $this->assertCount(2, $got);
+        $this->assertCount(1, $got);
 
         $stmt = $db->prepare("SELECT * FROM main WHERE a = ? OR b = ?");
         $result = $stmt->execute([1, 8]);

@@ -437,13 +437,14 @@ class ConnectionProcessor implements TransientResource
      * $params is by-ref, because the actual result object might not yet have been filled completely with data upon
      * call of this method ...
      *
+     * @param list<MysqlColumnDefinition> $params
      * @param array<int, mixed> $prebound
      * @param array<int, mixed> $data
      */
-    public function execute(int $stmtId, string $query, array &$params, array $prebound, array $data = []): Future
+    public function execute(int $stmtId, string $query, array $params, array $prebound, array $data = []): Future
     {
         $deferred = new DeferredFuture;
-        $this->appendTask(function () use ($stmtId, $query, &$params, $prebound, $data, $deferred): void {
+        $this->appendTask(function () use ($stmtId, $query, $params, $prebound, $data, $deferred): void {
             $payload = "\x17";
             $payload .= MysqlDataType::encodeInt32($stmtId);
             $payload .= \chr(0); // cursor flag // @TODO cursor types?!
@@ -882,7 +883,7 @@ class ConnectionProcessor implements TransientResource
                         affectedRows: $this->metadata->affectedRows,
                         insertId: $this->metadata->insertId
                     );
-                    $this->result->updateState(MysqlResultProxyState::ColumnsFetched);
+                    $this->result->markDefinitionsFetched();
                     $this->dequeueDeferred()->complete(new MysqlConnectionResult($this->result));
                     $this->successfulResultFetch();
                 } else {
@@ -950,7 +951,7 @@ class ConnectionProcessor implements TransientResource
         \assert($this->result !== null, 'Connection result was in invalid state');
 
         if (!$this->result->columnsToFetch--) {
-            $this->result->updateState(MysqlResultProxyState::ColumnsFetched);
+            $this->result->markDefinitionsFetched();
             if (\ord($packet) === self::ERR_PACKET) {
                 $this->parseCallback = null;
                 $this->handleError($packet);
@@ -996,7 +997,7 @@ class ConnectionProcessor implements TransientResource
             $result = $this->result;
             $this->result = null;
             $this->ready();
-            $result->updateState(MysqlResultProxyState::ColumnsFetched);
+            $result->markDefinitionsFetched();
 
             return;
         }
@@ -1076,7 +1077,7 @@ class ConnectionProcessor implements TransientResource
 
         $this->result = null;
 
-        $result->updateState(MysqlResultProxyState::Complete);
+        $result->complete();
     }
 
     /** @see 14.6.4.1.1.3 Resultset Row */
@@ -1112,7 +1113,7 @@ class ConnectionProcessor implements TransientResource
             }
         }
 
-        $this->result->rowFetched($fields);
+        $this->result->pushRow($fields);
     }
 
     /** @see 14.7.2 Binary Protocol Resultset Row */
@@ -1147,8 +1148,9 @@ class ConnectionProcessor implements TransientResource
             $column = $this->result->columns[$i] ?? throw new \RuntimeException("Definition missing for column $i");
             $fields[$i] = $column->type->decodeBinary($packet, $offset, $column->flags);
         }
+
         \ksort($fields);
-        $this->result->rowFetched($fields);
+        $this->result->pushRow($fields);
     }
 
     /** @see 14.7.4.1 COM_STMT_PREPARE Response */

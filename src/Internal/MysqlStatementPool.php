@@ -59,11 +59,19 @@ final class MysqlStatementPool extends SqlStatementPool implements MysqlStatemen
         $this->params = [];
     }
 
-    public function getColumnDefinitions(): ?array
+    public function getColumnDefinitions(): array
     {
-        $statement = $this->pop();
+        $statement = parent::pop();
         $columns = $statement->getColumnDefinitions();
         $this->push($statement);
         return $columns;
+    }
+
+    public function getParameterDefinitions(): array
+    {
+        $statement = parent::pop();
+        $parameters = $statement->getParameterDefinitions();
+        $this->push($statement);
+        return $parameters;
     }
 }

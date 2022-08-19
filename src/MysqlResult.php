@@ -5,7 +5,7 @@ namespace Amp\Mysql;
 use Amp\Sql\Result;
 
 /**
- * @extends Result<bool|int|float|string|null>
+ * @extends Result<int|float|string|null>
  */
 interface MysqlResult extends Result
 {

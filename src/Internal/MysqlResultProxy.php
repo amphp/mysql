@@ -4,6 +4,7 @@ namespace Amp\Mysql\Internal;
 
 use Amp\DeferredFuture;
 use Amp\Mysql\MysqlColumnDefinition;
+use Amp\Mysql\MysqlResult;
 use Amp\Pipeline\ConcurrentIterator;
 use Amp\Pipeline\Queue;
 
@@ -15,6 +16,7 @@ final class MysqlResultProxy
     /** @var list<MysqlColumnDefinition> */
     public array $columns = [];
 
+    /** @var list<MysqlColumnDefinition> */
     public array $params = [];
 
     private readonly Queue $rowQueue;
@@ -25,6 +27,7 @@ final class MysqlResultProxy
 
     private MysqlResultProxyState $state = MysqlResultProxyState::Initial;
 
+    /** @var DeferredFuture<MysqlResult|null>|null */
     public ?DeferredFuture $next = null;
 
     public function __construct(
@@ -49,30 +52,38 @@ final class MysqlResultProxy
         return $this->columns;
     }
 
-    public function updateState(MysqlResultProxyState $state): void
+    public function getParameterDefinitions(): array
     {
-        if ($this->state === MysqlResultProxyState::Complete) {
-            throw new \RuntimeException('Result set already complete');
+        if ($this->state === MysqlResultProxyState::Initial) {
+            $this->columnDeferred ??= new DeferredFuture();
+            $this->columnDeferred->getFuture()->await();
         }
 
-        match ($state) {
-            MysqlResultProxyState::Complete => $this->rowQueue->complete(),
-            MysqlResultProxyState::ColumnsFetched => $this->columnsFetched(),
-            MysqlResultProxyState::Initial => throw new \RuntimeException('Cannot reset to initial state'),
-        };
-
-        $this->state = $state;
+        return $this->params;
     }
 
-    private function columnsFetched(): void
+    public function markDefinitionsFetched(): void
     {
+        \assert($this->state === MysqlResultProxyState::Initial, 'Result proxy in invalid state');
+
+        $this->state = MysqlResultProxyState::Fetched;
         $this->columnDeferred?->complete();
         $this->columnDeferred = null;
     }
 
-    public function rowFetched(array $row): void
+    public function pushRow(array $row): void
     {
+        \assert($this->state === MysqlResultProxyState::Fetched, 'Result proxy in invalid state');
+
         $this->rowQueue->push($row);
+    }
+
+    public function complete(): void
+    {
+        \assert($this->state === MysqlResultProxyState::Fetched, 'Result proxy in invalid state');
+
+        $this->state = MysqlResultProxyState::Complete;
+        $this->rowQueue->complete();
     }
 
     public function error(\Throwable $e): void

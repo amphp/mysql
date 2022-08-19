@@ -157,9 +157,14 @@ final class MysqlConnectionStatement implements MysqlStatement
             ->await();
     }
 
-    public function getColumnDefinitions(): ?array
+    public function getColumnDefinitions(): array
     {
         return $this->result->getColumnDefinitions();
+    }
+
+    public function getParameterDefinitions(): array
+    {
+        return $this->result->getParameterDefinitions();
     }
 
     public function getLastUsedAt(): int
