@@ -25,17 +25,11 @@ final class MysqlConnectionResult implements MysqlResult, \IteratorAggregate
 
     private static function iterate(MysqlResultProxy $result): \Generator
     {
-        if (!$result->rowIterator->continue()) {
-            return;
-        }
+        $columnNames = \array_column($result->getColumnDefinitions(), 'name');
 
-        // Column names are only available once a result row has been fetched.
-        $columnNames = \array_column($result->columns, 'name');
-
-        do {
-            $row = $result->rowIterator->getValue();
+        foreach ($result->rowIterator as $row) {
             yield \array_combine($columnNames, $row);
-        } while ($result->rowIterator->continue());
+        }
     }
 
     public function __destruct()
