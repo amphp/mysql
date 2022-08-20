@@ -11,38 +11,39 @@ use Revolt\EventLoop;
 /** @internal */
 final class MysqlConnectionStatement implements MysqlStatement
 {
-    private int $paramCount;
-    private int $numParamCount;
+    private readonly int $totalParamCount;
+    private readonly int $positionalParamCount;
+
     private array $named = [];
-    private array $byNamed;
-    private string $query;
-    private int $stmtId;
     private array $prebound = [];
 
     private ?ConnectionProcessor $processor;
-
-    private readonly MysqlResultProxy $result;
 
     private int $lastUsedAt;
 
     private readonly DeferredFuture $onClose;
 
-    public function __construct(ConnectionProcessor $processor, string $query, int $stmtId, array $named, MysqlResultProxy $result)
-    {
+    public function __construct(
+        ConnectionProcessor $processor,
+        private readonly string $query,
+        private readonly int $stmtId,
+        private readonly array $byNamed,
+        private readonly MysqlResultProxy $result
+    ) {
         $this->processor = $processor;
-        $this->query = $query;
-        $this->stmtId = $stmtId;
-        $this->result = $result;
-        $this->numParamCount = $this->paramCount = $this->result->columnsToFetch;
-        $this->byNamed = $named;
+        $this->totalParamCount = $this->result->columnsToFetch;
+
         $this->onClose = new DeferredFuture();
 
-        foreach ($named as $name => $ids) {
+        $positionalParamCount = $this->totalParamCount;
+        foreach ($this->byNamed as $name => $ids) {
             foreach ($ids as $id) {
                 $this->named[$id] = $name;
-                $this->numParamCount--;
+                $positionalParamCount--;
             }
         }
+
+        $this->positionalParamCount = $positionalParamCount;
 
         $this->lastUsedAt = \time();
     }
@@ -81,7 +82,7 @@ final class MysqlConnectionStatement implements MysqlStatement
     public function bind(int|string $paramId, mixed $data): void
     {
         if (\is_int($paramId)) {
-            if ($paramId >= $this->numParamCount) {
+            if ($paramId >= $this->positionalParamCount) {
                 throw new \Error("Parameter $paramId is not defined for this prepared statement");
             }
             $i = $paramId;
@@ -94,7 +95,7 @@ final class MysqlConnectionStatement implements MysqlStatement
         }
 
         if (!\is_scalar($data) && !(\is_object($data) && \method_exists($data, '__toString'))) {
-            throw new \TypeError("Data must be scalar or object that implements __toString method");
+            throw new \TypeError("Data must be scalar or an object that implements __toString method");
         }
 
         do {
@@ -120,7 +121,7 @@ final class MysqlConnectionStatement implements MysqlStatement
         $this->lastUsedAt = \time();
 
         $prebound = $args = [];
-        for ($unnamed = $i = 0; $i < $this->paramCount; $i++) {
+        for ($unnamed = $i = 0; $i < $this->totalParamCount; $i++) {
             if (isset($this->named[$i])) {
                 $name = $this->named[$i];
                 if (\array_key_exists($name, $params)) {
@@ -175,10 +176,7 @@ final class MysqlConnectionStatement implements MysqlStatement
     public function __destruct()
     {
         if ($this->processor) {
-            $processor = $this->processor;
-            $stmtId = $this->stmtId;
-            $onClose = $this->onClose;
-            EventLoop::queue(static fn () => self::shutdown($processor, $stmtId, $onClose));
+            EventLoop::queue(self::shutdown(...), $this->processor, $this->stmtId, $this->onClose);
         }
     }
 
