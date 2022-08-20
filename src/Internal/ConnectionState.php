@@ -6,6 +6,7 @@ namespace Amp\Mysql\Internal;
 enum ConnectionState
 {
     case Unconnected;
+    case Connecting;
     case Established;
     case Ready;
     case Closing;

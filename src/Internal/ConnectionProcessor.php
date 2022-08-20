@@ -9,6 +9,7 @@ use Amp\Future;
 use Amp\Mysql\MysqlColumnDefinition;
 use Amp\Mysql\MysqlConfig;
 use Amp\Mysql\MysqlDataType;
+use Amp\Parser\Parser;
 use Amp\Socket\EncryptableSocket;
 use Amp\Sql\ConnectionException;
 use Amp\Sql\QueryError;
@@ -44,7 +45,7 @@ class ConnectionProcessor implements TransientResource
         ]msxS
         REGEX;
 
-    private ?\Generator $parser = null;
+    private Parser $parser;
 
     private int $seqId = -1;
     private int $compressionId = -1;
@@ -132,13 +133,8 @@ class ConnectionProcessor implements TransientResource
 
         $this->deferreds = new \SplQueue();
         $this->onReady = new \SplQueue();
-    }
 
-    public function __destruct()
-    {
-        if (!$this->isClosed()) {
-            $this->close();
-        }
+        $this->parser = new Parser($this->parseMysql());
     }
 
     public function isClosed(): bool
@@ -192,11 +188,14 @@ class ConnectionProcessor implements TransientResource
 
     public function connect(?Cancellation $cancellation = null): void
     {
-        \assert(!$this->parser, self::class."::connect() must not be called twice");
+        \assert(
+            $this->connectionState === ConnectionState::Unconnected,
+            self::class . "::connect() must not be called twice",
+        );
+
+        $this->connectionState = ConnectionState::Connecting;
 
         $this->enqueueDeferred($deferred = new DeferredFuture()); // Will be resolved in sendHandshake().
-
-        $this->parser = $this->parseMysql();
 
         $id = $cancellation?->subscribe($this->close(...));
 
@@ -244,8 +243,7 @@ class ConnectionProcessor implements TransientResource
 
                 $this->lastUsedAt = \time();
 
-                \assert($this->parser !== null, 'Inconsistent object state after receiving data');
-                $this->parser->send($bytes);
+                $this->parser->push($bytes);
                 $bytes = null; // Free last data read.
             }
         } catch (\Throwable $exception) {
@@ -1047,8 +1045,7 @@ class ConnectionProcessor implements TransientResource
     {
         \assert($this->result !== null, 'Connection result was in invalid state');
 
-        $result = $this->result;
-        $deferred = $result->next ??= new DeferredFuture();
+        $deferred = $this->result->next ??= new DeferredFuture();
 
         if ($this->metadata->statusFlags & self::SERVER_MORE_RESULTS_EXISTS) {
             $this->parseCallback = $this->handleQuery(...);
@@ -1060,9 +1057,8 @@ class ConnectionProcessor implements TransientResource
             $this->ready();
         }
 
+        $this->result->complete();
         $this->result = null;
-
-        $result->complete();
     }
 
     /** @see 14.6.4.1.1.3 Resultset Row */
@@ -1203,6 +1199,9 @@ class ConnectionProcessor implements TransientResource
 
         $this->connectionState = ConnectionState::Closed;
 
+        $this->socket->close();
+        $this->parser->cancel();
+
         if (!$this->deferreds->isEmpty() || $this->result) {
             $exception = new ConnectionException("Connection closed unexpectedly", 0, $exception ?? null);
 
@@ -1211,10 +1210,8 @@ class ConnectionProcessor implements TransientResource
             }
 
             $this->result?->error($exception);
+            $this->result = null;
         }
-
-        $this->socket->close();
-        $this->parser = null;
     }
 
     private function write(string $packet): void
@@ -1287,36 +1284,32 @@ class ConnectionProcessor implements TransientResource
             . \substr(\pack("V", $length), 0, 3) . $deflated;
     }
 
-    /** @see 14.4 Compression */
-    private function parseCompression(\Generator $parser): \Generator
+    /**
+     * @see 14.4 Compression
+     *
+     * @return \Generator<int, int, string, void>
+     */
+    private function parseCompression(Parser $parser): \Generator
     {
-        $buffer = "";
-
         while (true) {
-            while (\strlen($buffer) < 7) {
-                $buffer .= yield;
-            }
-
+            $buffer = yield 7;
             $offset = 0;
 
-            $size = MysqlDataType::decodeUnsigned24($buffer, $offset);
-            $this->compressionId = \ord($buffer[$offset++]);
+            $length = MysqlDataType::decodeUnsigned24($buffer, $offset);
+            $this->compressionId = MysqlDataType::decodeUnsigned8($buffer, $offset);
             $uncompressed = MysqlDataType::decodeUnsigned24($buffer, $offset);
 
-            $buffer = \substr($buffer, $offset);
-
-            if ($size > 0) {
-                while (\strlen($buffer) < $size) {
-                    $buffer .= yield;
-                }
-
+            if ($length > 0) {
                 if ($uncompressed === 0) {
-                    $parser->send(\substr($buffer, 0, $size));
+                    $parser->push(yield $length);
                 } else {
-                    $parser->send(\zlib_decode(\substr($buffer, 0, $size), $uncompressed));
-                }
+                    $buffer = \zlib_decode(yield $length, $uncompressed);
+                    if ($buffer === false) {
+                        throw new \RuntimeException('Decompression failed');
+                    }
 
-                $buffer = \substr($buffer, $size);
+                    $parser->push($buffer);
+                }
             }
         }
     }
@@ -1324,47 +1317,35 @@ class ConnectionProcessor implements TransientResource
     /**
      * @see 14.1.2 MySQL Packet
      * @see 14.1.3 Generic Response Packets
+     *
+     * @return \Generator<int, int, string, void>
      */
     private function parseMysql(): \Generator
     {
-        $buffer = "";
-
         while (true) {
-            $packet = "";
+            $packet = [];
 
             do {
-                while (\strlen($buffer) < 4) {
-                    $buffer .= yield;
+                $buffer = yield 4;
+                $offset = 0;
+
+                $length = MysqlDataType::decodeUnsigned24($buffer, $offset);
+                $this->seqId = MysqlDataType::decodeUnsigned8($buffer, $offset);
+
+                if ($length > 0) {
+                    $packet[] = yield $length;
                 }
+            } while ($length === 0xffffff);
 
-                $length = MysqlDataType::decodeUnsigned24($buffer);
-                $this->seqId = \ord($buffer[3]);
-                $buffer = \substr($buffer, 4);
-
-                while (\strlen($buffer) < ($length & 0xffffff)) {
-                    $buffer .= yield;
-                }
-
-                $lastIn = $length !== 0xffffff;
-                if ($lastIn) {
-                    $size = $length % 0xffffff;
-                } else {
-                    $size = 0xffffff;
-                }
-
-                $packet .= \substr($buffer, 0, $size);
-                $buffer = \substr($buffer, $size);
-            } while (!$lastIn);
-
-            if (\strlen($packet) > 0) {
-                $this->parsePayload($packet);
+            if ($packet) {
+                $this->parsePayload(\implode($packet));
             }
         }
     }
 
     private function parsePayload(string $packet): void
     {
-        if ($this->connectionState === ConnectionState::Unconnected) {
+        if ($this->connectionState === ConnectionState::Connecting) {
             $this->established();
             $this->connectionState = ConnectionState::Established;
             $this->handleHandshake($packet);
@@ -1375,8 +1356,7 @@ class ConnectionProcessor implements TransientResource
             switch (\ord($packet)) {
                 case self::OK_PACKET:
                     if ($this->capabilities & self::CLIENT_COMPRESS) {
-                        \assert($this->parser !== null, 'Inconsistent object state when parsing payload');
-                        $this->parser = $this->parseCompression($this->parser);
+                        $this->parser = new Parser($this->parseCompression($this->parser));
                     }
                     $this->connectionState = ConnectionState::Ready;
                     $this->handleOk($packet);

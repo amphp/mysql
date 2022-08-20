@@ -15,6 +15,7 @@
     "require": {
         "php": ">=8.1",
         "amphp/amp": "^3",
+        "amphp/parser": "^1",
         "amphp/pipeline": "^1",
         "amphp/socket": "^2",
         "amphp/sql": "^2",

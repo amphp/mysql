@@ -83,7 +83,10 @@ final class MysqlResultProxy
         \assert($this->state === MysqlResultProxyState::Fetched, 'Result proxy in invalid state');
 
         $this->state = MysqlResultProxyState::Complete;
-        $this->rowQueue->complete();
+
+        if (!$this->rowQueue->isComplete()) {
+            $this->rowQueue->complete();
+        }
     }
 
     public function error(\Throwable $e): void
@@ -94,7 +97,9 @@ final class MysqlResultProxy
 
         $this->state = MysqlResultProxyState::Complete;
 
-        $this->rowQueue->error($e);
+        if (!$this->rowQueue->isComplete()) {
+            $this->rowQueue->error($e);
+        }
 
         $this->columnDeferred?->error($e);
         $this->columnDeferred = null;
