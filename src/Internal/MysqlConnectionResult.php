@@ -57,6 +57,10 @@ final class MysqlConnectionResult implements MysqlResult, \IteratorAggregate
 
     public function getNextResult(): ?MysqlResult
     {
+        if ($this->generator->valid()) {
+            throw new \Error('Consume entire current result before requesting next result');
+        }
+
         $this->nextResult ??= async(function (): ?MysqlResult {
             $deferred = $this->result->next ??= new DeferredFuture;
             $result = $deferred->getFuture()->await();

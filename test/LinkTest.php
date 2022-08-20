@@ -34,11 +34,11 @@ abstract class LinkTest extends AsyncTestCase
     {
         $db = $this->getLink();
 
-        $resultset = $db->execute("SELECT ? AS a", [M_PI]);
-        $this->assertInstanceOf(MysqlResult::class, $resultset);
+        $result = $db->execute("SELECT ? AS a", [M_PI]);
+        $this->assertInstanceOf(MysqlResult::class, $result);
 
         $i = 0;
-        foreach ($resultset as $row) {
+        foreach ($result as $row) {
             $this->assertSame(["a" => M_PI], $row);
             ++$i;
         }
@@ -50,13 +50,13 @@ abstract class LinkTest extends AsyncTestCase
     {
         $db = $this->getLink();
 
-        $resultset = $db->query('SELECT a FROM main WHERE a < 4');
-        $this->assertInstanceOf(MysqlResult::class, $resultset);
+        $result = $db->query('SELECT a FROM main WHERE a < 4');
+        $this->assertInstanceOf(MysqlResult::class, $result);
 
-        $this->assertSame(1, $resultset->getColumnCount());
+        $this->assertSame(1, $result->getColumnCount());
 
         $got = [];
-        foreach ($resultset as $row) {
+        foreach ($result as $row) {
             $got[] = \array_values($row);
         }
 
@@ -77,27 +77,27 @@ abstract class LinkTest extends AsyncTestCase
     {
         $db = $this->getLink(true);
 
-        $resultset = $db->query("SELECT a FROM main; SELECT b FROM main WHERE a = 5; SELECT b AS d, a + 1 AS c FROM main WHERE b > 4");
-        $this->assertInstanceOf(MysqlResult::class, $resultset);
+        $result = $db->query("SELECT a FROM main; SELECT b FROM main WHERE a = 5; SELECT b AS d, a + 1 AS c FROM main WHERE b > 4");
+        $this->assertInstanceOf(MysqlResult::class, $result);
 
         $got = [];
-        foreach ($resultset as $row) {
+        foreach ($result as $row) {
             $got[] = \array_values($row);
         }
         $this->assertSame([[1], [2], [3], [4], [5]], $got);
-        $this->assertInstanceOf(MysqlResult::class, $resultset = $resultset->getNextResult());
+        $this->assertInstanceOf(MysqlResult::class, $result = $result->getNextResult());
 
         $got = [];
-        foreach ($resultset as $row) {
+        foreach ($result as $row) {
             $got[] = \array_values($row);
         }
         $this->assertSame([[6]], $got);
-        $this->assertInstanceOf(MysqlResult::class, $resultset = $resultset->getNextResult());
+        $this->assertInstanceOf(MysqlResult::class, $result = $result->getNextResult());
 
-        $fields = $resultset->getColumnDefinitions();
+        $fields = $result->getColumnDefinitions();
 
         $got = [];
-        foreach ($resultset as $row) {
+        foreach ($result as $row) {
             $got[] = $row;
         }
         $this->assertSame([["d" => 5, "c" => 5], ["d" => 6, "c" => 6]], $got);
@@ -109,22 +109,51 @@ abstract class LinkTest extends AsyncTestCase
         $this->assertSame($fields[1]->name, "c");
         $this->assertSame($fields[1]->type, MysqlDataType::LongLong);
 
-        $this->assertNull($resultset->getNextResult());
+        $this->assertNull($result->getNextResult());
+    }
+
+    public function testNextResultBeforeConsumption()
+    {
+        $db = $this->getLink(true);
+
+        $result = $db->query("SELECT a FROM main; SELECT b FROM main;");
+
+        $this->expectException(\Error::class);
+        $this->expectExceptionMessage('Consume entire current result before requesting next result');
+
+        $result->getNextResult();
     }
 
     public function testQueryWithUnconsumedTupleResult()
     {
         $db = $this->getLink();
 
-        $result = $db->query("SELECT * FROM main");
+        $result = $db->query("SELECT a FROM main");
 
         $this->assertInstanceOf(Result::class, $result);
 
         unset($result); // Force destruction of result object.
 
-        $result = $db->query("SELECT * FROM main");
+        $result = $db->query("SELECT b FROM main");
 
         $this->assertInstanceOf(Result::class, $result);
+    }
+
+    public function testUnconsumedMultiResult()
+    {
+        $db = $this->getLink(true);
+
+        $result = $db->query("SELECT a FROM main; SELECT b FROM main");
+
+        unset($result);
+
+        $result = $db->query("SELECT a, b FROM main WHERE a = 5");
+
+        $got = [];
+        foreach ($result as $row) {
+            $got[] = $row;
+        }
+        self::assertSame([['a' => 5, 'b' => 6]], $got);
     }
 
     public function testPrepared()
