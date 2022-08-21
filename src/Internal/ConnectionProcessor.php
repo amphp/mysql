@@ -1300,16 +1300,16 @@ class ConnectionProcessor implements TransientResource
             $uncompressed = MysqlDataType::decodeUnsigned24($buffer, $offset);
 
             if ($length > 0) {
-                if ($uncompressed === 0) {
-                    $parser->push(yield $length);
-                } else {
-                    $buffer = \zlib_decode(yield $length, $uncompressed);
+                $buffer = yield $length;
+
+                if ($uncompressed !== 0) {
+                    $buffer = \zlib_decode($buffer, $uncompressed);
                     if ($buffer === false) {
                         throw new \RuntimeException('Decompression failed');
                     }
-
-                    $parser->push($buffer);
                 }
+
+                $parser->push($buffer);
             }
         }
     }
