@@ -303,7 +303,7 @@ abstract class LinkTest extends AsyncTestCase
             $got[] = \array_values($row);
         }
         $this->assertCount(2, $got);
-        $this->assertSame([[2, 2, 3, '1970-01-01 00:00:00.00000'], [4, 4, 5, '1970-01-01 00:00:00.00000']], $got);
+        $this->assertSame([[2, 2, 3, self::EPOCH], [4, 4, 5, self::EPOCH]], $got);
 
         $result = $db->execute("INSERT INTO main (a, b) VALUES (:a, :b)", ["a" => 10, "b" => 11, "c" => '1970-01-01 00:00:00']);
         $this->assertInstanceOf(MysqlResult::class, $result);

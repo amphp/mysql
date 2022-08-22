@@ -139,63 +139,10 @@ enum MysqlDataType: int
             case self::Date:
             case self::Datetime:
             case self::Timestamp:
-                $string = \substr($string, $offset, 12);
-                $year = $month = $day = $hour = $minute = $second = $microsecond = 0;
-                switch ($length = \ord($string) + 1) {
-                    case 12:
-                        $microsecond = self::decodeUnsigned32(\substr($string, 8));
-                        // no break
-                    case 8:
-                        $second = \ord($string[7]);
-                        $minute = \ord($string[6]);
-                        $hour = \ord($string[5]);
-                        // no break
-                    case 5:
-                        $day = \ord($string[4]);
-                        $month = \ord($string[3]);
-                        $year = self::decodeUnsigned16(\substr($string, 1));
-                        // no break
-                    case 1:
-                        break;
-
-                    default:
-                        throw new SqlException("Unexpected string length for date in binary protocol: " . ($length - 1));
-                }
-                $offset += $length;
-                return \str_pad((string) $year, 2, "0", \STR_PAD_LEFT)
-                    . "-" . \str_pad((string) $month, 2, "0", \STR_PAD_LEFT)
-                    . "-" . \str_pad((string) $day, 2, "0", \STR_PAD_LEFT)
-                    . " " . \str_pad((string) $hour, 2, "0", \STR_PAD_LEFT)
-                    . ":" . \str_pad((string) $minute, 2, "0", \STR_PAD_LEFT)
-                    . ":" . \str_pad((string) $second, 2, "0", \STR_PAD_LEFT)
-                    . "." . \str_pad((string) $microsecond, 5, "0", \STR_PAD_LEFT);
+                return self::decodeDateTime($string, $offset);
 
             case self::Time:
-                $string = \substr($string, $offset, 13);
-                $negative = $day = $hour = $minute = $second = $microsecond = 0;
-                switch ($length = \ord($string) + 1) {
-                    case 13:
-                        $microsecond = self::decodeUnsigned32(\substr($string, 9));
-                        // no break
-                    case 9:
-                        $second = \ord($string[8]);
-                        $minute = \ord($string[7]);
-                        $hour = \ord($string[6]);
-                        $day = self::decodeUnsigned32(\substr($string, 2));
-                        $negative = \ord($string[1]);
-                        // no break
-                    case 1:
-                        break;
-
-                    default:
-                        throw new SqlException("Unexpected string length for time in binary protocol: " . ($length - 1));
-                }
-                $offset += $length;
-                return ($negative ? "" : "-") . \str_pad((string) $day, 2, "0", \STR_PAD_LEFT)
-                    . "d " . \str_pad((string) $hour, 2, "0", \STR_PAD_LEFT)
-                    . ":" . \str_pad((string) $minute, 2, "0", \STR_PAD_LEFT)
-                    . ":" . \str_pad((string) $second, 2, "0", \STR_PAD_LEFT)
-                    . "." . \str_pad((string) $microsecond, 5, "0", \STR_PAD_LEFT);
+                return self::decodeTime($string, $offset);
 
             case self::Null:
                 return null;
@@ -239,6 +186,83 @@ enum MysqlDataType: int
             default:
                 return $data;
         }
+    }
+
+    private static function decodeDateTime(string $string, int &$offset): string
+    {
+        $year = $month = $day = $hour = $minute = $second = $microsecond = 0;
+
+        switch ($length = self::decodeUnsigned8($string, $offset)) {
+            case 11:
+                $position = $offset + 7;
+                $microsecond = self::decodeUnsigned32($string, $position);
+                // no break
+
+            case 7:
+                $position = $offset + 4;
+                $hour = self::decodeUnsigned8($string, $position);
+                $minute = self::decodeUnsigned8($string, $position);
+                $second = self::decodeUnsigned8($string, $position);
+                // no break
+
+            case 4:
+                $position = $offset;
+                $year = self::decodeUnsigned16($string, $position);
+                $month = self::decodeUnsigned8($string, $position);
+                $day = self::decodeUnsigned8($string, $position);
+                // no break
+
+            case 0:
+                break;
+
+            default:
+                throw new SqlException("Unexpected string length for datetime in binary protocol: $length");
+        }
+
+        $offset += $length;
+
+        $result = \sprintf('%04d-%02d-%02d %02d:%02d:%02d', $year, $month, $day, $hour, $minute, $second);
+        if ($microsecond) {
+            $result .= sprintf('.%06d', $microsecond);
+        }
+
+        return $result;
+    }
+
+    private static function decodeTime(string $string, int &$offset): string
+    {
+        $negative = $day = $hour = $minute = $second = $microsecond = 0;
+
+        switch ($length = self::decodeUnsigned8($string, $offset)) {
+            case 12:
+                $position = $offset + 8;
+                $microsecond = self::decodeUnsigned32($string, $position);
+                // no break
+
+            case 8:
+                $position = $offset;
+                $negative = self::decodeUnsigned8($string, $position);
+                $day = self::decodeUnsigned32($string, $position);
+                $hour = self::decodeUnsigned8($string, $position);
+                $minute = self::decodeUnsigned8($string, $position);
+                $second = self::decodeUnsigned8($string, $position);
+                // no break
+
+            case 0:
+                break;
+
+            default:
+                throw new SqlException("Unexpected string length for time in binary protocol: $length");
+        }
+
+        $offset += $length;
+
+        $result = \sprintf('%s%dd %02d:%02d:%02d', ($negative ? "-" : ""), $day, $hour, $minute, $second);
+        if ($microsecond) {
+            $result .= sprintf('.%06d', $microsecond);
+        }
+
+        return $result;
     }
 
     private static function decodeJson(string $data): string
