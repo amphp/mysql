@@ -129,14 +129,12 @@ enum MysqlDataType: int
                     : self::decodeInt8($string, $offset);
 
             case self::Double:
-                $string = \substr($string, $offset, 8);
                 $offset += 8;
-                return \unpack("e", $string)[1];
+                return \unpack("e", $string, $offset - 8)[1];
 
             case self::Float:
-                $string = \substr($string, $offset, 4);
                 $offset += 4;
-                return \unpack("g", $string)[1];
+                return \unpack("g", $string, $offset - 4)[1];
 
             case self::Date:
             case self::Datetime:
@@ -318,7 +316,7 @@ enum MysqlDataType: int
 
     public static function decodeInt16(string $string, int &$offset = 0): int
     {
-        $int = \unpack("v", \substr($string, $offset, 2))[1];
+        $int = \unpack("v", $string, $offset)[1];
         $offset += 2;
         if ($int < (1 << 15)) {
             return $int;
@@ -329,9 +327,8 @@ enum MysqlDataType: int
 
     public static function decodeUnsigned16(string $string, int &$offset = 0): int
     {
-        $result = \unpack("v", \substr($string, $offset, 2))[1];
         $offset += 2;
-        return $result;
+        return \unpack("v", $string, $offset - 2)[1];
     }
 
     public static function decodeInt24(string $string, int &$offset = 0): int
@@ -354,26 +351,24 @@ enum MysqlDataType: int
 
     public static function decodeInt32(string $string, int &$offset = 0): int
     {
-        $string = \substr($string, $offset, 4);
         $offset += 4;
 
         if (\PHP_INT_SIZE > 4) {
-            $int = \unpack("V", $string)[1];
+            $int = \unpack("V", $string, $offset - 4)[1];
             if ($int < (1 << 31)) {
                 return $int;
             }
             return $int << 32 >> 32;
         }
 
-        return \unpack("V", $string)[1];
+        return \unpack("V", $string, $offset - 4)[1];
     }
 
     public static function decodeUnsigned32(string $string, int &$offset = 0): int
     {
-        $string = \substr($string, $offset, 4);
+        $result = \unpack("V", $string, $offset)[1];
         $offset += 4;
 
-        $result = \unpack("V", $string)[1];
         if ($result < 0) {
             throw new \RuntimeException('Expecting a non-negative integer');
         }
@@ -383,25 +378,22 @@ enum MysqlDataType: int
 
     public static function decodeUnsigned32WithGmp(string $string, int &$offset = 0): int|string
     {
-        $string = \substr($string, $offset, 4);
         $offset += 4;
 
         if (\PHP_INT_SIZE > 4) {
-            return \unpack("V", $string)[1];
+            return \unpack("V", $string, $offset - 4)[1];
         }
 
         \assert(\extension_loaded("gmp"), "The GMP extension is required for UNSIGNED INT fields on 32-bit systems");
         /** @psalm-suppress UndefinedConstant */
-        return \gmp_strval(\gmp_import(\substr($string, 0, 4), 1, \GMP_LSW_FIRST));
+        return \gmp_strval(\gmp_import(\substr($string, $offset - 4, 4), 1, \GMP_LSW_FIRST));
     }
 
     public static function decodeInt64(string $string, int &$offset = 0): int
     {
-        $string = \substr($string, $offset, 8);
-        $offset += 8;
-
         if (\PHP_INT_SIZE > 4) {
-            return \unpack("P", $string)[1];
+            $offset += 8;
+            return \unpack("P", $string, $offset - 8)[1];
         }
 
         throw new \RuntimeException('64-bit integers are not supported by 32-bit builds of PHP');
@@ -409,16 +401,15 @@ enum MysqlDataType: int
 
     public static function decodeInt64WithGmp(string $string, int &$offset = 0): int|string
     {
-        $string = \substr($string, $offset, 8);
         $offset += 8;
 
         if (\PHP_INT_SIZE > 4) {
-            return \unpack("P", $string)[1];
+            return \unpack("P", $string, $offset - 8)[1];
         }
 
         \assert(\extension_loaded("gmp"), "The GMP extension is required for BIGINT fields on 32-bit systems");
         /** @psalm-suppress UndefinedConstant */
-        return \gmp_strval(\gmp_import(\substr($string, 0, 8), 1, \GMP_LSW_FIRST));
+        return \gmp_strval(\gmp_import(\substr($string, $offset - 8, 8), 1, \GMP_LSW_FIRST));
     }
 
     public static function decodeUnsigned64(string $string, int &$offset = 0): int
@@ -427,10 +418,9 @@ enum MysqlDataType: int
             throw new \RuntimeException('64-bit integers are not supported by 32-bit builds of PHP');
         }
 
-        $string = \substr($string, $offset, 8);
+        $result = \unpack("P", $string, $offset)[1];
         $offset += 8;
 
-        $result = \unpack("P", $string)[1];
         if ($result < 0) {
             throw new \RuntimeException('Expecting a non-negative integer');
         }
@@ -440,12 +430,11 @@ enum MysqlDataType: int
 
     public static function decodeUnsigned64WithGmp(string $string, int &$offset = 0): string
     {
-        $string = \substr($string, $offset, 8);
         $offset += 8;
 
         \assert(\extension_loaded("gmp"), "The GMP extension is required for UNSIGNED BIGINT fields");
         /** @psalm-suppress UndefinedConstant */
-        return \gmp_strval(\gmp_import(\substr($string, 0, 8), 1, \GMP_LSW_FIRST));
+        return \gmp_strval(\gmp_import(\substr($string, $offset - 8, 8), 1, \GMP_LSW_FIRST));
     }
 
     public static function encodeInt(int $int): string
