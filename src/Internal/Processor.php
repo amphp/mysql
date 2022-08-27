@@ -18,6 +18,7 @@ use Amp\Sql\ConnectionException;
 use Amp\Sql\FailureException;
 use Amp\Sql\QueryError;
 use Amp\Sql\TransientResource;
+use function Amp\call;
 
 /* @TODO
  * 14.2.3 Auth switch request??
@@ -60,6 +61,9 @@ class Processor implements TransientResource
     const STATEMENT_PARAM_REGEX = <<<'REGEX'
 ~(["'`])(?:\\(?:\\|\1)|(?!\1).)*+\1(*SKIP)(*FAIL)|(\?)|:([a-zA-Z_][a-zA-Z0-9_]*)~ms
 REGEX;
+
+    private const COMPRESSION_MINIMUM_LENGTH = 860;
+    private const MAX_PACKET_LENGTH = 0xffffff;
 
     /** @var \Generator[] */
     private $processors = [];
@@ -375,7 +379,7 @@ REGEX;
     {
         return $this->startCommand(function () use ($db) {
             $this->config = $this->config->withDatabase($db);
-            $this->sendPacket("\x02$db");
+            $this->write("\x02$db");
         });
     }
 
@@ -385,7 +389,7 @@ REGEX;
         return $this->startCommand(function () use ($query) {
             $this->query = $query;
             $this->parseCallback = [$this, "handleQuery"];
-            $this->sendPacket("\x03$query");
+            $this->write("\x03$query");
         });
     }
 
@@ -404,7 +408,7 @@ REGEX;
                 $index++;
                 return "?";
             }, $query);
-            $this->sendPacket("\x16$query");
+            $this->write("\x16$query");
         });
     }
 
@@ -426,7 +430,7 @@ REGEX;
             }
             $payload .= "$db\0";
 
-            $this->sendPacket($payload);
+            $this->write($payload);
             $this->parseCallback = [$this, "authSwitchRequest"];
         });
     }
@@ -436,7 +440,7 @@ REGEX;
     public function ping(): Promise
     {
         return $this->startCommand(function () {
-            $this->sendPacket("\x0e");
+            $this->write("\x0e");
         });
     }
 
@@ -444,7 +448,7 @@ REGEX;
     public function resetConnection(): Promise
     {
         return $this->startCommand(function () {
-            $this->sendPacket("\x1f");
+            $this->write("\x1f");
         });
     }
 
@@ -457,7 +461,7 @@ REGEX;
         $payload .= $data;
         $this->appendTask(function () use ($payload) {
             $this->resetIds();
-            $this->sendPacket($payload);
+            $this->write($payload);
             $this->ready();
         });
     }
@@ -526,7 +530,7 @@ REGEX;
 
             $this->resetIds();
             $this->addDeferred($deferred);
-            $this->sendPacket($payload);
+            $this->write($payload);
             // apparently LOAD DATA LOCAL INFILE requests are not supported via prepared statements
             $this->packetCallback = [$this, "handleExecute"];
         });
@@ -540,7 +544,7 @@ REGEX;
         $this->appendTask(function () use ($payload) {
             if ($this->connectionState === self::READY) {
                 $this->resetIds();
-                $this->sendPacket($payload);
+                $this->write($payload);
                 $this->resetIds(); // does not expect a reply - must be reset immediately
             }
             $this->ready();
@@ -551,7 +555,7 @@ REGEX;
     public function listFields(string $table, string $like = "%"): Promise
     {
         return $this->startCommand(static function () use ($table, $like) {
-            $this->sendPacket("\x04$table\0$like");
+            $this->write("\x04$table\0$like");
             $this->parseCallback = [$this, "handleFieldlist"];
         });
     }
@@ -582,7 +586,7 @@ REGEX;
     public function createDatabase(string $db): Promise
     {
         return $this->startCommand(function () use ($db) {
-            $this->sendPacket("\x05$db");
+            $this->write("\x05$db");
         });
     }
 
@@ -590,7 +594,7 @@ REGEX;
     public function dropDatabase(string $db): Promise
     {
         return $this->startCommand(function () use ($db) {
-            $this->sendPacket("\x06$db");
+            $this->write("\x06$db");
         });
     }
 
@@ -601,7 +605,7 @@ REGEX;
     public function refresh(int $subcommand): Promise
     {
         return $this->startCommand(function () use ($subcommand) {
-            $this->sendPacket("\x07" . \chr($subcommand));
+            $this->write("\x07" . \chr($subcommand));
         });
     }
 
@@ -609,7 +613,7 @@ REGEX;
     public function shutdown(): Promise
     {
         return $this->startCommand(function () {
-            $this->sendPacket("\x08\x00"); /* SHUTDOWN_DEFAULT / SHUTDOWN_WAIT_ALL_BUFFERS, only one in use */
+            $this->write("\x08\x00"); /* SHUTDOWN_DEFAULT / SHUTDOWN_WAIT_ALL_BUFFERS, only one in use */
         });
     }
 
@@ -617,7 +621,7 @@ REGEX;
     public function statistics(): Promise
     {
         return $this->startCommand(function () {
-            $this->sendPacket("\x09");
+            $this->write("\x09");
             $this->parseCallback = [$this, "readStatistics"];
         });
     }
@@ -626,7 +630,7 @@ REGEX;
     public function processInfo(): Promise
     {
         return $this->startCommand(function () {
-            $this->sendPacket("\x0a");
+            $this->write("\x0a");
             $this->query("SHOW PROCESSLIST");
         });
     }
@@ -635,7 +639,7 @@ REGEX;
     public function killProcess(int $process): Promise
     {
         return $this->startCommand(function () use ($process) {
-            $this->sendPacket("\x0c" . DataTypes::encodeInt32($process));
+            $this->write("\x0c" . DataTypes::encodeInt32($process));
         });
     }
 
@@ -643,7 +647,7 @@ REGEX;
     public function debugStdout(): Promise
     {
         return $this->startCommand(function () {
-            $this->sendPacket("\x0d");
+            $this->write("\x0d");
         });
     }
 
@@ -655,7 +659,7 @@ REGEX;
         $this->appendTask(function () use ($payload, $deferred) {
             $this->resetIds();
             $this->addDeferred($deferred);
-            $this->sendPacket($payload);
+            $this->write($payload);
         });
         return $deferred->promise();
     }
@@ -668,7 +672,7 @@ REGEX;
         $this->appendTask(function () use ($payload, $deferred) {
             $this->resetIds();
             $this->addDeferred($deferred);
-            $this->sendPacket($payload);
+            $this->write($payload);
         });
         return $deferred->promise();
     }
@@ -907,9 +911,9 @@ REGEX;
                 }
 
                 while ("" != ($chunk = yield $fileHandle->read())) {
-                    $this->sendPacket($chunk);
+                    $this->write($chunk);
                 }
-                $this->sendPacket("");
+                $this->write("");
             } catch (\Throwable $e) {
                 $this->getDeferred()->fail(new ConnectionException("Failed to transfer a file to the server", 0, $e));
             }
@@ -1244,7 +1248,7 @@ REGEX;
     public function sendClose(): Promise
     {
         return $this->startCommand(function () {
-            $this->sendPacket("\x01");
+            $this->write("\x01");
             $this->connectionState = self::CLOSING;
         });
     }
@@ -1263,9 +1267,42 @@ REGEX;
         }
     }
 
+    private function resetIds(): void
+    {
+        if ($this->pendingWrite) {
+            $this->pendingWrite->onResolve(function () {
+                $this->seqId = $this->compressionId = -1;
+            });
+            return;
+        }
+
+        $this->seqId = $this->compressionId = -1;
+    }
+
     private function write(string $packet): Promise
     {
-        $packet = $this->compilePacket($packet);
+        \assert(!$this->socket->isClosed(), 'The connection was closed during a call to write');
+
+        if (\strlen($packet) < self::MAX_PACKET_LENGTH) {
+            return $this->sendPacket($packet);
+        }
+
+        return call(function () use ($packet) {
+            while (\strlen($packet) >= self::MAX_PACKET_LENGTH) {
+                yield $this->sendPacket(\substr($packet, 0, self::MAX_PACKET_LENGTH));
+                $packet = \substr($packet, self::MAX_PACKET_LENGTH);
+            }
+
+            yield $this->sendPacket($packet);
+        });
+    }
+
+    /**
+     * @see 14.1.2 MySQL Packets
+     */
+    private function sendPacket(string $out): Promise
+    {
+        $packet = DataTypes::encodeInt32(\strlen($out) | (++$this->seqId << 24)) . $out;
 
         // @codeCoverageIgnoreStart
         \assert((function () use ($packet) {
@@ -1284,58 +1321,35 @@ REGEX;
         })());
         // @codeCoverageIgnoreEnd
 
-        if (($this->capabilities & self::CLIENT_COMPRESS) && $this->connectionState >= self::READY) {
+        if (($this->capabilities & self::CLIENT_COMPRESS) && $this->connectionState === self::READY) {
             $packet = $this->compressPacket($packet);
         }
 
         return $this->pendingWrite = $this->socket->write($packet);
     }
 
-    private function resetIds(): void
-    {
-        if ($this->pendingWrite) {
-            $this->pendingWrite->onResolve(function () {
-                $this->seqId = $this->compressionId = -1;
-            });
-            return;
-        }
-
-        $this->seqId = $this->compressionId = -1;
-    }
-
-    private function compilePacket(string $pending): string
-    {
-        $packet = "";
-        do {
-            $len = \strlen($pending);
-            if ($len >= (1 << 24) - 1) {
-                $out = \substr($pending, 0, (1 << 24) - 1);
-                $pending = \substr($pending, (1 << 24) - 1);
-                $len = (1 << 24) - 1;
-            } else {
-                $out = $pending;
-                $pending = "";
-            }
-            $packet .= \substr_replace(\pack("V", $len), \chr(++$this->seqId), 3, 1) . $out; // expects $len < (1 << 24) - 1
-        } while ($pending !== "");
-
-        return $packet;
-    }
-
+    /**
+     * @see 14.4 Compression
+     */
     private function compressPacket(string $packet): string
     {
-        if ($packet === "") {
-            return "";
+        $length = \strlen($packet);
+        if ($length < self::COMPRESSION_MINIMUM_LENGTH) {
+            return $this->makeCompressedPacket(0, $packet);
         }
 
-        $len = \strlen($packet);
-        $deflated = \zlib_encode($packet, ZLIB_ENCODING_DEFLATE);
-
-        if ($len < \strlen($deflated)) {
-            return \substr_replace(\pack("V", \strlen($packet)), \chr(++$this->compressionId), 3, 1) . "\0\0\0" . $packet;
+        $deflated = \zlib_encode($packet, \ZLIB_ENCODING_DEFLATE);
+        if ($length < \strlen($deflated)) {
+            return $this->makeCompressedPacket(0, $packet);
         }
 
-        return \substr_replace(\pack("V", \strlen($deflated)), \chr(++$this->compressionId), 3, 1) . \substr(\pack("V", $len), 0, 3) . $deflated;
+        return $this->makeCompressedPacket($length, $deflated);
+    }
+
+    private function makeCompressedPacket(int $uncompressed, string $packet): string
+    {
+        return DataTypes::encodeInt32(\strlen($packet) | (++$this->compressionId << 24))
+            . DataTypes::encodeInt24($uncompressed) . $packet;
     }
 
     /** @see 14.4 Compression */
@@ -1532,7 +1546,7 @@ REGEX;
                 $len = \strpos($packet, "\0");
                 $pluginName = \substr($packet, 0, $len); // @TODO mysql_native_pass only now...
                 $authPluginData = \substr($packet, $len + 1);
-                $this->sendPacket($this->secureAuth($this->config->getPassword(), $authPluginData));
+                $this->write($this->secureAuth($this->config->getPassword(), $authPluginData));
                 break;
             case self::ERR_PACKET:
                 $this->handleError($packet);
@@ -1635,15 +1649,5 @@ REGEX;
         }
 
         return $this->secureAuth($password, $this->authPluginData);
-    }
-
-    /** @see 14.1.2 MySQL Packet */
-    protected function sendPacket(string $payload): Promise
-    {
-        if ($this->connectionState !== self::READY) {
-            throw new \Error("Connection not ready, cannot send any packets");
-        }
-
-        return $this->write($payload);
     }
 }
