@@ -272,8 +272,15 @@ REGEX;
             $this->close();
         }
 
-        if (!empty($this->deferreds)) {
+        if (!empty($this->deferreds) || $this->result) {
             $exception = new ConnectionException("Connection closed unexpectedly", 0, $exception ?? null);
+
+            $result = $this->result;
+            $this->result = null;
+
+            if ($result) {
+                $result->fail($exception);
+            }
 
             foreach ($this->deferreds as $deferred) {
                 $deferred->fail($exception);
@@ -483,10 +490,26 @@ REGEX;
                     } else {
                         $bound = 1;
                     }
+
+                    $paramType = $params[$paramId]['type'] ?? null;
+                    if ($paramType === null) {
+                        $deferred->fail(new \RuntimeException("Type not found for param ID $paramId"));
+                        return;
+                    }
+
                     list($unsigned, $type, $value) = DataTypes::encodeBinary($param);
                     if (isset($prebound[$paramId])) {
+                        if (!DataTypes::isBindable($paramType)) {
+                            $deferred->fail(new FailureException("Cannot use bind with columns of type " . $paramType));
+                            return;
+                        }
+
                         $types .= \chr(DataTypes::MYSQL_TYPE_LONG_BLOB);
                     } else {
+                        if ($paramType === DataTypes::MYSQL_TYPE_JSON && $type === DataTypes::MYSQL_TYPE_LONG_BLOB) {
+                            $type = DataTypes::MYSQL_TYPE_JSON;
+                        }
+
                         $types .= \chr($type);
                     }
                     $types .= $unsigned?"\x80":"\0";

@@ -9,6 +9,7 @@ use Amp\Mysql\ResultSet;
 use Amp\Mysql\Statement;
 use Amp\PHPUnit\AsyncTestCase;
 use Amp\Promise;
+use Amp\Sql\FailureException;
 use Amp\Sql\Link;
 use Amp\Sql\QueryError;
 use Amp\Sql\Transaction;
@@ -386,5 +387,37 @@ abstract class LinkTest extends AsyncTestCase
 
         yield $resultset->advance();
         $this->assertSame(["a" => '{"key": "value"}'], $resultset->getCurrent());
+    }
+
+    public function testJson()
+    {
+        /** @var Link $db */
+        $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
+
+        /** @var Statement $statement */
+        $statement = yield $db->prepare("SELECT CAST(? AS JSON) AS data");
+
+        $json = '{"key": "value"}';
+
+        /** @var ResultSet $result */
+        $result = yield $statement->execute([$json]);
+
+        yield $result->advance();
+        $this->assertEquals(\json_decode($json), \json_decode($result->getCurrent()['data']));
+    }
+
+    public function testBindJson()
+    {
+        /** @var Link $db */
+        $db = yield $this->getLink("host=".DB_HOST.";user=".DB_USER.";pass=".DB_PASS.";db=test");
+
+        /** @var Statement $statement */
+        $statement = yield $db->prepare("SELECT CAST(? AS JSON)");
+        $statement->bind(0, '{"key": "value"}');
+
+        $this->expectException(FailureException::class);
+        $this->expectExceptionMessage("Cannot use bind");
+
+        yield $statement->execute();
     }
 }

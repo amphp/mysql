@@ -39,8 +39,6 @@ final class DataTypes
     public const MYSQL_TYPE_STRING = 0xfe;
     public const MYSQL_TYPE_GEOMETRY = 0xff;
 
-    private const ENCODED_JSON_PREFIX = "base64:type251:";
-
     /** @see 14.7.3 Binary Value */
     public static function encodeBinary($param): array
     {
@@ -100,14 +98,10 @@ final class DataTypes
             case self::MYSQL_TYPE_BIT:
             case self::MYSQL_TYPE_DECIMAL:
             case self::MYSQL_TYPE_NEWDECIMAL:
-                $ret = self::decodeString($str, $intlen, $len);
-                $len += $intlen;
-                return $ret;
-
             case self::MYSQL_TYPE_JSON:
                 $ret = self::decodeString($str, $intlen, $len);
                 $len += $intlen;
-                return self::decodeJson($ret);
+                return $ret;
 
             case self::MYSQL_TYPE_LONGLONG:
             case self::MYSQL_TYPE_LONGLONG | 0x80:
@@ -123,6 +117,7 @@ final class DataTypes
 
             case self::MYSQL_TYPE_SHORT:
             case self::MYSQL_TYPE_SHORT | 0x80:
+            case self::MYSQL_TYPE_YEAR:
                 $len = 2;
                 return $unsigned ? self::decodeUnsigned16($str) : self::decodeInt16($str);
 
@@ -163,7 +158,18 @@ final class DataTypes
                     default:
                         throw new FailureException("Unexpected string length for date in binary protocol: " . ($len - 1));
                 }
-                return \str_pad($year, 2, "0", STR_PAD_LEFT) . "-" . \str_pad($month, 2, "0", STR_PAD_LEFT) . "-" . \str_pad($day, 2, "0", STR_PAD_LEFT) . " " . \str_pad($hour, 2, "0", STR_PAD_LEFT) . ":" . \str_pad($minute, 2, "0", STR_PAD_LEFT) . ":" . \str_pad($second, 2, "0", STR_PAD_LEFT) . "." . \str_pad($microsecond, 5, "0", STR_PAD_LEFT);
+
+                $result = \sprintf('%04d-%02d-%02d', $year, $month, $day);
+                if ($type === self::MYSQL_TYPE_DATE) {
+                    return $result;
+                }
+
+                $result .= \sprintf(' %02d:%02d:%02d', $hour, $minute, $second);
+                if ($microsecond) {
+                    $result .= \sprintf('.%06d', $microsecond);
+                }
+
+                return $result;
 
             case self::MYSQL_TYPE_TIME:
                 $negative = $day = $hour = $minute = $second = $microsecond = 0;
@@ -184,7 +190,15 @@ final class DataTypes
                     default:
                         throw new FailureException("Unexpected string length for time in binary protocol: " . ($len - 1));
                 }
-                return ($negative ? "" : "-") . \str_pad($day, 2, "0", STR_PAD_LEFT) . "d " . \str_pad($hour, 2, "0", STR_PAD_LEFT) . ":" . \str_pad($minute, 2, "0", STR_PAD_LEFT) . ":" . \str_pad($second, 2, "0", STR_PAD_LEFT) . "." . \str_pad($microsecond, 5, "0", STR_PAD_LEFT);
+
+                $hour += $day * 24;
+
+                $result = \sprintf('%s%02d:%02d:%02d', ($negative ? "-" : ""), $hour, $minute, $second);
+                if ($microsecond) {
+                    $result .= \sprintf('.%06d', $microsecond);
+                }
+
+                return $result;
 
             case self::MYSQL_TYPE_NULL:
                 $len = 0;
@@ -224,28 +238,16 @@ final class DataTypes
             case self::MYSQL_TYPE_SHORT | 0x80:
             case self::MYSQL_TYPE_TINY:
             case self::MYSQL_TYPE_TINY | 0x80:
+            case self::MYSQL_TYPE_YEAR:
                 return (int) $data;
 
             case self::MYSQL_TYPE_DOUBLE:
             case self::MYSQL_TYPE_FLOAT:
                 return (float) $data;
 
-            case self::MYSQL_TYPE_JSON:
-                return self::decodeJson($data);
-
             default:
                 return $data;
         }
-    }
-
-    private static function decodeJson(string $data): string
-    {
-        if (\strncmp(self::ENCODED_JSON_PREFIX, $data, \strlen(self::ENCODED_JSON_PREFIX)) !== 0) {
-            return $data; // Data was not base-64 encoded.
-        }
-
-        $data = \substr($data, \strlen(self::ENCODED_JSON_PREFIX));
-        return \base64_decode($data);
     }
 
     public static function decodeUnsignedOff(string $str, int &$off): int
@@ -440,5 +442,16 @@ final class DataTypes
     public static function encodeInt64(int $int): string
     {
         return \pack("VV", $int & 0xffffffff, $int >> 32);
+    }
+
+    public static function isBindable(int $type): bool
+    {
+        switch ($type) {
+            case self::MYSQL_TYPE_JSON:
+                return false;
+
+            default:
+                return true;
+        }
     }
 }

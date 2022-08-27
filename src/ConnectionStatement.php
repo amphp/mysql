@@ -135,10 +135,9 @@ final class ConnectionStatement implements Statement
             }
         }
 
-        $promise = $this->getProcessor()->execute($this->stmtId, $this->query, $this->result->params, $prebound, $args);
-
-        return call(function () use ($promise) {
-            $result = yield $promise;
+        return call(function () use ($prebound, $args) {
+            $result = yield $this->getProcessor()
+                ->execute($this->stmtId, $this->query, $this->result->params, $prebound, $args);
 
             if ($result instanceof Internal\ResultProxy) {
                 $result = new ConnectionResultSet($result);
