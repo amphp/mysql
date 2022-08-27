@@ -9,17 +9,65 @@ class MysqlDataTypeTest extends MysqlTestCase
 {
     private readonly MysqlConnection $connection;
 
-    private readonly \DateTimeImmutable $now;
-
     public function setUp(): void
     {
         parent::setUp();
 
         $this->connection = (new SocketMysqlConnector)->connect($this->getConfig());
-        $this->now = new \DateTimeImmutable();
     }
 
-    protected function assertResult(int|float|string|null $expected, string $type): void
+    public function provideDataAndTypes(): array
+    {
+        $now = new \DateTimeImmutable();
+
+        return [
+            // DATE
+            ['0000-00-00', 'DATE'],
+            ['1970-01-01', 'DATE'],
+            ['2020-03-17', 'DATE'],
+            [$now->format('Y-m-d'), 'DATE'],
+
+            // DATETIME
+            ['0000-00-00 00:00:00', 'DATETIME(6)'],
+            ['1970-01-01 00:00:00', 'DATETIME(6)'],
+            [$now->format('Y-m-d H:i:s.u'), 'DATETIME(6)'],
+
+            // TIME
+            ['00:00:00', 'TIME(6)'],
+            ['96:42:23', 'TIME(6)'],
+            ['184:15:56.271282', 'TIME(6)'],
+            [$now->format('H:i:s.u'), 'TIME(6)'],
+
+            // YEAR
+            [0, 'YEAR'],
+            [1901, 'YEAR'],
+            [2155, 'YEAR'],
+
+            // FLOAT
+            [0.0, 'FLOAT'],
+            [\M_PI, 'FLOAT'],
+            [-\M_E, 'FLOAT'],
+
+            // DOUBLE
+            [0.0, 'DOUBLE'],
+            [\M_PI, 'DOUBLE'],
+            [-\M_E, 'DOUBLE'],
+
+            // SIGNED
+            [0, 'SIGNED'],
+            [-12345, 'SIGNED'],
+            [12345, 'UNSIGNED'],
+
+            // UNSIGNED
+            [0, 'UNSIGNED'],
+            [12345, 'UNSIGNED'],
+        ];
+    }
+
+    /**
+     * @dataProvider provideDataAndTypes
+     */
+    public function testDateType(int|float|string|null $expected, string $type): void
     {
         $result = $this->connection->execute("SELECT CAST(:expected AS $type) AS data", ['expected' => $expected]);
 
@@ -34,41 +82,10 @@ class MysqlDataTypeTest extends MysqlTestCase
         }
     }
 
-    public function testDate(): void
+    public function provideJsonData(): array
     {
-        $this->assertResult('1970-01-01', 'DATE');
-        $this->assertResult('2020-03-17', 'DATE');
-        $this->assertResult($this->now->format('Y-m-d'), 'DATE');
-    }
-
-    public function testDateTime(): void
-    {
-        $this->assertResult('1970-01-01 00:00:00', 'DATETIME(6)');
-        $this->assertResult($this->now->format('Y-m-d H:i:s.u'), 'DATETIME(6)');
-    }
-
-    public function testTime(): void
-    {
-        $this->assertResult('184:15:56.271282', 'TIME(6)');
-        $this->assertResult($this->now->format('H:i:s.u'), 'TIME(6)');
-    }
-
-    public function testFloatAndDouble(): void
-    {
-        $double = 3.1415926;
-        $this->assertResult($double, 'FLOAT');
-        $this->assertResult($double, 'DOUBLE');
-    }
-
-    public function testInteger(): void
-    {
-        $this->assertResult(-12345, 'SIGNED');
-        $this->assertResult(12345, 'UNSIGNED');
-    }
-
-    public function provideJsonData(): \Generator
-    {
-        yield 'object' => [<<<JSON
+        return [
+            'object' => [<<<JSON
             {
                 "object": {"key": "value"},
                 "array": [1, 2, 3],
@@ -78,17 +95,13 @@ class MysqlDataTypeTest extends MysqlTestCase
                 "boolean": true,
                 "null": null
             }
-            JSON, false];
-
-        yield 'array' => ['[1, 2, 3]', true];
-
-        yield 'float' => ['3.1415926', true];
-
-        yield 'integer' => ['42', true];
-
-        yield 'boolean' => ['true', true];
-
-        yield 'null' => ['null', true];
+            JSON, false],
+            'array' => ['[1, 2, 3]', true],
+            'float' => ['3.1415926', true],
+            'integer' => ['42', true],
+            'boolean' => ['true', true],
+            'null' => ['null', true],
+        ];
     }
 
     /**
