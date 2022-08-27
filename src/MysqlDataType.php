@@ -137,9 +137,11 @@ enum MysqlDataType: int
                 return \unpack("g", $string, $offset - 4)[1];
 
             case self::Date:
+                return self::decodeDateTime($string, true, $offset);
+
             case self::Datetime:
             case self::Timestamp:
-                return self::decodeDateTime($string, $offset);
+                return self::decodeDateTime($string, false, $offset);
 
             case self::Time:
                 return self::decodeTime($string, $offset);
@@ -221,7 +223,12 @@ enum MysqlDataType: int
 
         $offset += $length;
 
-        $result = \sprintf('%04d-%02d-%02d %02d:%02d:%02d', $year, $month, $day, $hour, $minute, $second);
+        $result = \sprintf('%04d-%02d-%02d', $year, $month, $day);
+        if ($dateOnly) {
+            return $result;
+        }
+
+        $result .= \sprintf(' %02d:%02d:%02d', $hour, $minute, $second);
         if ($microsecond) {
             $result .= sprintf('.%06d', $microsecond);
         }
@@ -257,7 +264,9 @@ enum MysqlDataType: int
 
         $offset += $length;
 
-        $result = \sprintf('%s%dd %02d:%02d:%02d', ($negative ? "-" : ""), $day, $hour, $minute, $second);
+        $hour += $day * 24;
+
+        $result = \sprintf('%s%02d:%02d:%02d', ($negative ? "-" : ""), $hour, $minute, $second);
         if ($microsecond) {
             $result .= sprintf('.%06d', $microsecond);
         }
