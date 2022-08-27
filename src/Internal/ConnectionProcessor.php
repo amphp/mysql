@@ -665,7 +665,7 @@ class ConnectionProcessor implements TransientResource
 
         $this->parseCallback = null;
 
-        if ($this->connectionState < ConnectionState::Ready) {
+        if ($this->connectionState === ConnectionState::Connecting) {
             // connection failure
             $this->free(new ConnectionException(\sprintf(
                 'Could not connect to %s: %s %s',
@@ -1271,7 +1271,7 @@ class ConnectionProcessor implements TransientResource
         })());
         // @codeCoverageIgnoreEnd
 
-        if (($this->capabilities & self::CLIENT_COMPRESS) && $this->connectionState >= ConnectionState::Ready) {
+        if (($this->capabilities & self::CLIENT_COMPRESS) && $this->connectionState === ConnectionState::Ready) {
             $packet = $this->compressPacket($packet);
         }
 
