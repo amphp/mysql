@@ -26,7 +26,7 @@ final class MysqlConnectionStatement implements MysqlStatement
     public function __construct(
         ConnectionProcessor $processor,
         private readonly string $query,
-        private readonly int $stmtId,
+        private readonly int $statementId,
         private readonly array $byNamed,
         private readonly MysqlResultProxy $result
     ) {
@@ -69,7 +69,7 @@ final class MysqlConnectionStatement implements MysqlStatement
     public function close(): void
     {
         if ($this->processor) {
-            self::shutdown($this->processor, $this->stmtId, $this->onClose);
+            self::shutdown($this->processor, $this->statementId, $this->onClose);
             $this->processor = null;
         }
     }
@@ -98,22 +98,21 @@ final class MysqlConnectionStatement implements MysqlStatement
             throw new \TypeError("Data must be scalar or an object that implements __toString method");
         }
 
+        $data = (string) $data;
+
         do {
             $realId = -1;
             while (isset($this->named[++$realId]) || $i-- > 0) {
-                if (!\is_numeric($paramId) && isset($this->named[$realId]) && $this->named[$realId] == $paramId) {
+                if (!\is_numeric($paramId) && isset($this->named[$realId]) && $this->named[$realId] === $paramId) {
                     break;
                 }
             }
 
-            $this->getProcessor()->bindParam($this->stmtId, $realId, (string) $data);
+            $this->getProcessor()->bindParam($this->statementId, $realId, $data);
         } while (isset($array) && $i = \next($array));
 
-        if (isset($this->prebound[$paramId])) {
-            $this->prebound[$paramId] .= (string) $data;
-        } else {
-            $this->prebound[$paramId] = (string) $data;
-        }
+        $prior = $this->prebound[$paramId] ?? '';
+        $this->prebound[$paramId] = $prior . $data;
     }
 
     public function execute(array $params = []): MysqlResult
@@ -142,7 +141,7 @@ final class MysqlConnectionStatement implements MysqlStatement
         }
 
         return $this->getProcessor()
-            ->execute($this->stmtId, $this->query, $this->result->params, $prebound, $args)
+            ->execute($this->statementId, $this->query, $this->result->params, $prebound, $args)
             ->await();
     }
 
@@ -154,7 +153,7 @@ final class MysqlConnectionStatement implements MysqlStatement
     public function reset(): void
     {
         $this->getProcessor()
-            ->resetStmt($this->stmtId)
+            ->resetStmt($this->statementId)
             ->await();
     }
 
@@ -176,7 +175,7 @@ final class MysqlConnectionStatement implements MysqlStatement
     public function __destruct()
     {
         if ($this->processor) {
-            EventLoop::queue(self::shutdown(...), $this->processor, $this->stmtId, $this->onClose);
+            EventLoop::queue(self::shutdown(...), $this->processor, $this->statementId, $this->onClose);
         }
     }
 

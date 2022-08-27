@@ -21,12 +21,12 @@ enum MysqlDataType: int
     case Time = 0x0b;
     case Datetime = 0x0c;
     case Year = 0x0d;
-    case NewDate = 0x0e;
+    case NewDate = 0x0e; // Internal, not used in protocol, see Date
     case Varchar = 0x0f;
     case Bit = 0x10;
-    case Timestamp2 = 0x11;
-    case Datetime2 = 0x12;
-    case Time2 = 0x13;
+    case Timestamp2 = 0x11; // Internal, not used in protocol, see Timestamp
+    case Datetime2 = 0x12; // Internal, not used in protocol, see DateTime
+    case Time2 = 0x13; // Internal, not used in protocol, see Time
     case Json = 0xf5;
     case NewDecimal = 0xf6;
     case Enum = 0xf7;
@@ -39,10 +39,10 @@ enum MysqlDataType: int
     case String = 0xfe;
     case Geometry = 0xff;
 
-    private const ENCODED_JSON_PREFIX = "base64:type251:";
-
     /**
      * @return array{self, string}
+     *
+     * @throws SqlException If the given value cannot be encoded.
      *
      * @see 14.7.3 Binary Value
      */
@@ -97,11 +97,8 @@ enum MysqlDataType: int
             case self::Bit:
             case self::Decimal:
             case self::NewDecimal:
-                return self::decodeString($string, $offset);
-
             case self::Json:
-                $data = self::decodeString($string, $offset);
-                return self::decodeJson($data);
+                return self::decodeString($string, $offset);
 
             case self::LongLong:
                 return $unsigned
@@ -119,6 +116,7 @@ enum MysqlDataType: int
                     : self::decodeInt24($string, $offset);
 
             case self::Short:
+            case self::Year:
                 return $unsigned
                     ? self::decodeUnsigned16($string, $offset)
                     : self::decodeInt16($string, $offset);
@@ -176,21 +174,27 @@ enum MysqlDataType: int
             case self::Int24:
             case self::Short:
             case self::Tiny:
+            case self::Year:
                 return (int) $data;
 
             case self::Double:
             case self::Float:
                 return (float) $data;
 
-            case self::Json:
-                return self::decodeJson($data);
-
             default:
                 return $data;
         }
     }
 
-    private static function decodeDateTime(string $string, int &$offset): string
+    public function isBindable(): bool
+    {
+        return match ($this) {
+            self::Json => false,
+            default => true,
+        };
+    }
+
+    private static function decodeDateTime(string $string, bool $dateOnly, int &$offset): string
     {
         $year = $month = $day = $hour = $minute = $second = $microsecond = 0;
 
@@ -230,7 +234,7 @@ enum MysqlDataType: int
 
         $result .= \sprintf(' %02d:%02d:%02d', $hour, $minute, $second);
         if ($microsecond) {
-            $result .= sprintf('.%06d', $microsecond);
+            $result .= \sprintf('.%06d', $microsecond);
         }
 
         return $result;
@@ -268,20 +272,10 @@ enum MysqlDataType: int
 
         $result = \sprintf('%s%02d:%02d:%02d', ($negative ? "-" : ""), $hour, $minute, $second);
         if ($microsecond) {
-            $result .= sprintf('.%06d', $microsecond);
+            $result .= \sprintf('.%06d', $microsecond);
         }
 
         return $result;
-    }
-
-    private static function decodeJson(string $data): string
-    {
-        if (\strncmp(self::ENCODED_JSON_PREFIX, $data, \strlen(self::ENCODED_JSON_PREFIX)) !== 0) {
-            return $data; // Data was not base-64 encoded.
-        }
-
-        $data = \substr($data, \strlen(self::ENCODED_JSON_PREFIX));
-        return \base64_decode($data);
     }
 
     public static function decodeNullTerminatedString(string $string, int &$offset = 0): string
@@ -473,7 +467,7 @@ enum MysqlDataType: int
     public static function encodeInt(int $int): string
     {
         if ($int < 0xfb) {
-            return \chr($int);
+            return self::encodeInt8($int);
         }
 
         if ($int < (1 << 16)) {
@@ -485,6 +479,11 @@ enum MysqlDataType: int
         }
 
         return "\xfe" . self::encodeInt64($int);
+    }
+
+    public static function encodeInt8(int $int): string
+    {
+        return \chr($int);
     }
 
     public static function encodeInt16(int $int): string

@@ -25,6 +25,9 @@ use Revolt\EventLoop;
 /** @internal */
 class ConnectionProcessor implements TransientResource
 {
+    private const COMPRESSION_MINIMUM_LENGTH = 860;
+    private const MAX_PACKET_LENGTH = 0xffffff;
+
     const STATEMENT_PARAM_REGEX = <<<'REGEX'
         [
             # Skip all quoted groups.
@@ -327,7 +330,7 @@ class ConnectionProcessor implements TransientResource
         return $this->startCommand(function () use ($database): void {
             /** @psalm-suppress PropertyTypeCoercion */
             $this->config = $this->config->withDatabase($database);
-            $this->sendPacket("\x02$database");
+            $this->write("\x02$database");
         });
     }
 
@@ -337,7 +340,7 @@ class ConnectionProcessor implements TransientResource
         return $this->startCommand(function () use ($query): void {
             $this->query = $query;
             $this->parseCallback = $this->handleQuery(...);
-            $this->sendPacket("\x03$query");
+            $this->write("\x03$query");
         });
     }
 
@@ -357,7 +360,7 @@ class ConnectionProcessor implements TransientResource
                 return "?";
             }, $query);
 
-            $this->sendPacket("\x16$query");
+            $this->write("\x16$query");
         });
     }
 
@@ -379,7 +382,7 @@ class ConnectionProcessor implements TransientResource
             }
             $payload .= "$db\0";
 
-            $this->sendPacket($payload);
+            $this->write($payload);
             $this->parseCallback = [$this, "authSwitchRequest"];
         });
     }
@@ -389,7 +392,7 @@ class ConnectionProcessor implements TransientResource
     public function ping(): Future
     {
         return $this->startCommand(function (): void {
-            $this->sendPacket("\x0e");
+            $this->write("\x0e");
         });
     }
 
@@ -397,20 +400,20 @@ class ConnectionProcessor implements TransientResource
     public function resetConnection(): Future
     {
         return $this->startCommand(function (): void {
-            $this->sendPacket("\x1f");
+            $this->write("\x1f");
         });
     }
 
     /** @see 14.7.5 COM_STMT_SEND_LONG_DATA */
     public function bindParam(int $stmtId, int $paramId, string $data): void
     {
-        $payload = "\x18";
-        $payload .= MysqlDataType::encodeInt32($stmtId);
-        $payload .= MysqlDataType::encodeInt16($paramId);
-        $payload .= $data;
-        $this->appendTask(function () use ($payload) {
+        $payload = ["\x18"];
+        $payload[] = MysqlDataType::encodeInt32($stmtId);
+        $payload[] = MysqlDataType::encodeInt16($paramId);
+        $payload[] = $data;
+        $this->appendTask(function () use ($payload): void {
             $this->resetIds();
-            $this->sendPacket($payload);
+            $this->write(\implode($payload));
             $this->ready();
         });
     }
@@ -428,42 +431,55 @@ class ConnectionProcessor implements TransientResource
     {
         $deferred = new DeferredFuture;
         $this->appendTask(function () use ($stmtId, $query, $params, $prebound, $data, $deferred): void {
-            $payload = "\x17";
-            $payload .= MysqlDataType::encodeInt32($stmtId);
-            $payload .= \chr(0); // cursor flag // @TODO cursor types?!
-            $payload .= MysqlDataType::encodeInt32(1);
+            $payload = ["\x17"];
+            $payload[] = MysqlDataType::encodeInt32($stmtId);
+            $payload[] = \chr(0); // cursor flag // @TODO cursor types?!
+            $payload[] = MysqlDataType::encodeInt32(1);
+
             $paramCount = \count($params);
             $bound = (!empty($data) || !empty($prebound)) ? 1 : 0;
-            $types = "";
-            $values = "";
+            $types = [];
+            $values = [];
+
             if ($paramCount) {
                 $args = $data + \array_fill(0, $paramCount, null);
                 \ksort($args);
                 $args = \array_slice($args, 0, $paramCount);
-                $nullOff = \strlen($payload);
-                $payload .= \str_repeat("\0", ($paramCount + 7) >> 3);
+                $paramList = \str_repeat("\0", ($paramCount + 7) >> 3);
                 foreach ($args as $paramId => $param) {
                     if ($param === null) {
-                        $offset = $nullOff + ($paramId >> 3);
-                        $payload[$offset] = $payload[$offset] | \chr(1 << ($paramId % 8));
+                        $offset = ($paramId >> 3);
+                        $paramList[$offset] = $paramList[$offset] | \chr(1 << ($paramId & 0x7));
                     } else {
                         $bound = 1;
                     }
 
-                    /** @var MysqlDataType $type */
-                    [$type, $value] = MysqlDataType::encodeBinary($param);
+                    $paramType = $params[$paramId]->type;
+
                     if (isset($prebound[$paramId])) {
-                        $types .= \chr(MysqlDataType::LongBlob->value);
-                    } else {
-                        $types .= \chr($type->value);
+                        if (!$paramType->isBindable()) {
+                            throw new SqlException("Cannot use bind with columns of type " . \strtoupper($paramType->name));
+                        }
+
+                        $types[] = MysqlDataType::encodeInt16(MysqlDataType::LongBlob->value);
+                        continue;
                     }
-                    $types .= "\0";
-                    $values .= $value;
+
+                    [$encodedType, $value] = MysqlDataType::encodeBinary($param);
+
+                    if ($paramType === MysqlDataType::Json && $encodedType === MysqlDataType::LongBlob) {
+                        $encodedType = $paramType;
+                    }
+
+                    $types[] = MysqlDataType::encodeInt16($encodedType->value);
+                    $values[] = $value;
                 }
-                $payload .= \chr($bound);
+
+                $payload[] = $paramList;
+                $payload[] = \chr($bound);
                 if ($bound) {
-                    $payload .= $types;
-                    $payload .= $values;
+                    $payload[] = \implode($types);
+                    $payload[] = \implode($values);
                 }
             }
 
@@ -471,7 +487,7 @@ class ConnectionProcessor implements TransientResource
 
             $this->resetIds();
             $this->enqueueDeferred($deferred);
-            $this->sendPacket($payload);
+            $this->write(\implode($payload));
             // apparently LOAD DATA LOCAL INFILE requests are not supported via prepared statements
             $this->packetCallback = $this->handleExecute(...);
         });
@@ -485,7 +501,7 @@ class ConnectionProcessor implements TransientResource
         $this->appendTask(function () use ($payload): void {
             if ($this->connectionState === ConnectionState::Ready) {
                 $this->resetIds();
-                $this->sendPacket($payload);
+                $this->write($payload);
                 $this->resetIds(); // does not expect a reply - must be reset immediately
             }
             $this->ready();
@@ -496,7 +512,7 @@ class ConnectionProcessor implements TransientResource
     public function listFields(string $table, string $like = "%"): Future
     {
         return $this->startCommand(function () use ($table, $like): void {
-            $this->sendPacket("\x04$table\0$like");
+            $this->write("\x04$table\0$like");
             $this->parseCallback = $this->handleFieldList(...);
         });
     }
@@ -521,7 +537,7 @@ class ConnectionProcessor implements TransientResource
     public function createDatabase(string $db): Future
     {
         return $this->startCommand(function () use ($db): void {
-            $this->sendPacket("\x05$db");
+            $this->write("\x05$db");
         });
     }
 
@@ -529,7 +545,7 @@ class ConnectionProcessor implements TransientResource
     public function dropDatabase(string $db): Future
     {
         return $this->startCommand(function () use ($db): void {
-            $this->sendPacket("\x06$db");
+            $this->write("\x06$db");
         });
     }
 
@@ -539,7 +555,7 @@ class ConnectionProcessor implements TransientResource
     public function refresh(int $subcommand): Future
     {
         return $this->startCommand(function () use ($subcommand): void {
-            $this->sendPacket("\x07" . \chr($subcommand));
+            $this->write("\x07" . \chr($subcommand));
         });
     }
 
@@ -547,7 +563,7 @@ class ConnectionProcessor implements TransientResource
     public function shutdown(): Future
     {
         return $this->startCommand(function (): void {
-            $this->sendPacket("\x08\x00"); /* SHUTDOWN_DEFAULT / SHUTDOWN_WAIT_ALL_BUFFERS, only one in use */
+            $this->write("\x08\x00"); /* SHUTDOWN_DEFAULT / SHUTDOWN_WAIT_ALL_BUFFERS, only one in use */
         });
     }
 
@@ -555,7 +571,7 @@ class ConnectionProcessor implements TransientResource
     public function statistics(): Future
     {
         return $this->startCommand(function (): void {
-            $this->sendPacket("\x09");
+            $this->write("\x09");
             $this->parseCallback = $this->readStatistics(...);
         });
     }
@@ -564,7 +580,7 @@ class ConnectionProcessor implements TransientResource
     public function processInfo(): Future
     {
         return $this->startCommand(function (): void {
-            $this->sendPacket("\x0a");
+            $this->write("\x0a");
             $this->query("SHOW PROCESSLIST");
         });
     }
@@ -573,7 +589,7 @@ class ConnectionProcessor implements TransientResource
     public function killProcess(int $process): Future
     {
         return $this->startCommand(function () use ($process): void {
-            $this->sendPacket("\x0c" . MysqlDataType::encodeInt32($process));
+            $this->write("\x0c" . MysqlDataType::encodeInt32($process));
         });
     }
 
@@ -581,7 +597,7 @@ class ConnectionProcessor implements TransientResource
     public function debugStdout(): Future
     {
         return $this->startCommand(function (): void {
-            $this->sendPacket("\x0d");
+            $this->write("\x0d");
         });
     }
 
@@ -593,7 +609,7 @@ class ConnectionProcessor implements TransientResource
         $this->appendTask(function () use ($payload, $deferred): void {
             $this->resetIds();
             $this->enqueueDeferred($deferred);
-            $this->sendPacket($payload);
+            $this->write($payload);
         });
         return $deferred->getFuture();
     }
@@ -606,7 +622,7 @@ class ConnectionProcessor implements TransientResource
         $this->appendTask(function () use ($payload, $deferred): void {
             $this->resetIds();
             $this->enqueueDeferred($deferred);
-            $this->sendPacket($payload);
+            $this->write($payload);
         });
         return $deferred->getFuture();
     }
@@ -845,9 +861,9 @@ class ConnectionProcessor implements TransientResource
                 $fileHandle = File\openFile($filePath, 'r');
 
                 while (null !== ($chunk = $fileHandle->read())) {
-                    $this->sendPacket($chunk);
+                    $this->write($chunk);
                 }
-                $this->sendPacket("");
+                $this->write("");
             } catch (\Throwable $e) {
                 $this->dequeueDeferred()->error(new ConnectionException("Failed to transfer a file to the server", 0, $e));
             }
@@ -1180,7 +1196,7 @@ class ConnectionProcessor implements TransientResource
     public function sendClose(): Future
     {
         return $this->startCommand(function (): void {
-            $this->sendPacket("\x01");
+            $this->write("\x01");
             $this->connectionState = ConnectionState::Closing;
         });
     }
@@ -1214,9 +1230,29 @@ class ConnectionProcessor implements TransientResource
         }
     }
 
+    private function resetIds(): void
+    {
+        $this->seqId = $this->compressionId = -1;
+    }
+
     private function write(string $packet): void
     {
-        $packet = $this->compilePacket($packet);
+        \assert(!$this->socket->isClosed(), 'The connection was closed during a call to write');
+
+        while (\strlen($packet) >= self::MAX_PACKET_LENGTH) {
+            $this->sendPacket(\substr($packet, 0, self::MAX_PACKET_LENGTH));
+            $packet = \substr($packet, self::MAX_PACKET_LENGTH);
+        }
+
+        $this->sendPacket($packet);
+    }
+
+    /**
+     * @see 14.1.2 MySQL Packets
+     */
+    private function sendPacket(string $out): void
+    {
+        $packet = MysqlDataType::encodeInt32(\strlen($out) | (++$this->seqId << 24)) . $out;
 
         // @codeCoverageIgnoreStart
         \assert((function () use ($packet) {
@@ -1239,49 +1275,31 @@ class ConnectionProcessor implements TransientResource
             $packet = $this->compressPacket($packet);
         }
 
-        \assert(!$this->socket->isClosed(), 'The connection was closed during a call to write');
         $this->socket->write($packet);
     }
 
-    private function resetIds(): void
-    {
-        $this->seqId = $this->compressionId = -1;
-    }
-
-    private function compilePacket(string $pending): string
-    {
-        $packet = "";
-        do {
-            $length = \strlen($pending);
-            if ($length >= (1 << 24) - 1) {
-                $out = \substr($pending, 0, (1 << 24) - 1);
-                $pending = \substr($pending, (1 << 24) - 1);
-                $length = (1 << 24) - 1;
-            } else {
-                $out = $pending;
-                $pending = "";
-            }
-            $packet .= \substr_replace(\pack("V", $length), \chr(++$this->seqId), 3, 1) . $out; // expects $length < (1 << 24) - 1
-        } while ($pending !== "");
-
-        return $packet;
-    }
-
+    /**
+     * @see 14.4 Compression
+     */
     private function compressPacket(string $packet): string
     {
-        if ($packet === "") {
-            return "";
-        }
-
         $length = \strlen($packet);
-        $deflated = \zlib_encode($packet, ZLIB_ENCODING_DEFLATE);
-
-        if ($length < \strlen($deflated)) {
-            return \substr_replace(\pack("V", \strlen($packet)), \chr(++$this->compressionId), 3, 1) . "\0\0\0" . $packet;
+        if ($length < self::COMPRESSION_MINIMUM_LENGTH) {
+            return $this->makeCompressedPacket(0, $packet);
         }
 
-        return \substr_replace(\pack("V", \strlen($deflated)), \chr(++$this->compressionId), 3, 1)
-            . \substr(\pack("V", $length), 0, 3) . $deflated;
+        $deflated = \zlib_encode($packet, \ZLIB_ENCODING_DEFLATE);
+        if ($length < \strlen($deflated)) {
+            return $this->makeCompressedPacket(0, $packet);
+        }
+
+        return $this->makeCompressedPacket($length, $deflated);
+    }
+
+    private function makeCompressedPacket(int $uncompressed, string $packet): string
+    {
+        return MysqlDataType::encodeInt32(\strlen($packet) | (++$this->compressionId << 24))
+            . MysqlDataType::encodeInt24($uncompressed) . $packet;
     }
 
     /**
@@ -1323,7 +1341,7 @@ class ConnectionProcessor implements TransientResource
     private function parseMysql(): \Generator
     {
         while (true) {
-            $packet = [];
+            $packet = "";
 
             do {
                 $buffer = yield 4;
@@ -1333,12 +1351,12 @@ class ConnectionProcessor implements TransientResource
                 $this->seqId = MysqlDataType::decodeUnsigned8($buffer, $offset);
 
                 if ($length > 0) {
-                    $packet[] = yield $length;
+                    $packet .= yield $length;
                 }
-            } while ($length === 0xffffff);
+            } while ($length === self::MAX_PACKET_LENGTH);
 
-            if ($packet) {
-                $this->parsePayload(\implode($packet));
+            if (\strlen($packet)) {
+                $this->parsePayload($packet);
             }
         }
     }
@@ -1467,7 +1485,7 @@ class ConnectionProcessor implements TransientResource
                 $length = (int) \strpos($packet, "\0");
                 $pluginName = \substr($packet, 0, $length); // @TODO mysql_native_pass only now...
                 $authPluginData = \substr($packet, $length + 1);
-                $this->sendPacket($this->secureAuth($this->config->getPassword() ?? '', $authPluginData));
+                $this->write($this->secureAuth($this->config->getPassword() ?? '', $authPluginData));
                 break;
             case self::ERR_PACKET:
                 $this->handleError($packet);
@@ -1493,16 +1511,16 @@ class ConnectionProcessor implements TransientResource
 
         $this->capabilities &= $this->serverCapabilities;
 
-        $payload = "";
-        $payload .= \pack("V", $this->capabilities);
-        $payload .= \pack("V", 1 << 24 - 1); // max-packet size
-        $payload .= \chr(MysqlConfig::BIN_CHARSET);
-        $payload .= \str_repeat("\0", 23); // reserved
+        $payload = [];
+        $payload[] = \pack("V", $this->capabilities);
+        $payload[] = \pack("V", self::MAX_PACKET_LENGTH);
+        $payload[] = \chr(MysqlConfig::BIN_CHARSET);
+        $payload[] = \str_repeat("\0", 23); // reserved
 
         if (!$inSSL && ($this->capabilities & self::CLIENT_SSL)) {
             EventLoop::queue(function () use ($payload): void {
                 try {
-                    $this->write($payload);
+                    $this->write(\implode($payload));
 
                     $this->socket->setupTls();
 
@@ -1515,32 +1533,32 @@ class ConnectionProcessor implements TransientResource
             return;
         }
 
-        $payload .= $this->config->getUser()."\0";
+        $payload[] = $this->config->getUser()."\0";
 
         $auth = $this->getAuthData();
         if ($this->capabilities & self::CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA) {
-            $payload .= MysqlDataType::encodeInt(\strlen($auth));
-            $payload .= $auth;
+            $payload[] = MysqlDataType::encodeInt(\strlen($auth));
+            $payload[] = $auth;
         } elseif ($this->capabilities & self::CLIENT_SECURE_CONNECTION) {
-            $payload .= \chr(\strlen($auth));
-            $payload .= $auth;
+            $payload[] = \chr(\strlen($auth));
+            $payload[] = $auth;
         } else {
-            $payload .= "$auth\0";
+            $payload[] = "$auth\0";
         }
 
         if ($this->capabilities & self::CLIENT_CONNECT_WITH_DB) {
-            $payload .= "{$this->config->getDatabase()}\0";
+            $payload[] = "{$this->config->getDatabase()}\0";
         }
 
         if ($this->capabilities & self::CLIENT_PLUGIN_AUTH) {
-            $payload .= "{$this->authPluginName}\0";
+            $payload[] = "{$this->authPluginName}\0";
         }
 
         if ($this->capabilities & self::CLIENT_CONNECT_ATTRS) {
             // connection attributes?! 5.6.6+ only!
         }
 
-        $this->write($payload);
+        $this->write(\implode($payload));
     }
 
     private function getAuthData(): string
@@ -1577,15 +1595,5 @@ class ConnectionProcessor implements TransientResource
         }
 
         return $this->secureAuth($password, $this->authPluginData);
-    }
-
-    /** @see 14.1.2 MySQL Packet */
-    protected function sendPacket(string $payload): void
-    {
-        if ($this->connectionState !== ConnectionState::Ready) {
-            throw new \Error("Connection not ready, cannot send any packets");
-        }
-
-        $this->write($payload);
     }
 }

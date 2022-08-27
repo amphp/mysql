@@ -416,14 +416,14 @@ abstract class LinkTest extends MysqlTestCase
         $db->close();
     }
 
-    public function testJsonDecoding()
+    public function testBindJson(): void
     {
-        $db = $this->getLink();
+        $statement = $this->getLink()->prepare("SELECT CAST(? AS JSON)");
+        $statement->bind(0, '{"key": "value"}');
 
-        $result = $db->execute("SELECT a FROM test.json");
+        $this->expectException(SqlException::class);
+        $this->expectExceptionMessage("Cannot use bind with columns of type JSON");
 
-        foreach ($result as $row) {
-            $this->assertSame(["a" => '{"key": "value"}'], $row);
-        }
+        $statement->execute();
     }
 }
