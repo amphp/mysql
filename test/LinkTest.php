@@ -3,15 +3,14 @@
 namespace Amp\Mysql\Test;
 
 use Amp\Mysql\MysqlColumnDefinition;
-use Amp\Mysql\MysqlConfig;
 use Amp\Mysql\MysqlDataType;
 use Amp\Mysql\MysqlLink;
 use Amp\Mysql\MysqlResult;
-use Amp\PHPUnit\AsyncTestCase;
 use Amp\Sql\QueryError;
 use Amp\Sql\Result;
+use Amp\Sql\SqlException;
 
-abstract class LinkTest extends AsyncTestCase
+abstract class LinkTest extends MysqlTestCase
 {
     public const EPOCH = '1970-01-01 00:00:00';
 
@@ -19,16 +18,6 @@ abstract class LinkTest extends AsyncTestCase
      * Returns the Link class to be tested.
      */
     abstract protected function getLink(bool $useCompression = false): MysqlLink;
-
-    protected function getConfig(bool $useCompression = false): MysqlConfig
-    {
-        $config = MysqlConfig::fromAuthority(DB_HOST, DB_USER, DB_PASS, 'test');
-        if ($useCompression) {
-            $config = $config->withCompression();
-        }
-
-        return $config;
-    }
 
     public function testQuery()
     {
@@ -160,7 +149,7 @@ abstract class LinkTest extends AsyncTestCase
     {
         $db = $this->getLink(true);
 
-        $stmt = $db->prepare("SELECT id AS no, a AS d, b, c FROM main AS table_alias WHERE b = :num AND c = ?");
+        $stmt = $db->prepare("SELECT id AS no, a AS d, b, c FROM main AS table_alias WHERE b = ? AND c = :date AND d = :data");
 
         $base = [
             "catalog" => "def",
@@ -174,12 +163,12 @@ abstract class LinkTest extends AsyncTestCase
             "decimals" => 0,
         ];
 
-        $this->assertEquals($stmt->getColumnDefinitions(), [
+        $this->assertEquals([
             new MysqlColumnDefinition(...\array_merge($base, ["name" => "no", "originalName" => "id", "flags" => 16899])),
             new MysqlColumnDefinition(...\array_merge($base, ["name" => "d", "originalName" => "a"])),
             new MysqlColumnDefinition(...\array_merge($base, ["name" => "b", "originalName" => "b"])),
             new MysqlColumnDefinition(...\array_merge($base, ["name" => "c", "originalName" => "c", "type" => MysqlDataType::Datetime, "length" => 19, "flags" => 128])),
-        ]);
+        ], $stmt->getColumnDefinitions());
 
         $base = [
             "name" => "?",
@@ -194,13 +183,14 @@ abstract class LinkTest extends AsyncTestCase
             "decimals" => 0,
         ];
 
-        $this->assertEquals($stmt->getParameterDefinitions(), [
+        $this->assertEquals([
             new MysqlColumnDefinition(...\array_merge($base, ["type" => MysqlDataType::LongLong, "flags" => 128])),
             new MysqlColumnDefinition(...\array_merge($base, ["type" => MysqlDataType::Datetime, "length" => 104, "decimals" => 6, "charset" => 45])),
-        ]);
+            new MysqlColumnDefinition(...\array_merge($base, ["type" => MysqlDataType::VarString, "length" => 65532, "decimals" => 31, "charset" => 45])),
+        ], $stmt->getParameterDefinitions());
 
-        $stmt->bind("num", 5);
-        $result = $stmt->execute([self::EPOCH]);
+        $stmt->bind("data", 'd');
+        $result = $stmt->execute([0 => 5, 'date' => self::EPOCH]);
         $this->assertInstanceOf(MysqlResult::class, $result);
         $this->assertSame(4, $result->getColumnCount());
         $got = [];
@@ -212,7 +202,7 @@ abstract class LinkTest extends AsyncTestCase
         $stmt = $db->prepare("SELECT * FROM main WHERE a = ? OR b = ?");
         $result = $stmt->execute([1, 8]);
         $this->assertInstanceOf(MysqlResult::class, $result);
-        $this->assertSame(4, $result->getColumnCount());
+        $this->assertSame(5, $result->getColumnCount());
         $got = [];
         foreach ($result as $row) {
             $got[] = \array_values($row);
@@ -222,7 +212,7 @@ abstract class LinkTest extends AsyncTestCase
         $stmt = $db->prepare("SELECT * FROM main WHERE a = :a OR b = ?");
         $result = $stmt->execute(["a" => 2, 5]);
         $this->assertInstanceOf(MysqlResult::class, $result);
-        $this->assertSame(4, $result->getColumnCount());
+        $this->assertSame(5, $result->getColumnCount());
         $got = [];
         foreach ($result as $row) {
             $got[] = \array_values($row);
@@ -303,7 +293,7 @@ abstract class LinkTest extends AsyncTestCase
             $got[] = \array_values($row);
         }
         $this->assertCount(2, $got);
-        $this->assertSame([[2, 2, 3, self::EPOCH], [4, 4, 5, self::EPOCH]], $got);
+        $this->assertSame([[2, 2, 3, self::EPOCH, 'b'], [4, 4, 5, self::EPOCH, 'd']], $got);
 
         $result = $db->execute("INSERT INTO main (a, b) VALUES (:a, :b)", ["a" => 10, "b" => 11, "c" => '1970-01-01 00:00:00']);
         $this->assertInstanceOf(MysqlResult::class, $result);
