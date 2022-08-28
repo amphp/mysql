@@ -49,9 +49,10 @@ final class MysqlStatementPool extends SqlStatementPool implements MysqlStatemen
         return parent::execute($params);
     }
 
-    public function bind(int|string $paramId, mixed $data): void
+    public function bind(int|string $paramId, string $data): void
     {
-        $this->params[$paramId] = $data;
+        $prior = $this->params[$paramId] ?? '';
+        $this->params[$paramId] = $prior . $data;
     }
 
     public function reset(): void

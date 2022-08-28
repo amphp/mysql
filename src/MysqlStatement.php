@@ -10,11 +10,11 @@ interface MysqlStatement extends Statement
 
     /**
      * @param int|string $paramId Parameter ID or name.
-     * @param mixed $data Data to bind to parameter.
+     * @param string $data Data to bind to parameter.
      *
-     * @throws \Error If $paramId is not an int or string, or the position does not exist.
+     * @throws \Error If $paramId does not exist.
      */
-    public function bind(int|string $paramId, mixed $data): void;
+    public function bind(int|string $paramId, string $data): void;
 
     /**
      * @return list<MysqlColumnDefinition>

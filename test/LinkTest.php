@@ -252,7 +252,7 @@ abstract class LinkTest extends MysqlTestCase
 
         $statement = $db->prepare("SELECT * FROM main WHERE a = ?");
 
-        $statement->bind(1, 1);
+        $statement->bind(1, "1");
 
         $statement->execute(); // Some implementations do not throw until execute() is called.
     }
@@ -260,13 +260,13 @@ abstract class LinkTest extends MysqlTestCase
     public function testBindWithInvalidParamName()
     {
         $this->expectException(\Error::class);
-        $this->expectExceptionMessage('Parameter :b is not defined for this prepared statement');
+        $this->expectExceptionMessage('Named parameter :b is not defined for this prepared statement');
 
         $db = $this->getLink();
 
         $statement = $db->prepare("SELECT * FROM main WHERE a = :a");
 
-        $statement->bind("b", 1);
+        $statement->bind("b", "1");
 
         $statement->execute(); // Some implementations do not throw until execute() is called.
     }
@@ -274,7 +274,7 @@ abstract class LinkTest extends MysqlTestCase
     public function testStatementExecuteWithTooFewParams()
     {
         $this->expectException(\Error::class);
-        $this->expectExceptionMessage('Parameter 1 for prepared statement missing');
+        $this->expectExceptionMessage('Parameter 1 missing for executing prepared statement');
 
         $db = $this->getLink();
 
@@ -318,7 +318,7 @@ abstract class LinkTest extends MysqlTestCase
     public function testExecuteWithTooFewParams()
     {
         $this->expectException(\Error::class);
-        $this->expectExceptionMessage('Parameter 1 for prepared statement missing');
+        $this->expectExceptionMessage('Parameter 1 missing for executing prepared statement');
 
         $db = $this->getLink();
 

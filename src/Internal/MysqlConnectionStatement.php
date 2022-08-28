@@ -79,26 +79,20 @@ final class MysqlConnectionStatement implements MysqlStatement
         $this->onClose->getFuture()->finally($onClose);
     }
 
-    public function bind(int|string $paramId, mixed $data): void
+    public function bind(int|string $paramId, string $data): void
     {
         if (\is_int($paramId)) {
-            if ($paramId >= $this->positionalParamCount) {
+            if ($paramId >= $this->positionalParamCount || $paramId < 0) {
                 throw new \Error("Parameter $paramId is not defined for this prepared statement");
             }
             $i = $paramId;
         } else {
             if (!isset($this->byNamed[$paramId])) {
-                throw new \Error("Parameter :$paramId is not defined for this prepared statement");
+                throw new \Error("Named parameter :$paramId is not defined for this prepared statement");
             }
             $array = $this->byNamed[$paramId];
             $i = \reset($array);
         }
-
-        if (!\is_scalar($data) && !(\is_object($data) && \method_exists($data, '__toString'))) {
-            throw new \TypeError("Data must be scalar or an object that implements __toString method");
-        }
-
-        $data = (string) $data;
 
         do {
             $realId = -1;
@@ -134,7 +128,7 @@ final class MysqlConnectionStatement implements MysqlStatement
                 $args[$i] = $params[$unnamed];
                 $unnamed++;
             } elseif (!\array_key_exists($unnamed, $this->prebound)) {
-                throw new \Error("Parameter $unnamed for prepared statement missing");
+                throw new \Error("Parameter $unnamed missing for executing prepared statement");
             } else {
                 $prebound[$i] = $this->prebound[$unnamed++];
             }
