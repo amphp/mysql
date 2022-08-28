@@ -6,6 +6,7 @@ use Amp\Mysql\MysqlResult;
 use Amp\Mysql\MysqlStatement;
 use Amp\Sql\Common\StatementPool as SqlStatementPool;
 use Amp\Sql\Result as SqlResult;
+use Amp\Sql\Statement;
 
 /**
  * @internal
@@ -22,8 +23,6 @@ final class MysqlStatementPool extends SqlStatementPool implements MysqlStatemen
         try {
             \assert($statement instanceof MysqlStatement);
 
-            $statement->reset();
-
             foreach ($this->params as $paramId => $data) {
                 $statement->bind($paramId, $data);
             }
@@ -33,6 +32,16 @@ final class MysqlStatementPool extends SqlStatementPool implements MysqlStatemen
         }
 
         return $statement;
+    }
+
+    protected function push(Statement $statement): void
+    {
+        if ($statement->isClosed()) {
+            return;
+        }
+
+        $statement->reset();
+        parent::push($statement);
     }
 
     protected function createResult(SqlResult $result, \Closure $release): MysqlResult
@@ -64,7 +73,7 @@ final class MysqlStatementPool extends SqlStatementPool implements MysqlStatemen
     {
         $statement = parent::pop();
         $columns = $statement->getColumnDefinitions();
-        $this->push($statement);
+        parent::push($statement);
         return $columns;
     }
 
@@ -72,7 +81,7 @@ final class MysqlStatementPool extends SqlStatementPool implements MysqlStatemen
     {
         $statement = parent::pop();
         $parameters = $statement->getParameterDefinitions();
-        $this->push($statement);
+        parent::push($statement);
         return $parameters;
     }
 }
