@@ -135,11 +135,9 @@ enum MysqlDataType: int
                 return \unpack("g", $string, $offset - 4)[1];
 
             case self::Date:
-                return self::decodeDateTime($string, true, $offset);
-
             case self::Datetime:
             case self::Timestamp:
-                return self::decodeDateTime($string, false, $offset);
+                return self::decodeDateTime($this, $string, $offset);
 
             case self::Time:
                 return self::decodeTime($string, $offset);
@@ -194,7 +192,7 @@ enum MysqlDataType: int
         };
     }
 
-    private static function decodeDateTime(string $string, bool $dateOnly, int &$offset): string
+    private static function decodeDateTime(self $type, string $string, int &$offset): string
     {
         $year = $month = $day = $hour = $minute = $second = $microsecond = 0;
 
@@ -228,7 +226,7 @@ enum MysqlDataType: int
         $offset += $length;
 
         $result = \sprintf('%04d-%02d-%02d', $year, $month, $day);
-        if ($dateOnly) {
+        if ($type === self::Date) {
             return $result;
         }
 
