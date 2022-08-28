@@ -2,102 +2,99 @@
 
 namespace Amp\Mysql\Bench;
 
+use Amp\Future;
+use Amp\Mysql\MysqlConnectionPool;
+use Amp\Mysql\MysqlLink;
 use Amp\Mysql\SocketMysqlConnector;
 use Amp\Mysql\MysqlConnection;
 use Amp\Mysql\MysqlConfig;
-use Amp\Mysql\MysqlConnectionPool as ConnectionPool;
-use Amp\Mysql\ResultSet;
-use function Amp\call;
-use function Amp\Promise\wait;
+use PhpBench\Attributes\AfterMethods;
+use PhpBench\Attributes\BeforeMethods;
+use PhpBench\Attributes\Iterations;
+use PhpBench\Attributes\Revs;
+use PhpBench\Attributes\OutputTimeUnit;
+use PhpBench\Attributes\Warmup;
+use function Amp\async;
 
-/**
- * @BeforeMethods({"init"})
- * @AfterMethods({"onAfterMethods"})
- * @Iterations(1)
- * @Revs(100)
- * @Warmup(1)
- * @OutputTimeUnit("milliseconds", precision=5)
- */
+#[
+    BeforeMethods('init'),
+    AfterMethods('cleanup'),
+    Iterations(1),
+    Revs(100),
+    Warmup(1),
+    OutputTimeUnit('milliseconds', precision: 5),
+]
 class QueryBench extends AbstractBench
 {
-    /** @var  ConnectionPool */
-    protected $connectionPool;
+    protected MysqlConnectionPool $connectionPool;
 
-    /** @var  MysqlConnection */
-    protected $connection;
+    protected MysqlConnection $connection;
 
-    /** @var  \PDO */
-    protected $pdoConnection;
+    protected \PDO $pdoConnection;
 
-    /** @var int */
-    protected $maxQueries = 10;
+    protected int $maxQueries = 100;
 
     /** @var int */
-    protected $poolLimit = 10;
+    protected int $poolLimit = 10;
 
-    public function init()
+    public function init(): void
     {
-        $config = MysqlConfig::fromString("host=$this->host;user=$this->user;pass=$this->pass");
+        $config = MysqlConfig::fromAuthority($this->host, $this->user, $this->password);
         $connector = new SocketMysqlConnector;
-        $this->connectionPool = new ConnectionPool($config, $this->poolLimit, 10, $connector);
-        $connectionPromise = $connector->connect($config);
-        $this->connection = wait($connectionPromise);
-        $this->pdoConnection = new \PDO("mysql:host=$this->host;port=3306", $this->user, $this->pass);
+
+        $this->connectionPool = new MysqlConnectionPool(
+            config: $config,
+            maxConnections: $this->poolLimit,
+            connector: $connector,
+        );
+
+        $this->connection = $connector->connect($config);
+
+        $this->pdoConnection = new \PDO("mysql:host=$this->host", $this->user, $this->password);
     }
 
-    public function onAfterMethods()
+    public function cleanup(): void
     {
         $this->connectionPool->close();
         $this->connection->close();
     }
 
-    public function benchPdoQueries()
+    public function benchPdoQueries(): void
     {
-        foreach (\range(1, $this->maxQueries) as $ii) {
-            $resultSet = $this->pdoConnection->query("SELECT $ii");
-            $resultSet->fetch(\PDO::FETCH_ASSOC);
+        $statement = $this->pdoConnection->prepare("SELECT ?");
+
+        foreach (\range(1, $this->maxQueries) as $i) {
+            $statement->execute([$i]);
+            $statement->fetch(\PDO::FETCH_ASSOC);
         }
     }
 
-    public function benchSyncQueries()
+    public function benchSyncQueries(): void
     {
-        wait(call(function () {
-            $connection = $this->connection;
-            foreach (\range(1, $this->maxQueries) as $i) {
-                /** @var ResultSet $resultSet */
-                $resultSet = yield $connection->query("SELECT $i");
-                yield $resultSet->advance();
-            }
-        }));
+        $statement = $this->connection->prepare("SELECT ?");
+
+        foreach (\range(1, $this->maxQueries) as $i) {
+            \iterator_to_array($statement->execute([$i]));
+        }
     }
 
-    public function benchAsyncQueries()
+    private function runAsyncQueries(MysqlLink $link): void
     {
-        wait(call(function () {
-            $connection = $this->connection;
-            /** @var ResultSet[] $resultSets */
-            $resultSets = yield \array_map(function ($i) use ($connection) {
-                return $connection->query("SELECT $i");
-            }, \range(1, $this->maxQueries));
-            yield \array_map(function ($resultSet) {
-                /** @var ResultSet $resultSet */
-                return $resultSet->advance();
-            }, $resultSets);
-        }));
+        $statement = $link->prepare("SELECT ?");
+
+        Future\await(\array_map(
+            fn (int $i) => async(fn () => \iterator_to_array($statement->execute([$i]))),
+            \range(1, $this->maxQueries),
+        ));
     }
 
-    public function benchAsyncQueriesUsingPool()
+    public function benchAsyncQueriesUsingSingleConnection(): void
     {
-        wait(call(function () {
-            $connection = $this->connectionPool;
-            /** @var ResultSet[] $resultSets */
-            $resultSets = yield \array_map(function ($i) use ($connection) {
-                return $connection->query("SELECT $i");
-            }, \range(1, $this->maxQueries));
-            yield \array_map(function ($resultSet) {
-                /** @var ResultSet $resultSet */
-                return $resultSet->advance();
-            }, $resultSets);
-        }));
+        $this->runAsyncQueries($this->connection);
+    }
+
+    public function benchAsyncQueriesUsingConnectionPool(): void
+    {
+        $this->runAsyncQueries($this->connectionPool);
     }
 }

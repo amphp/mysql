@@ -1,5 +1,5 @@
 {
-    "bootstrap": "vendor/autoload.php",
-    "path": "benchmarks",
-    "php_binary": "php_no_xdebug"
+    "$schema": "vendor/phpbench/phpbench/phpbench.schema.json",
+    "runner.bootstrap": "vendor/autoload.php",
+    "runner.path": "benchmarks"
 }
