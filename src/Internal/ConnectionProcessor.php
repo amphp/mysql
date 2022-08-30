@@ -227,22 +227,7 @@ class ConnectionProcessor implements TransientResource
     {
         try {
             while (($bytes = $this->socket->read()) !== null) {
-                // @codeCoverageIgnoreStart
-                \assert((function () use ($bytes) {
-                    if (\defined("MYSQL_DEBUG")) {
-                        \fwrite(STDERR, "in: ");
-                        for ($i = 0; $i < \min(\strlen($bytes), 200); $i++) {
-                            \fwrite(STDERR, \dechex(\ord($bytes[$i])) . " ");
-                        }
-                        $r = \range("\0", "\x1f");
-                        unset($r[10], $r[9]);
-                        \fwrite(STDERR, "len: " . \strlen($bytes) . "\n");
-                        \fwrite(STDERR, \str_replace($r, ".", \substr($bytes, 0, 200)) . "\n");
-                    }
-
-                    return true;
-                })());
-                // @codeCoverageIgnoreEnd
+                \assert($this->writeDebugData($bytes, 'in'));
 
                 $this->lastUsedAt = \time();
 
@@ -1233,28 +1218,32 @@ class ConnectionProcessor implements TransientResource
     }
 
     /**
+     * @codeCoverageIgnore
+     */
+    private function writeDebugData(string $packet, string $label): bool
+    {
+        if (\defined("MYSQL_DEBUG")) {
+            \fwrite(STDERR, "$label: ");
+            for ($i = 0; $i < \min(\strlen($packet), 200); $i++) {
+                \fwrite(STDERR, \dechex(\ord($packet[$i])) . " ");
+            }
+            $r = \range("\0", "\x1f");
+            unset($r[10], $r[9]);
+            \fwrite(STDERR, "len: ".\strlen($packet)."\n");
+            \fwrite(STDERR, \str_replace($r, ".", \substr($packet, 0, 200))."\n");
+        }
+
+        return true;
+    }
+
+    /**
      * @see 14.1.2 MySQL Packets
      */
     private function sendPacket(string $out): void
     {
         $packet = MysqlDataType::encodeInt32(\strlen($out) | (++$this->seqId << 24)) . $out;
 
-        // @codeCoverageIgnoreStart
-        \assert((function () use ($packet) {
-            if (\defined("MYSQL_DEBUG")) {
-                \fwrite(STDERR, "out: ");
-                for ($i = 0; $i < \min(\strlen($packet), 200); $i++) {
-                    \fwrite(STDERR, \dechex(\ord($packet[$i])) . " ");
-                }
-                $r = \range("\0", "\x1f");
-                unset($r[10], $r[9]);
-                \fwrite(STDERR, "len: ".\strlen($packet)."\n");
-                \fwrite(STDERR, \str_replace($r, ".", \substr($packet, 0, 200))."\n");
-            }
-
-            return true;
-        })());
-        // @codeCoverageIgnoreEnd
+        \assert($this->writeDebugData($packet, 'out'));
 
         if (($this->capabilities & self::CLIENT_COMPRESS) && $this->connectionState === ConnectionState::Ready) {
             $packet = $this->compressPacket($packet);
