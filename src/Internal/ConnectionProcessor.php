@@ -391,17 +391,13 @@ class ConnectionProcessor implements TransientResource
     /** @see 14.6.15 COM_PING */
     public function ping(): Future
     {
-        return $this->startCommand(function (): void {
-            $this->write("\x0e");
-        });
+        return $this->startCommand(fn () => $this->write("\x0e"));
     }
 
     /** @see 14.6.19 COM_RESET_CONNECTION */
     public function resetConnection(): Future
     {
-        return $this->startCommand(function (): void {
-            $this->write("\x1f");
-        });
+        return $this->startCommand(fn () => $this->write("\x1f"));
     }
 
     /** @see 14.7.5 COM_STMT_SEND_LONG_DATA */
@@ -536,17 +532,13 @@ class ConnectionProcessor implements TransientResource
     /** @see 14.6.6 COM_CREATE_DB */
     public function createDatabase(string $db): Future
     {
-        return $this->startCommand(function () use ($db): void {
-            $this->write("\x05$db");
-        });
+        return $this->startCommand(fn () => $this->write("\x05$db"));
     }
 
     /** @see 14.6.7 COM_DROP_DB */
     public function dropDatabase(string $db): Future
     {
-        return $this->startCommand(function () use ($db): void {
-            $this->write("\x06$db");
-        });
+        return $this->startCommand(fn () => $this->write("\x06$db"));
     }
 
     /**
@@ -554,17 +546,14 @@ class ConnectionProcessor implements TransientResource
      */
     public function refresh(int $subcommand): Future
     {
-        return $this->startCommand(function () use ($subcommand): void {
-            $this->write("\x07" . \chr($subcommand));
-        });
+        return $this->startCommand(fn () => $this->write("\x07" . \chr($subcommand)));
     }
 
     /** @see 14.6.9 COM_SHUTDOWN */
     public function shutdown(): Future
     {
-        return $this->startCommand(function (): void {
-            $this->write("\x08\x00"); /* SHUTDOWN_DEFAULT / SHUTDOWN_WAIT_ALL_BUFFERS, only one in use */
-        });
+        /* SHUTDOWN_DEFAULT / SHUTDOWN_WAIT_ALL_BUFFERS, only one in use */
+        return $this->startCommand(fn () => $this->write("\x08\x00"));
     }
 
     /** @see 14.6.10 COM_STATISTICS */
@@ -588,17 +577,13 @@ class ConnectionProcessor implements TransientResource
     /** @see 14.6.13 COM_PROCESS_KILL */
     public function killProcess(int $process): Future
     {
-        return $this->startCommand(function () use ($process): void {
-            $this->write("\x0c" . MysqlDataType::encodeInt32($process));
-        });
+        return $this->startCommand(fn () => $this->write("\x0c" . MysqlDataType::encodeInt32($process)));
     }
 
     /** @see 14.6.14 COM_DEBUG */
     public function debugStdout(): Future
     {
-        return $this->startCommand(function (): void {
-            $this->write("\x0d");
-        });
+        return $this->startCommand(fn () => $this->write("\x0d"));
     }
 
     /** @see 14.7.8 COM_STMT_RESET */
