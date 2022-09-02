@@ -184,12 +184,17 @@ enum MysqlDataType: int
         }
     }
 
-    public function isBindable(): bool
+    public function isInternal(): bool
     {
         return match ($this) {
-            self::Json => false,
-            default => true,
+            self::Timestamp2, self::Datetime2, self::NewDate, self::Time2 => true,
+            default => false,
         };
+    }
+
+    public function isBindable(): bool
+    {
+        return $this !== self::Json;
     }
 
     private static function decodeDateTime(self $type, string $string, int &$offset): string

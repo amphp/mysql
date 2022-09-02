@@ -1091,7 +1091,9 @@ class ConnectionProcessor implements TransientResource
             $this->parseEof($packet);
             $this->successfulResultFetch();
             return;
-        } elseif ($packetType === self::ERR_PACKET) {
+        }
+
+        if ($packetType === self::ERR_PACKET) {
             $this->handleError($packet);
             return;
         }
@@ -1099,24 +1101,20 @@ class ConnectionProcessor implements TransientResource
         \assert($this->result !== null, 'Connection result was in invalid state');
 
         $offset = 1; // skip first byte
-        $fields = [];
-        for ($i = 0; $i < $this->result->columnCount; $i++) {
-            if (\ord($packet[$offset + (($i + 2) >> 3)]) & (1 << (($i + 2) % 8))) {
-                $fields[$i] = null;
-            }
-        }
         $offset += ($this->result->columnCount + 9) >> 3;
+        $fields = [];
 
-        for ($i = 0; $offset < \strlen($packet); $i++) {
-            while (\array_key_exists($i, $fields)) {
-                $i++;
+        for ($i = 0; $i < $this->result->columnCount; $i++) {
+            if (\ord($packet[1 + (($i + 2) >> 3)]) & (1 << (($i + 2) % 8))) {
+                $fields[] = null;
+                continue;
             }
 
             $column = $this->result->columns[$i] ?? throw new \RuntimeException("Definition missing for column $i");
-            $fields[$i] = $column->type->decodeBinary($packet, $offset, $column->flags);
+            \assert($offset < \strlen($packet));
+            $fields[] = $column->type->decodeBinary($packet, $offset, $column->flags);
         }
 
-        \ksort($fields);
         $this->result->pushRow($fields);
     }
 

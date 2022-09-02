@@ -8,7 +8,10 @@ use Amp\Mysql\MysqlResult;
 use Amp\Pipeline\ConcurrentIterator;
 use Amp\Pipeline\Queue;
 
-/** @internal */
+/**
+ * @internal
+ * @psalm-import-type TRow from MysqlResult
+ */
 final class MysqlResultProxy
 {
     public int $columnsToFetch = 0;
@@ -19,8 +22,10 @@ final class MysqlResultProxy
     /** @var list<MysqlColumnDefinition> */
     public array $params = [];
 
+    /** @var Queue<list<TRow>> */
     private readonly Queue $rowQueue;
 
+    /** @var ConcurrentIterator<list<TRow>> */
     public readonly ConcurrentIterator $rowIterator;
 
     private ?DeferredFuture $columnDeferred = null;
@@ -71,6 +76,9 @@ final class MysqlResultProxy
         $this->columnDeferred = null;
     }
 
+    /**
+     * @param list<TRow> $row
+     */
     public function pushRow(array $row): void
     {
         \assert($this->state === MysqlResultProxyState::Fetched, 'Result proxy in invalid state');

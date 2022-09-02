@@ -11,16 +11,11 @@ use Amp\Mysql\MysqlConnectionPool;
 use Amp\Mysql\MysqlConnector;
 use Amp\Mysql\MysqlLink;
 use Amp\Mysql\MysqlResult;
-use Amp\Mysql\MysqlStatement;
 use Amp\Mysql\SocketMysqlConnection;
 use Amp\Sql\Transaction as SqlTransaction;
 use PHPUnit\Framework\MockObject\MockObject;
 use function Amp\async;
 use function Amp\delay;
-
-interface StatementOperation extends MysqlStatement
-{
-}
 
 class PoolTest extends LinkTest
 {
