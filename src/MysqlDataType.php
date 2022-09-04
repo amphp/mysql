@@ -46,7 +46,24 @@ enum MysqlDataType: int
      *
      * @see 14.7.3 Binary Value
      */
-    public static function encodeBinary(mixed $param): array
+    public function encodeBinary(mixed $param): array
+    {
+        $encodedPair = self::encodeValue($param);
+
+        if ($this === self::Json) {
+            [$encodedType, $encodedValue] = $encodedPair;
+            if ($encodedType === self::LongBlob) {
+                return [$this, $encodedValue];
+            }
+        }
+
+        return $encodedPair;
+    }
+
+    /**
+     * @return array{self, string}
+     */
+    private static function encodeValue(mixed $param): array
     {
         switch (\get_debug_type($param)) {
             case "bool":
@@ -137,10 +154,10 @@ enum MysqlDataType: int
             case self::Date:
             case self::Datetime:
             case self::Timestamp:
-                return self::decodeDateTime($this, $string, $offset);
+                return $this->decodeDateTime($string, $offset);
 
             case self::Time:
-                return self::decodeTime($string, $offset);
+                return $this->decodeTime($string, $offset);
 
             case self::Null:
                 return null;
@@ -197,7 +214,7 @@ enum MysqlDataType: int
         return $this !== self::Json;
     }
 
-    private static function decodeDateTime(self $type, string $string, int &$offset): string
+    private function decodeDateTime(string $string, int &$offset): string
     {
         $year = $month = $day = $hour = $minute = $second = $microsecond = 0;
 
@@ -231,7 +248,7 @@ enum MysqlDataType: int
         $offset += $length;
 
         $result = \sprintf('%04d-%02d-%02d', $year, $month, $day);
-        if ($type === self::Date) {
+        if ($this === self::Date) {
             return $result;
         }
 
@@ -243,7 +260,7 @@ enum MysqlDataType: int
         return $result;
     }
 
-    private static function decodeTime(string $string, int &$offset): string
+    private function decodeTime(string $string, int &$offset): string
     {
         $negative = $day = $hour = $minute = $second = $microsecond = 0;
 

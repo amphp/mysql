@@ -446,11 +446,7 @@ class ConnectionProcessor implements TransientResource
                         continue;
                     }
 
-                    [$encodedType, $value] = MysqlDataType::encodeBinary($param);
-
-                    if ($paramType === MysqlDataType::Json && $encodedType === MysqlDataType::LongBlob) {
-                        $encodedType = $paramType;
-                    }
+                    [$encodedType, $value] = $paramType->encodeBinary($param);
 
                     $types[] = MysqlDataType::encodeInt16($encodedType->value);
                     $values[] = $value;
