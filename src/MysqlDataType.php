@@ -46,7 +46,7 @@ enum MysqlDataType: int
      *
      * @see 14.7.3 Binary Value
      */
-    public function encodeBinary(mixed $param): array
+    public function encodeBinary(int|float|string|bool|\BackedEnum|\Stringable|null $param): array
     {
         $encodedPair = self::encodeValue($param);
 
@@ -91,7 +91,17 @@ enum MysqlDataType: int
                 return [self::Null, ""];
 
             default:
-                throw new SqlException("Unexpected type for binding parameter: " . \get_debug_type($param));
+                if (\is_object($param)) {
+                    if ($param instanceof \BackedEnum) {
+                        return self::encodeValue($param->value);
+                    }
+
+                    if ($param instanceof \Stringable) {
+                        return self::encodeValue((string) $param);
+                    }
+                }
+
+                throw new SqlException("Unexpected type for query parameter: " . \get_debug_type($param));
         }
     }
 
