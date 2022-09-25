@@ -48,7 +48,7 @@ class ConnectionProcessor implements TransientResource
         ]msxS
         REGEX;
 
-    private Parser $parser;
+    private GeneratorParser $parser;
 
     private int $seqId = -1;
     private int $compressionId = -1;
@@ -137,7 +137,7 @@ class ConnectionProcessor implements TransientResource
         $this->deferreds = new \SplQueue();
         $this->onReady = new \SplQueue();
 
-        $this->parser = new Parser($this->parseMysql());
+        $this->parser = new GeneratorParser($this->parseMysql());
     }
 
     public function isClosed(): bool
@@ -1275,7 +1275,7 @@ class ConnectionProcessor implements TransientResource
      *
      * @return \Generator<int, int, string, void>
      */
-    private function parseCompression(Parser $parser): \Generator
+    private function parseCompression(GeneratorParser $parser): \Generator
     {
         while (true) {
             $buffer = yield 7;
@@ -1309,7 +1309,7 @@ class ConnectionProcessor implements TransientResource
     private function parseMysql(): \Generator
     {
         while (true) {
-            $packet = "";
+            $packet = '';
 
             do {
                 $buffer = yield 4;
@@ -1323,7 +1323,7 @@ class ConnectionProcessor implements TransientResource
                 }
             } while ($length === self::MAX_PACKET_LENGTH);
 
-            if (\strlen($packet)) {
+            if ($packet !== '') {
                 $this->parsePayload($packet);
             }
         }
@@ -1342,7 +1342,7 @@ class ConnectionProcessor implements TransientResource
             switch (\ord($packet)) {
                 case self::OK_PACKET:
                     if ($this->capabilities & self::CLIENT_COMPRESS) {
-                        $this->parser = new Parser($this->parseCompression($this->parser));
+                        $this->parser = new GeneratorParser($this->parseCompression($this->parser));
                     }
                     $this->connectionState = ConnectionState::Ready;
                     $this->handleOk($packet);
