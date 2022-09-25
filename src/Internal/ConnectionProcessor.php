@@ -9,7 +9,6 @@ use Amp\Future;
 use Amp\Mysql\MysqlColumnDefinition;
 use Amp\Mysql\MysqlConfig;
 use Amp\Mysql\MysqlDataType;
-use Amp\Parser\Parser;
 use Amp\Socket\EncryptableSocket;
 use Amp\Sql\ConnectionException;
 use Amp\Sql\QueryError;
@@ -1436,10 +1435,12 @@ class ConnectionProcessor implements TransientResource
         return $auth;
     }
 
-    private function sha2Auth(string $pass, string $scramble): string
+    public static function sha2Auth(string $pass, string $scramble): string
     {
-        $hash = \hash("sha256", $pass, true);
-        return $hash ^ \hash("sha256", \substr($scramble, 0, 20) . \hash("sha256", $hash, true), true);
+        $digestStage1 = \hash("sha256", $pass, true);
+        $digestStage2 = \hash("sha256", $digestStage1, true);
+        $scrambleStage1 = \hash("sha256", $digestStage2 . \substr($scramble, 0, 20), true);
+        return $digestStage1 ^ $scrambleStage1;
     }
 
     private function authSwitchRequest(string $packet): void
@@ -1550,7 +1551,7 @@ class ConnectionProcessor implements TransientResource
                     }
                     return "\x01";
                 case "caching_sha2_password":
-                    return $this->sha2Auth($password, $this->authPluginData);
+                    return self::sha2Auth($password, $this->authPluginData);
                 case "mysql_old_password":
                     throw new ConnectionException(
                         "mysql_old_password is outdated and insecure. Intentionally not implemented!"
