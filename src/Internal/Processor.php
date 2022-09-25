@@ -1531,8 +1531,10 @@ REGEX;
 
     private function sha2Auth(string $pass, string $scramble): string
     {
-        $hash = \hash("sha256", $pass, true);
-        return $hash ^ \hash("sha256", \substr($scramble, 0, 20) . \hash("sha256", $hash, true), true);
+        $digestStage1 = \hash("sha256", $pass, true);
+        $digestStage2 = \hash("sha256", $digestStage1, true);
+        $scrambleStage1 = \hash("sha256", $digestStage2 . \substr($scramble, 0, 20), true);
+        return $digestStage1 ^ $scrambleStage1;
     }
 
     private function authSwitchRequest(string $packet): void
