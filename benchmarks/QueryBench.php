@@ -51,6 +51,7 @@ class QueryBench extends AbstractBench
         $this->connection = $connector->connect($config);
 
         $this->pdoConnection = new \PDO("mysql:host=$this->host", $this->user, $this->password);
+        $this->pdoConnection->setAttribute(\PDO::ATTR_EMULATE_PREPARES, false);
     }
 
     public function cleanup(): void
@@ -69,7 +70,7 @@ class QueryBench extends AbstractBench
         }
     }
 
-    public function benchSyncQueries(): void
+    public function benchSequentialQueries(): void
     {
         $statement = $this->connection->prepare("SELECT ?");
 
@@ -78,7 +79,17 @@ class QueryBench extends AbstractBench
         }
     }
 
-    private function runAsyncQueries(MysqlLink $link): void
+    public function benchConcurrentQueriesUsingSingleConnection(): void
+    {
+        $this->runConcurrentQueries($this->connection);
+    }
+
+    public function benchConcurrentQueriesUsingConnectionPool(): void
+    {
+        $this->runConcurrentQueries($this->connectionPool);
+    }
+
+    private function runConcurrentQueries(MysqlLink $link): void
     {
         $statement = $link->prepare("SELECT ?");
 
@@ -86,15 +97,5 @@ class QueryBench extends AbstractBench
             fn (int $i) => async(fn () => \iterator_to_array($statement->execute([$i]))),
             \range(1, $this->maxQueries),
         ));
-    }
-
-    public function benchAsyncQueriesUsingSingleConnection(): void
-    {
-        $this->runAsyncQueries($this->connection);
-    }
-
-    public function benchAsyncQueriesUsingConnectionPool(): void
-    {
-        $this->runAsyncQueries($this->connectionPool);
     }
 }
