@@ -1429,8 +1429,8 @@ class ConnectionProcessor implements TransientResource
         \openssl_public_encrypt(
             "$pass\0" ^ \str_repeat($scramble, (int) \ceil(\strlen($pass) / \strlen($scramble))),
             $auth,
-            $key,
-            OPENSSL_PKCS1_OAEP_PADDING,
+            PublicKeyCache::loadKey($key),
+            \OPENSSL_PKCS1_OAEP_PADDING,
         );
 
         return $auth;
