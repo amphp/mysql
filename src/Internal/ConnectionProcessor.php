@@ -621,7 +621,10 @@ class ConnectionProcessor implements TransientResource
 
         $this->metadata->errorCode = MysqlDataType::decodeUnsigned16($packet, $offset);
 
-        if ($this->capabilities & self::CLIENT_PROTOCOL_41) {
+        $connecting = $this->connectionState === ConnectionState::Connecting
+            || $this->connectionState === ConnectionState::Established;
+
+        if ($this->capabilities & self::CLIENT_PROTOCOL_41 && !$connecting) {
             $this->metadata->errorState = \substr($packet, $offset, 6);
             $offset += 6;
         }
@@ -630,12 +633,11 @@ class ConnectionProcessor implements TransientResource
 
         $this->parseCallback = null;
 
-        if ($this->connectionState === ConnectionState::Connecting) {
+        if ($connecting) {
             // connection failure
             $this->free(new ConnectionException(\sprintf(
-                'Could not connect to %s: %s %s',
+                'Could not connect to %s: %s',
                 $this->config->getConnectionString(),
-                $this->metadata->errorState ?? 'Unknown state',
                 $this->metadata->errorMsg,
             )));
             return;
@@ -758,6 +760,12 @@ class ConnectionProcessor implements TransientResource
         $offset = 1;
 
         $protocol = \ord($packet);
+
+        if ($protocol === self::ERR_PACKET) {
+            $this->handleError($packet);
+            return;
+        }
+
         if ($protocol !== 0x0a) {
             throw new ConnectionException("Unsupported protocol version ".\ord($packet)." (Expected: 10)");
         }
@@ -1182,7 +1190,9 @@ class ConnectionProcessor implements TransientResource
         $this->parser->cancel();
 
         if (!$this->deferreds->isEmpty() || $this->result) {
-            $exception = new ConnectionException("Connection closed unexpectedly", 0, $exception ?? null);
+            if (!$exception instanceof ConnectionException) {
+                $exception = new ConnectionException("Connection closed unexpectedly", 0, $exception ?? null);
+            }
 
             while (!$this->deferreds->isEmpty()) {
                 $this->deferreds->shift()->error($exception);
