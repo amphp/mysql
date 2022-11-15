@@ -55,6 +55,17 @@ final class MysqlConnectionResult implements MysqlResult, \IteratorAggregate
         yield from $this->generator;
     }
 
+    public function fetchRow(): ?array
+    {
+        if (!$this->generator->valid()) {
+            return null;
+        }
+
+        $current = $this->generator->current();
+        $this->generator->next();
+        return $current;
+    }
+
     public function getNextResult(): ?MysqlResult
     {
         if ($this->generator->valid()) {

@@ -45,7 +45,7 @@ abstract class LinkTest extends MysqlTestCase
         $this->assertSame(1, $result->getColumnCount());
 
         $got = [];
-        foreach ($result as $row) {
+        while ($row = $result->fetchRow()) {
             $got[] = \array_values($row);
         }
 

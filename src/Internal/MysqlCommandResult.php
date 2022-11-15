@@ -25,6 +25,11 @@ final class MysqlCommandResult implements MysqlResult, \IteratorAggregate
         return $this->delegate->getIterator();
     }
 
+    public function fetchRow(): ?array
+    {
+        return $this->delegate->fetchRow();
+    }
+
     public function getRowCount(): int
     {
         return $this->delegate->getRowCount();
