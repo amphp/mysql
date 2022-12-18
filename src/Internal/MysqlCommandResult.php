@@ -11,12 +11,15 @@ final class MysqlCommandResult implements MysqlResult, \IteratorAggregate
 {
     private ?int $lastInsertId;
 
-    /** @var CommandResult<null> */
+    /** @var CommandResult<MysqlResult> */
     private readonly CommandResult $delegate;
 
     public function __construct(int $affectedRows, int $lastInsertId)
     {
-        $this->delegate = new CommandResult($affectedRows, Future::complete());
+        /** @var Future<MysqlResult|null> $future Explicit declaration for Psalm. */
+        $future = Future::complete();
+
+        $this->delegate = new CommandResult($affectedRows, $future);
         $this->lastInsertId = $lastInsertId ?: null; // Convert 0 to null
     }
 

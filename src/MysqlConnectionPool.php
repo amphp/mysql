@@ -11,7 +11,7 @@ use Amp\Sql\TransactionIsolation;
 use Amp\Sql\TransactionIsolationLevel;
 
 /**
- * @extends ConnectionPool<MysqlConfig, MysqlConnection, MysqlResult, MysqlStatement, MysqlTransaction>
+ * @extends ConnectionPool<MysqlConfig, MysqlResult, MysqlStatement, MysqlTransaction, MysqlConnection>
  */
 final class MysqlConnectionPool extends ConnectionPool implements MysqlLink
 {

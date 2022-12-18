@@ -8,10 +8,10 @@ use Amp\Mysql\Internal\MysqlCommandResult;
 use Amp\Mysql\MysqlConfig;
 use Amp\Mysql\MysqlConnection;
 use Amp\Mysql\MysqlConnectionPool;
-use Amp\Mysql\MysqlConnector;
 use Amp\Mysql\MysqlLink;
 use Amp\Mysql\MysqlResult;
 use Amp\Mysql\SocketMysqlConnection;
+use Amp\Sql\SqlConnector;
 use Amp\Sql\Transaction as SqlTransaction;
 use PHPUnit\Framework\MockObject\MockObject;
 use function Amp\async;
@@ -26,7 +26,7 @@ class PoolTest extends LinkTest
 
     protected function createPool(array $connections): MysqlConnectionPool
     {
-        $connector = $this->createMock(MysqlConnector::class);
+        $connector = $this->createMock(SqlConnector::class);
         $connector->method('connect')
             ->will($this->returnCallback(function () use ($connections): MysqlConnection {
                 static $count = 0;

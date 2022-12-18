@@ -4,6 +4,9 @@ namespace Amp\Mysql;
 
 use Amp\Sql\Statement;
 
+/**
+ * @extends Statement<MysqlResult>
+ */
 interface MysqlStatement extends Statement
 {
     public function execute(array $params = []): MysqlResult;

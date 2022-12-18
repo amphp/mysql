@@ -23,6 +23,10 @@ function mysqlConnector(?SqlConnector $connector = null): SqlConnector
         return $map[$driver] = $connector;
     }
 
+    /**
+     * @psalm-suppress InvalidArgument
+     * @var SqlConnector<MysqlConfig, MysqlConnection>
+     */
     return $map[$driver] ??= new RetrySqlConnector(new SocketMysqlConnector());
 }
 

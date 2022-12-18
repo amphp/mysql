@@ -5,8 +5,12 @@ namespace Amp\Mysql;
 use Amp\Cancellation;
 use Amp\Socket;
 use Amp\Sql\SqlConfig;
+use Amp\Sql\SqlConnector;
 
-final class SocketMysqlConnector implements MysqlConnector
+/**
+ * @implements SqlConnector<MysqlConfig, MysqlConnection>
+ */
+final class SocketMysqlConnector implements SqlConnector
 {
     public function __construct(private readonly ?Socket\SocketConnector $connector = null)
     {

@@ -9,7 +9,7 @@ use Amp\Sync\LocalKeyedMutex;
 /** @internal */
 final class PublicKeyCache
 {
-    private static AtomicCache $cache;
+    private static ?AtomicCache $cache = null;
 
     public static function loadKey(string $pem): \OpenSSLAsymmetricKey
     {
