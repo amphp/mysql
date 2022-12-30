@@ -9,6 +9,7 @@ use Amp\Future;
 use Amp\Mysql\MysqlColumnDefinition;
 use Amp\Mysql\MysqlConfig;
 use Amp\Mysql\MysqlDataType;
+use Amp\Parser\Parser;
 use Amp\Socket\EncryptableSocket;
 use Amp\Sql\ConnectionException;
 use Amp\Sql\QueryError;
@@ -47,7 +48,7 @@ class ConnectionProcessor implements TransientResource
         ]msxS
         REGEX;
 
-    private GeneratorParser $parser;
+    private Parser $parser;
 
     private int $seqId = -1;
     private int $compressionId = -1;
@@ -136,7 +137,7 @@ class ConnectionProcessor implements TransientResource
         $this->deferreds = new \SplQueue();
         $this->onReady = new \SplQueue();
 
-        $this->parser = new GeneratorParser($this->parseMysql());
+        $this->parser = new Parser($this->parseMysql());
     }
 
     public function isClosed(): bool
@@ -1284,7 +1285,7 @@ class ConnectionProcessor implements TransientResource
      *
      * @return \Generator<int, int, string, void>
      */
-    private function parseCompression(GeneratorParser $parser): \Generator
+    private function parseCompression(Parser $parser): \Generator
     {
         while (true) {
             $buffer = yield 7;
@@ -1351,7 +1352,7 @@ class ConnectionProcessor implements TransientResource
             switch (\ord($packet)) {
                 case self::OK_PACKET:
                     if ($this->capabilities & self::CLIENT_COMPRESS) {
-                        $this->parser = new GeneratorParser($this->parseCompression($this->parser));
+                        $this->parser = new Parser($this->parseCompression($this->parser));
                     }
                     $this->connectionState = ConnectionState::Ready;
                     $this->handleOk($packet);
