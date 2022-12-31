@@ -8,8 +8,8 @@ use Amp\Sql\Result;
 
 /**
  * @internal
- * @psalm-import-type TRow from MysqlResult
- * @extends PooledResult<TRow, MysqlResult>
+ * @psalm-import-type TFieldType from MysqlResult
+ * @extends PooledResult<TFieldType, MysqlResult>
  */
 final class MysqlPooledResult extends PooledResult implements MysqlResult
 {

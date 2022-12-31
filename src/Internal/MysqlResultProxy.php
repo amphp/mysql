@@ -10,7 +10,7 @@ use Amp\Pipeline\Queue;
 
 /**
  * @internal
- * @psalm-import-type TRow from MysqlResult
+ * @psalm-import-type TFieldType from MysqlResult
  */
 final class MysqlResultProxy
 {
@@ -22,10 +22,10 @@ final class MysqlResultProxy
     /** @var list<MysqlColumnDefinition> */
     public array $params = [];
 
-    /** @var Queue<list<TRow>> */
+    /** @var Queue<list<TFieldType>> */
     private readonly Queue $rowQueue;
 
-    /** @var ConcurrentIterator<list<TRow>> */
+    /** @var ConcurrentIterator<list<TFieldType>> */
     public readonly ConcurrentIterator $rowIterator;
 
     private ?DeferredFuture $columnDeferred = null;
@@ -83,7 +83,7 @@ final class MysqlResultProxy
     }
 
     /**
-     * @param list<TRow> $row
+     * @param list<TFieldType> $row
      */
     public function pushRow(array $row): void
     {

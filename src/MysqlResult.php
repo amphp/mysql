@@ -5,9 +5,10 @@ namespace Amp\Mysql;
 use Amp\Sql\Result;
 
 /**
- * @psalm-type TRow = int|float|string|null
+ * @psalm-type TFieldType = int|float|string|null
+ * @psalm-type TRowType = array<string, TFieldType>
  *
- * @extends Result<TRow>
+ * @extends Result<TFieldType>
  */
 interface MysqlResult extends Result
 {

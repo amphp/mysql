@@ -10,8 +10,8 @@ use function Amp\async;
 
 /**
  * @internal
- * @psalm-import-type TRow from MysqlResult
- * @implements \IteratorAggregate<int, array<string, TRow>>
+ * @psalm-import-type TRowType from MysqlResult
+ * @implements \IteratorAggregate<int, TRowType>
  */
 final class MysqlConnectionResult implements MysqlResult, \IteratorAggregate
 {
