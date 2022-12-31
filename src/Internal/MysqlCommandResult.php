@@ -6,12 +6,16 @@ use Amp\Future;
 use Amp\Mysql\MysqlResult;
 use Amp\Sql\Common\CommandResult;
 
-/** @internal */
+/**
+ * @internal
+ * @psalm-import-type TRow from MysqlResult
+ * @implements \IteratorAggregate<int, never>
+ */
 final class MysqlCommandResult implements MysqlResult, \IteratorAggregate
 {
     private ?int $lastInsertId;
 
-    /** @var CommandResult<MysqlResult> */
+    /** @var CommandResult<TRow, MysqlResult> */
     private readonly CommandResult $delegate;
 
     public function __construct(int $affectedRows, int $lastInsertId)

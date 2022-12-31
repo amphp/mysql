@@ -47,6 +47,9 @@ final class MysqlResultProxy
         $this->columnsToFetch = $columnsToFetch ?? $this->columnCount;
     }
 
+    /**
+     * @return list<MysqlColumnDefinition>
+     */
     public function getColumnDefinitions(): array
     {
         if ($this->state === MysqlResultProxyState::Initial) {
@@ -57,6 +60,9 @@ final class MysqlResultProxy
         return $this->columns;
     }
 
+    /**
+     * @return list<MysqlColumnDefinition>
+     */
     public function getParameterDefinitions(): array
     {
         if ($this->state === MysqlResultProxyState::Initial) {

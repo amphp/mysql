@@ -1284,6 +1284,8 @@ class ConnectionProcessor implements TransientResource
      * @see 14.4 Compression
      *
      * @return \Generator<int, int, string, void>
+     *
+     * @psalm-suppress InvalidReturnType Psalm confuses this function to have a return of never
      */
     private function parseCompression(Parser $parser): \Generator
     {

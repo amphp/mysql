@@ -30,7 +30,7 @@
         "amphp/phpunit-util": "^3",
         "amphp/php-cs-fixer-config": "^2",
         "phpbench/phpbench": "^1.2.6",
-        "psalm/phar": "^4.22"
+        "psalm/phar": "^5.4"
     },
     "minimum-stability": "dev",
     "prefer-stable": true,

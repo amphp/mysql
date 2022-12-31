@@ -8,7 +8,11 @@ use Amp\Mysql\MysqlResult;
 use Revolt\EventLoop;
 use function Amp\async;
 
-/** @internal */
+/**
+ * @internal
+ * @psalm-import-type TRow from MysqlResult
+ * @implements \IteratorAggregate<int, array<string, TRow>>
+ */
 final class MysqlConnectionResult implements MysqlResult, \IteratorAggregate
 {
     private readonly MysqlResultProxy $result;
