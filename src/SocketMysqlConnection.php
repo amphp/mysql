@@ -4,7 +4,7 @@ namespace Amp\Mysql;
 
 use Amp\Cancellation;
 use Amp\DeferredFuture;
-use Amp\Socket\EncryptableSocket;
+use Amp\Socket\Socket;
 use Amp\Sql\TransactionIsolation;
 use Amp\Sql\TransactionIsolationLevel;
 use Revolt\EventLoop;
@@ -19,7 +19,7 @@ final class SocketMysqlConnection implements MysqlConnection
     private readonly \Closure $release;
 
     public static function initialize(
-        EncryptableSocket $socket,
+        Socket $socket,
         MysqlConfig $config,
         ?Cancellation $cancellation = null,
     ): self {

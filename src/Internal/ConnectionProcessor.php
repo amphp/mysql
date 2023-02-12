@@ -10,7 +10,7 @@ use Amp\Mysql\MysqlColumnDefinition;
 use Amp\Mysql\MysqlConfig;
 use Amp\Mysql\MysqlDataType;
 use Amp\Parser\Parser;
-use Amp\Socket\EncryptableSocket;
+use Amp\Socket\Socket;
 use Amp\Sql\ConnectionException;
 use Amp\Sql\QueryError;
 use Amp\Sql\SqlException;
@@ -53,7 +53,7 @@ class ConnectionProcessor implements TransientResource
     private int $seqId = -1;
     private int $compressionId = -1;
 
-    private readonly EncryptableSocket $socket;
+    private readonly Socket $socket;
 
     private ?string $query = null;
     private array $named = [];
@@ -127,7 +127,7 @@ class ConnectionProcessor implements TransientResource
     private const EOF_PACKET = 0xfe;
     private const ERR_PACKET = 0xff;
 
-    public function __construct(EncryptableSocket $socket, MysqlConfig $config)
+    public function __construct(Socket $socket, MysqlConfig $config)
     {
         $this->socket = $socket;
         $this->metadata = new MysqlConnectionMetdata();
