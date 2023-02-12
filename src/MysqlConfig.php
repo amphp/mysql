@@ -11,11 +11,7 @@ final class MysqlConfig extends SqlConfig
     public const BIN_CHARSET = 45; // utf8mb4_general_ci
 
     public const KEY_MAP = [
-        'hostname' => 'host',
-        'username' => 'user',
-        'pass' => 'password',
-        'database' => 'db',
-        'dbname' => 'db',
+        ...parent::KEY_MAP,
         'compress' => 'compression',
         'useCompression' => 'compression',
         'cs' => 'charset',
