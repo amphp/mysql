@@ -167,9 +167,9 @@ final class MysqlConnectionTransaction implements MysqlTransaction
             throw new TransactionError("The transaction has been committed or rolled back");
         }
 
-        $promise = $this->processor->query("COMMIT");
+        $future = $this->processor->query("COMMIT");
         $this->processor = null;
-        $promise->finally($this->onClose->complete(...))->await();
+        $future->finally($this->onClose->complete(...))->await();
     }
 
     /**
@@ -183,9 +183,9 @@ final class MysqlConnectionTransaction implements MysqlTransaction
             throw new TransactionError("The transaction has been committed or rolled back");
         }
 
-        $promise = $this->processor->query("ROLLBACK");
+        $future = $this->processor->query("ROLLBACK");
         $this->processor = null;
-        $promise->finally($this->onClose->complete(...))->await();
+        $future->finally($this->onClose->complete(...))->await();
     }
 
     /**
