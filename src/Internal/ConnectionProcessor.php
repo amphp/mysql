@@ -2,6 +2,7 @@
 
 namespace Amp\Mysql\Internal;
 
+use Amp\ByteStream\ResourceStream;
 use Amp\Cancellation;
 use Amp\DeferredFuture;
 use Amp\File;
@@ -179,14 +180,18 @@ class ConnectionProcessor implements TransientResource
         }
 
         $this->resetIds();
-        $this->socket->unreference();
+        if ($this->socket instanceof ResourceStream) {
+            $this->socket->unreference();
+        }
     }
 
     private function enqueueDeferred(DeferredFuture $deferred): void
     {
         \assert(!$this->socket->isClosed(), "The connection has been closed");
         $this->deferreds->push($deferred);
-        $this->socket->reference();
+        if ($this->socket instanceof ResourceStream) {
+            $this->socket->reference();
+        }
     }
 
     public function connect(?Cancellation $cancellation = null): void
