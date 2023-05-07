@@ -2,6 +2,7 @@
 
 namespace Amp\Mysql\Test;
 
+use Amp\Future;
 use Amp\Mysql\MysqlColumnDefinition;
 use Amp\Mysql\MysqlDataType;
 use Amp\Mysql\MysqlLink;
@@ -9,6 +10,8 @@ use Amp\Mysql\MysqlResult;
 use Amp\Sql\QueryError;
 use Amp\Sql\Result;
 use Amp\Sql\SqlException;
+use function Amp\async;
+use function Amp\delay;
 
 abstract class LinkTest extends MysqlTestCase
 {
@@ -113,7 +116,7 @@ abstract class LinkTest extends MysqlTestCase
         $result->getNextResult();
     }
 
-    public function testQueryWithUnconsumedTupleResult()
+    public function testQueryWithUnconsumedTupleResult(): void
     {
         $db = $this->getLink();
 
@@ -128,7 +131,7 @@ abstract class LinkTest extends MysqlTestCase
         $this->assertInstanceOf(Result::class, $result);
     }
 
-    public function testUnconsumedMultiResult()
+    public function testUnconsumedMultiResult(): void
     {
         $db = $this->getLink(true);
 
@@ -145,7 +148,34 @@ abstract class LinkTest extends MysqlTestCase
         self::assertSame([['a' => 5, 'b' => 6]], $got);
     }
 
-    public function testPrepared()
+    public function testSimultaneousQuery(): void
+    {
+        $db = $this->getLink(true);
+
+        $future1 = async(function () use ($db): void {
+            $result = $db->query("SELECT a FROM main");
+            $got = [];
+            foreach ($result as $row) {
+                $got[] = $row['a'];
+                delay(0.1);
+            }
+            self::assertSame(\range(1, \count($got)), $got);
+        });
+
+        $future2 = async(function () use ($db): void {
+            $result = $db->query("SELECT b FROM main");
+            $got = [];
+            foreach ($result as $row) {
+                $got[] = $row['b'];
+                delay(0.1);
+            }
+            self::assertSame(\range(2, \count($got) + 1), $got);
+        });
+
+        Future\await([$future1, $future2]);
+    }
+
+    public function testPrepared(): void
     {
         $db = $this->getLink(true);
 
@@ -231,7 +261,7 @@ abstract class LinkTest extends MysqlTestCase
         $this->assertInstanceOf(MysqlResult::class, $result);
     }
 
-    public function testPrepareWithInvalidQuery()
+    public function testPrepareWithInvalidQuery(): void
     {
         $this->expectException(QueryError::class);
         $this->expectExceptionMessage('You have an error in your SQL syntax');
@@ -243,7 +273,7 @@ abstract class LinkTest extends MysqlTestCase
         $statement->execute(); // Some implementations do not throw until execute() is called.
     }
 
-    public function testBindWithInvalidParamId()
+    public function testBindWithInvalidParamId(): void
     {
         $this->expectException(\Error::class);
         $this->expectExceptionMessage('Parameter 1 is not defined for this prepared statement');
@@ -257,7 +287,7 @@ abstract class LinkTest extends MysqlTestCase
         $statement->execute(); // Some implementations do not throw until execute() is called.
     }
 
-    public function testBindWithInvalidParamName()
+    public function testBindWithInvalidParamName(): void
     {
         $this->expectException(\Error::class);
         $this->expectExceptionMessage('Named parameter :b is not defined for this prepared statement');
@@ -271,7 +301,7 @@ abstract class LinkTest extends MysqlTestCase
         $statement->execute(); // Some implementations do not throw until execute() is called.
     }
 
-    public function testStatementExecuteWithTooFewParams()
+    public function testStatementExecuteWithTooFewParams(): void
     {
         $this->expectException(\Error::class);
         $this->expectExceptionMessage('Parameter 1 missing for executing prepared statement');
@@ -282,7 +312,7 @@ abstract class LinkTest extends MysqlTestCase
         $stmt->execute([1]);
     }
 
-    public function testExecute()
+    public function testExecute(): void
     {
         $db = $this->getLink();
 
@@ -303,7 +333,7 @@ abstract class LinkTest extends MysqlTestCase
         $this->assertInstanceOf(MysqlResult::class, $result);
     }
 
-    public function testExecuteWithInvalidQuery()
+    public function testExecuteWithInvalidQuery(): void
     {
         $this->expectException(QueryError::class);
         $this->expectExceptionMessage('You have an error in your SQL syntax');
@@ -315,7 +345,7 @@ abstract class LinkTest extends MysqlTestCase
         $db->close();
     }
 
-    public function testExecuteWithTooFewParams()
+    public function testExecuteWithTooFewParams(): void
     {
         $this->expectException(\Error::class);
         $this->expectExceptionMessage('Parameter 1 missing for executing prepared statement');
@@ -327,7 +357,7 @@ abstract class LinkTest extends MysqlTestCase
         $db->close();
     }
 
-    public function testPreparedWithNegativeValue()
+    public function testPreparedWithNegativeValue(): void
     {
         $db = $this->getLink();
 
@@ -345,7 +375,7 @@ abstract class LinkTest extends MysqlTestCase
         $db->close();
     }
 
-    public function testTransaction()
+    public function testTransaction(): void
     {
         $db = $this->getLink();
 
@@ -355,6 +385,8 @@ abstract class LinkTest extends MysqlTestCase
         $result = $statement->execute([6, 7]);
         $this->assertInstanceOf(MysqlResult::class, $result);
         $this->assertGreaterThan(5, $result->getLastInsertId());
+
+        $statement->close();
 
         $result = $transaction->query("SELECT * FROM main WHERE a = 6");
 
@@ -390,7 +422,7 @@ abstract class LinkTest extends MysqlTestCase
     /**
      * @depends testTransaction
      */
-    public function testInsertSelect()
+    public function testInsertSelect(): void
     {
         $db = $this->getLink();
 

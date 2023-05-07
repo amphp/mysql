@@ -5,13 +5,13 @@ namespace Amp\Mysql\Internal;
 use Amp\Mysql\MysqlResult;
 use Amp\Mysql\MysqlStatement;
 use Amp\Mysql\MysqlTransaction;
-use Amp\Sql\Common\PooledTransaction;
+use Amp\Sql\Common\NestedTransaction;
 
 /**
  * @internal
- * @extends PooledTransaction<MysqlResult, MysqlStatement, MysqlTransaction>
+ * @extends NestedTransaction<MysqlResult, MysqlStatement, MysqlTransaction>
  */
-final class MysqlPooledTransaction extends PooledTransaction implements MysqlTransaction
+class MysqlNestedTransaction extends NestedTransaction implements MysqlTransaction
 {
     use MysqlTransactionDelegate;
 

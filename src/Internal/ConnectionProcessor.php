@@ -324,7 +324,11 @@ class ConnectionProcessor implements TransientResource
         });
     }
 
-    /** @see 14.6.4 COM_QUERY */
+    /**
+     * @see 14.6.4 COM_QUERY
+     *
+     * @return Future<MysqlConnectionResult|MysqlCommandResult>
+     */
     public function query(string $query): Future
     {
         return $this->startCommand(function () use ($query): void {
@@ -334,7 +338,11 @@ class ConnectionProcessor implements TransientResource
         });
     }
 
-    /** @see 14.7.4 COM_STMT_PREPARE */
+    /**
+     * @see 14.7.4 COM_STMT_PREPARE
+     *
+     * @return Future<MysqlConnectionStatement>
+     */
     public function prepare(string $query): Future
     {
         return $this->startCommand(function () use ($query): void {
@@ -738,7 +746,9 @@ class ConnectionProcessor implements TransientResource
     private function handleOk(string $packet): void
     {
         $this->parseOk($packet);
-        $this->dequeueDeferred()->complete(new MysqlCommandResult($this->metadata->affectedRows, $this->metadata->insertId));
+        $this->dequeueDeferred()->complete(
+            new MysqlCommandResult($this->metadata->affectedRows, $this->metadata->insertId),
+        );
         $this->ready();
     }
 

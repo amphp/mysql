@@ -34,8 +34,7 @@ final class SocketMysqlConnection implements MysqlConnection
 
         $busy = &$this->busy;
         $this->release = static function () use (&$busy): void {
-            \assert($busy instanceof DeferredFuture);
-            $busy->complete();
+            $busy?->complete();
             $busy = null;
         };
     }
