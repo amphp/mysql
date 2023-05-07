@@ -9,57 +9,40 @@ use Amp\Sql\Common\CommandResult;
 /**
  * @internal
  * @psalm-import-type TFieldType from MysqlResult
- * @implements \IteratorAggregate<int, never>
+ * @extends CommandResult<TFieldType, MysqlResult>
  */
-final class MysqlCommandResult implements MysqlResult, \IteratorAggregate
+final class MysqlCommandResult extends CommandResult implements MysqlResult
 {
     private ?int $lastInsertId;
-
-    /** @var CommandResult<TFieldType, MysqlResult> */
-    private readonly CommandResult $delegate;
 
     public function __construct(int $affectedRows, int $lastInsertId)
     {
         /** @var Future<MysqlResult|null> $future Explicit declaration for Psalm. */
         $future = Future::complete();
 
-        $this->delegate = new CommandResult($affectedRows, $future);
+        parent::__construct($affectedRows, $future);
         $this->lastInsertId = $lastInsertId ?: null; // Convert 0 to null
     }
 
-    public function getIterator(): \Traversable
+    /**
+     * Changes return type to this library's Result type.
+     */
+    public function getNextResult(): ?MysqlResult
     {
-        return $this->delegate->getIterator();
-    }
-
-    public function fetchRow(): ?array
-    {
-        return $this->delegate->fetchRow();
-    }
-
-    public function getRowCount(): int
-    {
-        return $this->delegate->getRowCount();
-    }
-
-    public function getColumnCount(): ?int
-    {
-        return $this->delegate->getColumnCount();
+        return parent::getNextResult();
     }
 
     /**
-     * @return int|null Insert ID of the last auto increment row.
+     * @return int|null Insert ID of the last auto increment row or null if not applicable to the query.
      */
     public function getLastInsertId(): ?int
     {
         return $this->lastInsertId;
     }
 
-    public function getNextResult(): ?MysqlResult
-    {
-        return $this->delegate->getNextResult();
-    }
-
+    /**
+     * @return null Always returns null as command results do not have a field list.
+     */
     public function getColumnDefinitions(): ?array
     {
         return null; // Command results do not have a field list.
