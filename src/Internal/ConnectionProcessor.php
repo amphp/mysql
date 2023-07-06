@@ -230,6 +230,12 @@ class ConnectionProcessor implements TransientResource
                 $this->query("SET NAMES '$charset'" . ($collate === "" ? "" : " COLLATE '$collate'"))->await();
             });
         }
+        if ($this->config->getSqlMode()) {
+            $future = $future->map(function (): void {
+                $sqlMode = $this->config->getSqlMode();
+                $this->query("SET SESSION sql_mode='$sqlMode'")->await();
+            });
+        }
 
         $future->await();
     }

@@ -34,6 +34,8 @@ final class MysqlConfig extends SqlConfig
     /* @var string private key to use for sha256_password auth method */
     private string $key;
 
+    private ?string $sqlMode;
+
     public static function fromString(string $connectionString, ConnectContext $context = null): self
     {
         $parts = self::parseConnectionString($connectionString, self::KEY_MAP);
@@ -84,6 +86,7 @@ final class MysqlConfig extends SqlConfig
         ?ConnectContext $context = null,
         ?string $charset = null,
         ?string $collate = null,
+        ?string $sqlMode = null,
         bool $useCompression = false,
         string $key = '',
         bool $useLocalInfile = false
@@ -93,6 +96,7 @@ final class MysqlConfig extends SqlConfig
         $this->context = $context ?? (new ConnectContext);
         $this->charset = $charset;
         $this->collate = $collate;
+        $this->sqlMode = $sqlMode;
         $this->useCompression = $useCompression;
         $this->key = $key;
         $this->useLocalInfile = $useLocalInfile;
@@ -170,6 +174,22 @@ final class MysqlConfig extends SqlConfig
         $new = clone $this;
         $new->charset = $charset;
         $new->collate = $collate;
+        return $new;
+    }
+
+    public function getSqlMode(): ?string
+    {
+        return $this->sqlMode;
+    }
+
+    /**
+     * Set the Server SQL Modes at connection time.
+     * @see https://dev.mysql.com/doc/refman/8.0/en/sql-mode.html
+     */
+    public function withSqlMode(?string $sqlMode): self
+    {
+        $new = clone $this;
+        $new->sqlMode = $sqlMode;
         return $new;
     }
 
