@@ -27,9 +27,9 @@ final class MysqlConfig extends SqlConfig
 
     private ConnectContext $context;
 
-    private string $charset;
+    private ?string $charset;
 
-    private string $collate;
+    private ?string $collate;
 
     /* @var string private key to use for sha256_password auth method */
     private string $key;
@@ -49,8 +49,8 @@ final class MysqlConfig extends SqlConfig
             password: $parts['password'] ?? null,
             database: $parts['db'] ?? null,
             context: $context,
-            charset: $parts['charset'] ?? self::DEFAULT_CHARSET,
-            collate: $parts['collate'] ?? self::DEFAULT_COLLATE,
+            charset: $parts['charset'] ?? null,
+            collate: $parts['collate'] ?? null,
             useCompression: ($parts['compression'] ?? '') === 'on',
             useLocalInfile: ($parts['local-infile'] ?? '') === 'on'
         );
@@ -82,8 +82,8 @@ final class MysqlConfig extends SqlConfig
         ?string $password = null,
         ?string $database = null,
         ?ConnectContext $context = null,
-        string $charset = self::DEFAULT_CHARSET,
-        string $collate = self::DEFAULT_COLLATE,
+        ?string $charset = null,
+        ?string $collate = null,
         bool $useCompression = false,
         string $key = '',
         bool $useLocalInfile = false
@@ -155,17 +155,17 @@ final class MysqlConfig extends SqlConfig
         return $new;
     }
 
-    public function getCharset(): string
+    public function getCharset(): ?string
     {
         return $this->charset;
     }
 
-    public function getCollation(): string
+    public function getCollation(): ?string
     {
         return $this->collate;
     }
 
-    public function withCharset(string $charset, string $collate): self
+    public function withCharset(?string $charset, ?string $collate = null): self
     {
         $new = clone $this;
         $new->charset = $charset;
