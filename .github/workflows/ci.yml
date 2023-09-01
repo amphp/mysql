@@ -12,6 +12,9 @@ jobs:
           - operating-system: 'ubuntu-latest'
             php-version: '8.1'
 
+          - operating-system: 'ubuntu-latest'
+            php-version: '8.2'
+
     name: PHP ${{ matrix.php-version }} ${{ matrix.job-description }}
 
     runs-on: ${{ matrix.operating-system }}
