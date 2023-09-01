@@ -8,7 +8,6 @@ final class MysqlColumnDefinition
      * @param non-empty-string $table
      * @param non-empty-string $name
      * @param int<0, max> $length
-     * @param MysqlDataType $type
      * @param int<0, max> $flags
      * @param int<0, max> $decimals
      * @param non-empty-string|null $originalTable

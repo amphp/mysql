@@ -33,7 +33,7 @@ final class MysqlConnectionResult implements MysqlResult, \IteratorAggregate
         static $mapper;
 
         $columnNames = \array_map(
-            $mapper ??= static fn(MysqlColumnDefinition $cd) => $cd->getName(),
+            $mapper ??= static fn (MysqlColumnDefinition $cd) => $cd->getName(),
             $result->getColumnDefinitions(),
         );
 
