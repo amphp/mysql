@@ -110,10 +110,12 @@ abstract class LinkTest extends MysqlTestCase
 
         $result = $db->query("SELECT a FROM main; SELECT b FROM main;");
 
-        $this->expectException(\Error::class);
-        $this->expectExceptionMessage('Consume entire current result before requesting next result');
+        $result = $result->getNextResult();
 
-        $result->getNextResult();
+        $columns = $result->getColumnDefinitions();
+        self::assertCount(1, $columns);
+        $column = $columns[0];
+        self::assertSame('b', $column->name);
     }
 
     public function testQueryWithUnconsumedTupleResult(): void
