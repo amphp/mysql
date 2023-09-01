@@ -95,11 +95,11 @@ abstract class LinkTest extends MysqlTestCase
         $this->assertSame([["d" => 5, "c" => 5], ["d" => 6, "c" => 6]], $got);
 
         $this->assertCount(2, $fields);
-        $this->assertSame($fields[0]->originalName, "b");
-        $this->assertSame($fields[0]->name, "d");
-        $this->assertSame($fields[0]->type, MysqlDataType::Long);
-        $this->assertSame($fields[1]->name, "c");
-        $this->assertSame($fields[1]->type, MysqlDataType::LongLong);
+        $this->assertSame($fields[0]->getOriginalName(), "b");
+        $this->assertSame($fields[0]->getName(), "d");
+        $this->assertSame($fields[0]->getType(), MysqlDataType::Long);
+        $this->assertSame($fields[1]->getName(), "c");
+        $this->assertSame($fields[1]->getType(), MysqlDataType::LongLong);
 
         $this->assertNull($result->getNextResult());
     }
@@ -115,7 +115,7 @@ abstract class LinkTest extends MysqlTestCase
         $columns = $result->getColumnDefinitions();
         self::assertCount(1, $columns);
         $column = $columns[0];
-        self::assertSame('b', $column->name);
+        self::assertSame('b', $column->getName());
     }
 
     public function testQueryWithUnconsumedTupleResult(): void

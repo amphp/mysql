@@ -4,6 +4,7 @@ namespace Amp\Mysql\Internal;
 
 use Amp\DeferredFuture;
 use Amp\Future;
+use Amp\Mysql\MysqlColumnDefinition;
 use Amp\Mysql\MysqlResult;
 use Revolt\EventLoop;
 use function Amp\async;
@@ -29,7 +30,12 @@ final class MysqlConnectionResult implements MysqlResult, \IteratorAggregate
 
     private static function iterate(MysqlResultProxy $result): \Generator
     {
-        $columnNames = \array_column($result->getColumnDefinitions(), 'name');
+        static $mapper;
+
+        $columnNames = \array_map(
+            $mapper ??= static fn(MysqlColumnDefinition $cd) => $cd->getName(),
+            $result->getColumnDefinitions(),
+        );
 
         foreach ($result->rowIterator as $row) {
             yield \array_combine($columnNames, $row);

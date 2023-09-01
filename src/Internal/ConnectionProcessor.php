@@ -448,7 +448,7 @@ class ConnectionProcessor implements TransientResource
                         $bound = 1;
                     }
 
-                    $paramType = $params[$paramId]->type;
+                    $paramType = $params[$paramId]->getType();
 
                     if (isset($prebound[$paramId])) {
                         if (!$paramType->isBindable()) {
@@ -1042,7 +1042,7 @@ class ConnectionProcessor implements TransientResource
             $column["defaults"] = MysqlDataType::decodeString($packet, $offset);
         }
 
-        /** @psalm-suppress InvalidScalarArgument */
+        /** @psalm-suppress InvalidScalarArgument, ArgumentTypeCoercion */
         return new MysqlColumnDefinition(...$column);
     }
 
@@ -1095,7 +1095,7 @@ class ConnectionProcessor implements TransientResource
                 $offset += 1;
             } else {
                 $column = $this->result->columns[$i] ?? throw new \RuntimeException("Definition missing for column $i");
-                $fields[] = $column->type->decodeText($packet, $offset, $column->flags);
+                $fields[] = $column->getType()->decodeText($packet, $offset, $column->getFlags());
             }
         }
 
@@ -1130,8 +1130,8 @@ class ConnectionProcessor implements TransientResource
             }
 
             $column = $this->result->columns[$i] ?? throw new \RuntimeException("Definition missing for column $i");
-            \assert($offset < \strlen($packet));
-            $fields[] = $column->type->decodeBinary($packet, $offset, $column->flags);
+            \assert($offset >= 0 && $offset < \strlen($packet));
+            $fields[] = $column->getType()->decodeBinary($packet, $offset, $column->getFlags());
         }
 
         $this->result->pushRow($fields);
