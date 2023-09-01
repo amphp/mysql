@@ -105,7 +105,11 @@ enum MysqlDataType: int
         }
     }
 
-    /** @see 14.7.3 Binary Protocol Value */
+    /**
+     * @see 14.7.3 Binary Protocol Value
+     *
+     * @param int<0, max> $offset
+     */
     public function decodeBinary(string $string, int &$offset = 0, int $flags = 0): int|float|string|null
     {
         $unsigned = $flags & 0x20;
@@ -177,6 +181,9 @@ enum MysqlDataType: int
         }
     }
 
+    /**
+     * @param int<0, max> $offset
+     */
     public function decodeText(string $string, int &$offset = 0, int $flags = 0): int|float|string
     {
         $length = self::decodeUnsigned($string, $offset);
@@ -224,6 +231,9 @@ enum MysqlDataType: int
         return $this !== self::Json;
     }
 
+    /**
+     * @param int<0, max> $offset
+     */
     private function decodeDateTime(string $string, int &$offset): string
     {
         $year = $month = $day = $hour = $minute = $second = $microsecond = 0;
@@ -270,6 +280,9 @@ enum MysqlDataType: int
         return $result;
     }
 
+    /**
+     * @param int<0, max> $offset
+     */
     private function decodeTime(string $string, int &$offset): string
     {
         $negative = $day = $hour = $minute = $second = $microsecond = 0;
@@ -308,6 +321,9 @@ enum MysqlDataType: int
         return $result;
     }
 
+    /**
+     * @param int<0, max> $offset
+     */
     public static function decodeNullTerminatedString(string $string, int &$offset = 0): string
     {
         $length = \strpos($string, "\0", $offset);
@@ -318,9 +334,14 @@ enum MysqlDataType: int
         $length -= $offset;
         $result = \substr($string, $offset, $length);
         $offset += $length + 1;
+        \assert($offset >= 0);
+
         return $result;
     }
 
+    /**
+     * @param int<0, max> $offset
+     */
     public static function decodeString(string $string, int &$offset = 0): string
     {
         $length = self::decodeUnsigned($string, $offset);
@@ -328,6 +349,11 @@ enum MysqlDataType: int
         return \substr($string, $offset - $length, $length);
     }
 
+    /**
+     * @param int<0, max> $offset
+     *
+     * @return int<0, max>
+     */
     public static function decodeUnsigned(string $string, int &$offset = 0): int
     {
         $int = self::decodeUnsigned8($string, $offset);
@@ -344,11 +370,15 @@ enum MysqlDataType: int
         };
     }
 
+    /**
+     * @param int<0, max> $offset
+     * @param int<0, max> $length
+     */
     public static function decodeIntByLength(string $string, int $length, int &$offset = 0): int
     {
         $int = 0;
-        while ($length--) {
-            $int = ($int << 8) + \ord($string[$length + $offset]);
+        while ($length) {
+            $int = ($int << 8) + \ord($string[--$length + $offset]);
         }
 
         $offset += $length;
@@ -356,6 +386,9 @@ enum MysqlDataType: int
         return $int;
     }
 
+    /**
+     * @param int<0, max> $offset
+     */
     public static function decodeInt8(string $string, int &$offset = 0): int
     {
         $int = \ord($string[$offset++]);
@@ -366,11 +399,21 @@ enum MysqlDataType: int
         return $int << $shift >> $shift;
     }
 
+    /**
+     * @param int<0, max> $offset
+     *
+     * @return int<0, max>
+     */
     public static function decodeUnsigned8(string $string, int &$offset = 0): int
     {
-        return \ord($string[$offset++]);
+        $result = \ord($string[$offset++]);
+        \assert($result >= 0);
+        return $result;
     }
 
+    /**
+     * @param int<0, max> $offset
+     */
     public static function decodeInt16(string $string, int &$offset = 0): int
     {
         $int = \unpack("v", $string, $offset)[1];
@@ -382,12 +425,20 @@ enum MysqlDataType: int
         return $int << $shift >> $shift;
     }
 
+    /**
+     * @param int<0, max> $offset
+     *
+     * @return int<0, max>
+     */
     public static function decodeUnsigned16(string $string, int &$offset = 0): int
     {
         $offset += 2;
         return \unpack("v", $string, $offset - 2)[1];
     }
 
+    /**
+     * @param int<0, max> $offset
+     */
     public static function decodeInt24(string $string, int &$offset = 0): int
     {
         $int = \unpack("V", \substr($string, $offset, 3) . "\x00")[1];
@@ -399,6 +450,11 @@ enum MysqlDataType: int
         return $int << $shift >> $shift;
     }
 
+    /**
+     * @param int<0, max> $offset
+     *
+     * @return int<0, max>
+     */
     public static function decodeUnsigned24(string $string, int &$offset = 0): int
     {
         $result = \unpack("V", \substr($string, $offset, 3) . "\x00")[1];
@@ -406,6 +462,9 @@ enum MysqlDataType: int
         return $result;
     }
 
+    /**
+     * @param int<0, max> $offset
+     */
     public static function decodeInt32(string $string, int &$offset = 0): int
     {
         $offset += 4;
@@ -421,6 +480,11 @@ enum MysqlDataType: int
         return \unpack("V", $string, $offset - 4)[1];
     }
 
+    /**
+     * @param int<0, max> $offset
+     *
+     * @return int<0, max>
+     */
     public static function decodeUnsigned32(string $string, int &$offset = 0): int
     {
         $result = \unpack("V", $string, $offset)[1];
@@ -433,6 +497,11 @@ enum MysqlDataType: int
         return $result;
     }
 
+    /**
+     * @param int<0, max> $offset
+     *
+     * @return int<0, max>|string
+     */
     public static function decodeUnsigned32WithGmp(string $string, int &$offset = 0): int|string
     {
         $offset += 4;
@@ -446,6 +515,9 @@ enum MysqlDataType: int
         return \gmp_strval(\gmp_import(\substr($string, $offset - 4, 4), 1, \GMP_LSW_FIRST));
     }
 
+    /**
+     * @param int<0, max> $offset
+     */
     public static function decodeInt64(string $string, int &$offset = 0): int
     {
         if (\PHP_INT_SIZE > 4) {
@@ -469,6 +541,11 @@ enum MysqlDataType: int
         return \gmp_strval(\gmp_import(\substr($string, $offset - 8, 8), 1, \GMP_LSW_FIRST));
     }
 
+    /**
+     * @param int<0, max> $offset
+     *
+     * @return int<0, max>
+     */
     public static function decodeUnsigned64(string $string, int &$offset = 0): int
     {
         if (\PHP_INT_SIZE <= 4) {
@@ -485,6 +562,9 @@ enum MysqlDataType: int
         return $result;
     }
 
+    /**
+     * @param int<0, max> $offset
+     */
     public static function decodeUnsigned64WithGmp(string $string, int &$offset = 0): string
     {
         $offset += 8;
