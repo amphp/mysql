@@ -95,30 +95,27 @@ class MysqlDataTypeTest extends MysqlTestCase
                 "boolean": true,
                 "null": null
             }
-            JSON, false],
-            'array' => ['[1, 2, 3]', true],
-            'float' => ['3.1415926', true],
-            'integer' => ['42', true],
-            'boolean' => ['true', true],
-            'null' => ['null', true],
+            JSON],
+            'array' => ['[1, 2, 3]'],
+            'string' => ['"string"'],
+            'float' => ['3.1415926'],
+            'integer' => ['42'],
+            'boolean' => ['true'],
+            'null' => ['null'],
         ];
     }
 
     /**
      * @dataProvider provideJsonData
      */
-    public function testJson(mixed $json, bool $same): void
+    public function testJson(mixed $json): void
     {
         $result = $this->connection->execute("SELECT CAST(? AS JSON) AS data", [$json]);
 
         foreach ($result as $row) {
             $expected = \json_decode($json);
             $actual = \json_decode($row['data']);
-            if ($same) {
-                self::assertSame($expected, $actual);
-            } else {
-                self::assertEquals($expected, $actual);
-            }
+            self::assertEquals($expected, $actual);
         }
     }
 }

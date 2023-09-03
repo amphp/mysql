@@ -10,6 +10,7 @@ use Amp\Future;
 use Amp\Mysql\MysqlColumnDefinition;
 use Amp\Mysql\MysqlConfig;
 use Amp\Mysql\MysqlDataType;
+use Amp\Mysql\MysqlEncodedValue;
 use Amp\Mysql\MysqlResult;
 use Amp\Parser\Parser;
 use Amp\Socket\Socket;
@@ -465,10 +466,14 @@ class ConnectionProcessor implements TransientResource
                         continue;
                     }
 
-                    [$encodedType, $value] = $paramType->encodeBinary($param);
+                    if ($paramType === MysqlDataType::Json && \is_string($param)) {
+                        $encodedValue = MysqlEncodedValue::fromJson($param);
+                    } else {
+                        $encodedValue = MysqlEncodedValue::fromValue($param);
+                    }
 
-                    $types[] = MysqlDataType::encodeInt16($encodedType->value);
-                    $values[] = $value;
+                    $types[] = MysqlDataType::encodeInt16($encodedValue->getType()->value);
+                    $values[] = $encodedValue->getBytes();
                 }
 
                 $payload[] = $paramList;
