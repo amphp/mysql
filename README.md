@@ -29,11 +29,11 @@ This package requires PHP 8.1 or later.
 More extensive code examples reside in the [`examples`](examples) directory.
 
 ```php
-$config = Amp\Mysql\MysqlConfig::fromString(
+$config = Amp\Mysql\ConnectionConfig::fromString(
     "host=127.0.0.1 user=username password=password db=test"
 );
 
-$pool = new Amp\Mysql\MysqlConnectionPool($config);
+$pool = new Amp\Mysql\Pool($config);
 
 $statement = $pool->prepare("SELECT * FROM table_name WHERE id = :id");
 foreach ($statement->execute(['id' => 1337]) as $row) {
