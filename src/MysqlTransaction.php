@@ -5,8 +5,8 @@ namespace Amp\Mysql;
 use Amp\Sql\Transaction;
 
 /**
- * @extends Transaction<MysqlResult, MysqlStatement>
+ * @extends Transaction<MysqlResult, MysqlStatement, MysqlTransaction>
  */
-interface MysqlTransaction extends MysqlExecutor, Transaction
+interface MysqlTransaction extends MysqlLink, Transaction
 {
 }

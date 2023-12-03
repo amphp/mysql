@@ -139,13 +139,12 @@ class PoolTest extends LinkTest
         $processors = $this->makeProcessorSet($count);
 
         $connection = $processors[0];
-        $result = new MysqlCommandResult(0, 0);
 
-        $connection->expects($this->exactly(3))
+        $connection->expects($this->exactly(2))
             ->method('query')
-            ->willReturn(async(function () use ($result): MysqlResult {
+            ->willReturn(async(function (): MysqlResult {
                 delay(0.01);
-                return $result;
+                return new MysqlCommandResult(0, 0);
             }));
 
         $pool = $this->createPool($this->makeConnectionSet($processors));

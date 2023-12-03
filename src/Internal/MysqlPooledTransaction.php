@@ -6,6 +6,7 @@ use Amp\Mysql\MysqlResult;
 use Amp\Mysql\MysqlStatement;
 use Amp\Mysql\MysqlTransaction;
 use Amp\Sql\Common\PooledTransaction;
+use Amp\Sql\Transaction;
 
 /**
  * @internal
@@ -15,8 +16,22 @@ final class MysqlPooledTransaction extends PooledTransaction implements MysqlTra
 {
     use MysqlTransactionDelegate;
 
+    /**
+     * @param \Closure():void $release
+     */
+    public function __construct(private readonly MysqlTransaction $transaction, \Closure $release)
+    {
+        parent::__construct($transaction, $release);
+    }
+
     protected function getTransaction(): MysqlTransaction
     {
         return $this->transaction;
+    }
+
+    protected function createTransaction(Transaction $transaction, \Closure $release): Transaction
+    {
+        \assert($transaction instanceof MysqlTransaction);
+        return new MysqlPooledTransaction($transaction, $release);
     }
 }

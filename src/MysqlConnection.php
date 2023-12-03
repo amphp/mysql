@@ -2,15 +2,15 @@
 
 namespace Amp\Mysql;
 
-interface MysqlConnection extends MysqlLink
+use Amp\Sql\Connection;
+
+/**
+ * @extends Connection<MysqlConfig, MysqlResult, MysqlStatement, MysqlTransaction>
+ */
+interface MysqlConnection extends MysqlLink, Connection
 {
     /**
-     * Change the active database on the connection.
+     * @return MysqlConfig Config object specific to this library.
      */
-    public function useDatabase(string $database): void;
-
-    /**
-     * Change the character set used by the connection.
-     */
-    public function useCharacterSet(string $charset, string $collate): void;
+    public function getConfig(): MysqlConfig;
 }

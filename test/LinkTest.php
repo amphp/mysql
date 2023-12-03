@@ -363,13 +363,8 @@ abstract class LinkTest extends MysqlTestCase
     {
         $db = $this->getLink();
 
-        $db->query("DROP TABLE IF EXISTS tmp");
-
-        $stmt = $db->prepare("CREATE TABLE tmp SELECT ? AS a");
-        $stmt->execute([-1]);
-
-        $stmt = $db->prepare("SELECT a FROM tmp");
-        $result = $stmt->execute();
+        $stmt = $db->prepare("SELECT ? AS a");
+        $result = $stmt->execute([-1]);
         $result = \iterator_to_array($result);
 
         $this->assertEquals(\array_values(\array_shift($result)), [-1]);

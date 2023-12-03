@@ -11,14 +11,14 @@ use Revolt\EventLoop;
 
 final class SocketMysqlConnection implements MysqlConnection
 {
-    private readonly Internal\ConnectionProcessor $processor;
+    private TransactionIsolation $transactionIsolation = TransactionIsolationLevel::Committed;
 
     private ?DeferredFuture $busy = null;
 
     /** @var \Closure():void Function used to release connection after a transaction has completed. */
     private readonly \Closure $release;
 
-    public static function initialize(
+    public static function connect(
         Socket $socket,
         MysqlConfig $config,
         ?Cancellation $cancellation = null,
@@ -28,15 +28,23 @@ final class SocketMysqlConnection implements MysqlConnection
         return new self($processor);
     }
 
-    private function __construct(Internal\ConnectionProcessor $processor)
+    private function __construct(private readonly Internal\ConnectionProcessor $processor)
     {
-        $this->processor = $processor;
-
         $busy = &$this->busy;
         $this->release = static function () use (&$busy): void {
             $busy?->complete();
             $busy = null;
         };
+    }
+
+    public function getConfig(): MysqlConfig
+    {
+        return $this->processor->getConfig();
+    }
+
+    public function setTransactionIsolation(TransactionIsolation $isolation): void
+    {
+        $this->transactionIsolation = $isolation;
     }
 
     /**
@@ -87,25 +95,29 @@ final class SocketMysqlConnection implements MysqlConnection
         return $this->processor->query($sql)->await();
     }
 
-    public function beginTransaction(
-        TransactionIsolation $isolation = TransactionIsolationLevel::Committed
-    ): MysqlTransaction {
+    public function beginTransaction(): MysqlTransaction
+    {
         while ($this->busy) {
             $this->busy->getFuture()->await();
         }
 
-        $this->busy = $deferred = new DeferredFuture;
+        $this->busy = $deferred = new DeferredFuture();
+
+        $sql = \sprintf(
+            "SET SESSION TRANSACTION ISOLATION LEVEL %s; START TRANSACTION",
+            $this->transactionIsolation->toSql(),
+        );
 
         try {
-            $this->processor->query("SET SESSION TRANSACTION ISOLATION LEVEL " . $isolation->toSql())->await();
-            $this->processor->query("START TRANSACTION")->await();
+            $this->processor->query($sql)->await();
         } catch (\Throwable $exception) {
             $this->busy = null;
             $deferred->complete();
             throw $exception;
         }
 
-        return new Internal\MysqlConnectionTransaction($this->processor, $this->release, $isolation);
+        $executor = new Internal\MysqlNestableExecutor($this->processor);
+        return new Internal\MysqlConnectionTransaction($executor, $this->release, $this->transactionIsolation);
     }
 
     public function ping(): void

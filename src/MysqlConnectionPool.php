@@ -7,13 +7,11 @@ use Amp\Sql\Result;
 use Amp\Sql\SqlConnector;
 use Amp\Sql\Statement;
 use Amp\Sql\Transaction;
-use Amp\Sql\TransactionIsolation;
-use Amp\Sql\TransactionIsolationLevel;
 
 /**
  * @extends ConnectionPool<MysqlConfig, MysqlResult, MysqlStatement, MysqlTransaction, MysqlConnection>
  */
-final class MysqlConnectionPool extends ConnectionPool implements MysqlLink
+final class MysqlConnectionPool extends ConnectionPool implements MysqlConnection
 {
     /**
      * @param positive-int $maxConnections
@@ -52,6 +50,14 @@ final class MysqlConnectionPool extends ConnectionPool implements MysqlLink
     }
 
     /**
+     * Changes return type to this library's configuration type.
+     */
+    public function getConfig(): MysqlConfig
+    {
+        return parent::getConfig();
+    }
+
+    /**
      * Changes return type to this library's Result type.
      */
     public function query(string $sql): MysqlResult
@@ -78,9 +84,8 @@ final class MysqlConnectionPool extends ConnectionPool implements MysqlLink
     /**
      * Changes return type to this library's Transaction type.
      */
-    public function beginTransaction(
-        TransactionIsolation $isolation = TransactionIsolationLevel::Committed
-    ): MysqlTransaction {
-        return parent::beginTransaction($isolation);
+    public function beginTransaction(): MysqlTransaction
+    {
+        return parent::beginTransaction();
     }
 }

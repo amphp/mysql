@@ -10,6 +10,7 @@ use Amp\Future;
 use Amp\Mysql\MysqlColumnDefinition;
 use Amp\Mysql\MysqlConfig;
 use Amp\Mysql\MysqlDataType;
+use Amp\Mysql\MysqlResult;
 use Amp\Parser\Parser;
 use Amp\Socket\Socket;
 use Amp\Sql\ConnectionException;
@@ -274,6 +275,11 @@ class ConnectionProcessor implements TransientResource
         return clone $this->metadata;
     }
 
+    public function getConfig(): MysqlConfig
+    {
+        return $this->config;
+    }
+
     public function getConnectionId(): int
     {
         return $this->connectionId;
@@ -327,7 +333,7 @@ class ConnectionProcessor implements TransientResource
     /**
      * @see 14.6.4 COM_QUERY
      *
-     * @return Future<MysqlConnectionResult|MysqlCommandResult>
+     * @return Future<MysqlResult>
      */
     public function query(string $query): Future
     {

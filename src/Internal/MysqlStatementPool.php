@@ -2,6 +2,7 @@
 
 namespace Amp\Mysql\Internal;
 
+use Amp\Mysql\MysqlConfig;
 use Amp\Mysql\MysqlResult;
 use Amp\Mysql\MysqlStatement;
 use Amp\Mysql\MysqlTransaction;
@@ -11,7 +12,7 @@ use Amp\Sql\Statement;
 
 /**
  * @internal
- * @extends SqlStatementPool<MysqlResult, MysqlStatement, MysqlTransaction>
+ * @extends SqlStatementPool<MysqlConfig, MysqlResult, MysqlStatement, MysqlTransaction>
  */
 final class MysqlStatementPool extends SqlStatementPool implements MysqlStatement
 {

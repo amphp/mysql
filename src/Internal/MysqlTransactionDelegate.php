@@ -48,4 +48,12 @@ trait MysqlTransactionDelegate
     {
         return parent::execute($sql, $params);
     }
+
+    /**
+     * Changes return type to this library's Transaction type.
+     */
+    public function beginTransaction(): MysqlTransaction
+    {
+        return parent::beginTransaction();
+    }
 }

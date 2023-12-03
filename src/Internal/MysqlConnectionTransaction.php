@@ -14,18 +14,18 @@ use Revolt\EventLoop;
 /** @internal */
 final class MysqlConnectionTransaction implements MysqlTransaction
 {
-    const SAVEPOINT_PREFIX = "amp_";
-
-    private ?ConnectionProcessor $processor;
-
-    private readonly TransactionIsolation $isolation;
-
     /** @var \Closure():void */
     private readonly \Closure $release;
 
     private int $refCount = 1;
 
+    private bool $active = true;
+
+    private readonly DeferredFuture $onCommit;
+    private readonly DeferredFuture $onRollback;
     private readonly DeferredFuture $onClose;
+
+    private ?DeferredFuture $busy = null;
 
     /**
      * @param \Closure():void $release
@@ -33,49 +33,64 @@ final class MysqlConnectionTransaction implements MysqlTransaction
      * @throws \Error If the isolation level is invalid.
      */
     public function __construct(
-        ConnectionProcessor $processor,
+        private readonly MysqlNestableExecutor $executor,
         \Closure $release,
-        TransactionIsolation $isolation
+        private readonly TransactionIsolation $isolation,
     ) {
-        $this->processor = $processor;
-        $this->isolation = $isolation;
+        $busy = &$this->busy;
+        $refCount = &$this->refCount;
+        $this->release = static function () use (&$busy, &$refCount, $release): void {
+            $busy?->complete();
+            $busy = null;
 
-        $refCount =& $this->refCount;
-        $this->release = static function () use (&$refCount, $release): void {
             if (--$refCount === 0) {
                 $release();
             }
         };
 
+        $this->onCommit = new DeferredFuture();
+        $this->onRollback = new DeferredFuture();
         $this->onClose = new DeferredFuture();
+
         $this->onClose($this->release);
     }
 
     public function __destruct()
     {
-        if ($this->onClose->isComplete()) {
+        if (!$this->isActive()) {
             return;
         }
 
-        $this->onClose->complete();
-
-        if (!$this->processor || $this->processor->isClosed()) {
-            return;
-        }
-
-        $processor = $this->processor;
-        EventLoop::queue(static function () use ($processor): void {
+        $busy = &$this->busy;
+        $executor = $this->executor;
+        $onRollback = $this->onRollback;
+        $onClose = $this->onClose;
+        EventLoop::queue(static function () use (&$busy, $executor, $onRollback, $onClose): void {
             try {
-                !$processor->isClosed() && $processor->query('ROLLBACK');
+                while ($busy) {
+                    $busy->getFuture()->await();
+                }
+
+                if (!$executor->isClosed()) {
+                    $executor->query('ROLLBACK');
+                }
             } catch (SqlException) {
                 // Ignore failure if connection closes during query.
+            } finally {
+                $onRollback->complete();
+                $onClose->complete();
             }
         });
     }
 
     public function getLastUsedAt(): int
     {
-        return $this->processor?->getLastUsedAt() ?? 0;
+        return $this->executor->getLastUsedAt();
+    }
+
+    public function isNestedTransaction(): bool
+    {
+        return false;
     }
 
     /**
@@ -83,14 +98,14 @@ final class MysqlConnectionTransaction implements MysqlTransaction
      */
     public function close(): void
     {
-        if ($this->processor) {
+        if ($this->isActive()) {
             $this->rollback(); // Invokes $this->release callback.
         }
     }
 
     public function isClosed(): bool
     {
-        return !$this->processor || $this->processor->isClosed();
+        return !$this->isActive();
     }
 
     public function onClose(\Closure $onClose): void
@@ -103,7 +118,7 @@ final class MysqlConnectionTransaction implements MysqlTransaction
      */
     public function isActive(): bool
     {
-        return $this->processor !== null;
+        return $this->active;
     }
 
     public function getIsolationLevel(): TransactionIsolation
@@ -116,12 +131,16 @@ final class MysqlConnectionTransaction implements MysqlTransaction
      */
     public function query(string $sql): MysqlResult
     {
-        if ($this->processor === null) {
-            throw new TransactionError("The transaction has been committed or rolled back");
+        $this->awaitPendingNestedTransaction();
+
+        ++$this->refCount;
+        try {
+            $result = $this->executor->query($sql);
+        } catch (\Throwable $exception) {
+            EventLoop::queue($this->release);
+            throw $exception;
         }
 
-        $result = $this->processor->query($sql)->await();
-        ++$this->refCount;
         return new MysqlPooledResult($result, $this->release);
     }
 
@@ -132,11 +151,16 @@ final class MysqlConnectionTransaction implements MysqlTransaction
      */
     public function prepare(string $sql): MysqlStatement
     {
-        if ($this->processor === null) {
-            throw new TransactionError("The transaction has been committed or rolled back");
+        $this->awaitPendingNestedTransaction();
+
+        ++$this->refCount;
+        try {
+            $statement = $this->executor->prepare($sql);
+        } catch (\Throwable $exception) {
+            EventLoop::queue($this->release);
+            throw $exception;
         }
 
-        $statement = $this->processor->prepare($sql)->await();
         return new MysqlPooledStatement($statement, $this->release);
     }
 
@@ -145,15 +169,35 @@ final class MysqlConnectionTransaction implements MysqlTransaction
      */
     public function execute(string $sql, array $params = []): MysqlResult
     {
-        if ($this->processor === null) {
-            throw new TransactionError("The transaction has been committed or rolled back");
-        }
-
-        $statement = $this->processor->prepare($sql)->await();
-        $result = $statement->execute($params);
+        $this->awaitPendingNestedTransaction();
 
         ++$this->refCount;
+        try {
+            $statement = $this->executor->prepare($sql);
+            $result = $statement->execute($params);
+        } catch (\Throwable $exception) {
+            EventLoop::queue($this->release);
+            throw $exception;
+        }
+
         return new MysqlPooledResult($result, $this->release);
+    }
+
+    public function beginTransaction(): MysqlTransaction
+    {
+        $this->awaitPendingNestedTransaction();
+
+        ++$this->refCount;
+        $this->busy = new DeferredFuture();
+        try {
+            $identifier = \bin2hex(\random_bytes(8));
+            $this->executor->createSavepoint($identifier);
+        } catch (\Throwable $exception) {
+            EventLoop::queue($this->release);
+            throw $exception;
+        }
+
+        return new MysqlNestedTransaction($this, $this->executor, $identifier, $this->release);
     }
 
     /**
@@ -163,13 +207,13 @@ final class MysqlConnectionTransaction implements MysqlTransaction
      */
     public function commit(): void
     {
-        if ($this->processor === null) {
-            throw new TransactionError("The transaction has been committed or rolled back");
-        }
+        $this->awaitPendingNestedTransaction();
 
-        $future = $this->processor->query("COMMIT");
-        $this->processor = null;
-        $future->finally($this->onClose->complete(...))->await();
+        $this->active = false;
+        $this->executor->query("COMMIT");
+
+        $this->onCommit->complete();
+        $this->onClose->complete();
     }
 
     /**
@@ -179,48 +223,38 @@ final class MysqlConnectionTransaction implements MysqlTransaction
      */
     public function rollback(): void
     {
-        if ($this->processor === null) {
+        $this->awaitPendingNestedTransaction();
+
+        $this->active = false;
+        $this->executor->query("ROLLBACK");
+
+        $this->onRollback->complete();
+        $this->onClose->complete();
+    }
+
+    public function onCommit(\Closure $onCommit): void
+    {
+        $this->onCommit->getFuture()->finally($onCommit);
+    }
+
+    public function onRollback(\Closure $onRollback): void
+    {
+        $this->onRollback->getFuture()->finally($onRollback);
+    }
+
+    private function assertOpen(): void
+    {
+        if ($this->isClosed()) {
             throw new TransactionError("The transaction has been committed or rolled back");
         }
-
-        $future = $this->processor->query("ROLLBACK");
-        $this->processor = null;
-        $future->finally($this->onClose->complete(...))->await();
     }
 
-    /**
-     * Creates a savepoint with the given identifier.
-     *
-     * @param string $identifier Savepoint identifier.
-     *
-     * @throws TransactionError If the transaction has been committed or rolled back.
-     */
-    public function createSavepoint(string $identifier): void
+    private function awaitPendingNestedTransaction(): void
     {
-        $this->query(\sprintf("SAVEPOINT `%s%s`", self::SAVEPOINT_PREFIX, \sha1($identifier)));
-    }
+        while ($this->busy) {
+            $this->busy->getFuture()->await();
+        }
 
-    /**
-     * Rolls back to the savepoint with the given identifier.
-     *
-     * @param string $identifier Savepoint identifier.
-     *
-     * @throws TransactionError If the transaction has been committed or rolled back.
-     */
-    public function rollbackTo(string $identifier): void
-    {
-        $this->query(\sprintf("ROLLBACK TO `%s%s`", self::SAVEPOINT_PREFIX, \sha1($identifier)));
-    }
-
-    /**
-     * Releases the savepoint with the given identifier.
-     *
-     * @param string $identifier Savepoint identifier.
-     *
-     * @throws TransactionError If the transaction has been committed or rolled back.
-     */
-    public function releaseSavepoint(string $identifier): void
-    {
-        $this->query(\sprintf("RELEASE SAVEPOINT `%s%s`", self::SAVEPOINT_PREFIX, \sha1($identifier)));
+        $this->assertOpen();
     }
 }
