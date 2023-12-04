@@ -7,7 +7,6 @@ use Amp\Mysql\MysqlExecutor;
 use Amp\Mysql\MysqlResult;
 use Amp\Mysql\MysqlStatement;
 use Amp\Sql\Common\NestableTransactionExecutor;
-use Amp\Sql\TransactionError;
 
 /**
  * @internal
@@ -72,37 +71,26 @@ final class MysqlNestableExecutor implements MysqlExecutor, NestableTransactionE
         return $statement->execute($params);
     }
 
-    /**
-     * Creates a savepoint with the given identifier.
-     *
-     * @param string $identifier Savepoint identifier.
-     *
-     * @throws TransactionError If the transaction has been committed or rolled back.
-     */
+    public function commit(): void
+    {
+        $this->query("COMMIT");
+    }
+
+    public function rollback(): void
+    {
+        $this->query("ROLLBACK");
+    }
+
     public function createSavepoint(string $identifier): void
     {
         $this->query(\sprintf("SAVEPOINT `%s`", $identifier));
     }
 
-    /**
-     * Rolls back to the savepoint with the given identifier.
-     *
-     * @param string $identifier Savepoint identifier.
-     *
-     * @throws TransactionError If the transaction has been committed or rolled back.
-     */
     public function rollbackTo(string $identifier): void
     {
         $this->query(\sprintf("ROLLBACK TO `%s`", $identifier));
     }
 
-    /**
-     * Releases the savepoint with the given identifier.
-     *
-     * @param string $identifier Savepoint identifier.
-     *
-     * @throws TransactionError If the transaction has been committed or rolled back.
-     */
     public function releaseSavepoint(string $identifier): void
     {
         $this->query(\sprintf("RELEASE SAVEPOINT `%s`", $identifier));

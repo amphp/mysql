@@ -24,11 +24,6 @@ final class MysqlPooledTransaction extends PooledTransaction implements MysqlTra
         parent::__construct($transaction, $release);
     }
 
-    protected function getTransaction(): MysqlTransaction
-    {
-        return $this->transaction;
-    }
-
     protected function createTransaction(Transaction $transaction, \Closure $release): Transaction
     {
         \assert($transaction instanceof MysqlTransaction);

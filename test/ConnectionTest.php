@@ -7,6 +7,7 @@ use Amp\DeferredCancellation;
 use Amp\Mysql\MysqlConnection;
 use Amp\Mysql\MysqlLink;
 use Amp\Mysql\SocketMysqlConnector;
+use function Amp\delay;
 use function Amp\Mysql\connect;
 
 class ConnectionTest extends LinkTest
@@ -90,5 +91,42 @@ class ConnectionTest extends LinkTest
         $this->assertTrue($db->isClosed());
 
         $db->close(); // Should not throw an exception.
+    }
+
+    public function testTransactionsCallbacksOnCommit(): void
+    {
+        $db = $this->getLink();
+
+        $transaction = $db->beginTransaction();
+        $transaction->onCommit($this->createCallback(1));
+        $transaction->onRollback($this->createCallback(0));
+        $transaction->onClose($this->createCallback(1));
+
+        $transaction->commit();
+    }
+
+    public function testTransactionsCallbacksOnRollback(): void
+    {
+        $db = $this->getLink();
+
+        $transaction = $db->beginTransaction();
+        $transaction->onCommit($this->createCallback(0));
+        $transaction->onRollback($this->createCallback(1));
+        $transaction->onClose($this->createCallback(1));
+
+        $transaction->rollback();
+    }
+
+    public function testTransactionsCallbacksOnDestruct(): void
+    {
+        $db = $this->getLink();
+
+        $transaction = $db->beginTransaction();
+        $transaction->onCommit($this->createCallback(0));
+        $transaction->onRollback($this->createCallback(1));
+        $transaction->onClose($this->createCallback(1));
+
+        unset($transaction);
+        delay(0); // Destructor is async, so give control to the loop to invoke callbacks.
     }
 }

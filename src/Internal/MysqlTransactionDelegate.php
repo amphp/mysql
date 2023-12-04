@@ -11,12 +11,13 @@ use Amp\Sql\Statement;
 /** @internal */
 trait MysqlTransactionDelegate
 {
-    abstract protected function getTransaction(): MysqlTransaction;
-
-    protected function createStatement(Statement $statement, \Closure $release): MysqlStatement
-    {
+    protected function createStatement(
+        Statement $statement,
+        \Closure $release,
+        ?\Closure $awaitBusyResource = null,
+    ): MysqlStatement {
         \assert($statement instanceof MysqlStatement);
-        return new MysqlPooledStatement($statement, $release);
+        return new MysqlPooledStatement($statement, $release, $awaitBusyResource);
     }
 
     protected function createResult(Result $result, \Closure $release): MysqlResult

@@ -13,15 +13,16 @@ use Amp\Sql\Result as SqlResult;
  */
 final class MysqlPooledStatement extends PooledStatement implements MysqlStatement
 {
-    private readonly MysqlStatement $statement;
-
     /**
      * @param \Closure():void $release
+     * @param (\Closure():void)|null $awaitBusyResource
      */
-    public function __construct(MysqlStatement $statement, \Closure $release)
-    {
-        parent::__construct($statement, $release);
-        $this->statement = $statement;
+    public function __construct(
+        private readonly MysqlStatement $statement,
+        \Closure $release,
+        ?\Closure $awaitBusyResource = null,
+    ) {
+        parent::__construct($statement, $release, $awaitBusyResource);
     }
 
     protected function createResult(SqlResult $result, \Closure $release): MysqlResult
