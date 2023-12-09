@@ -3,7 +3,7 @@
 namespace Amp\Mysql\Internal;
 
 /** @internal */
-final class MysqlConnectionMetdata
+final class MysqlConnectionMetadata
 {
     public int $affectedRows = 0;
     public int $insertId = 0;

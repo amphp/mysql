@@ -65,7 +65,7 @@ class ConnectionProcessor implements TransientResource
 
     private MysqlConfig $config;
 
-    private readonly MysqlConnectionMetdata $metadata;
+    private readonly MysqlConnectionMetadata $metadata;
 
     /** @var \SplQueue<DeferredFuture> */
     private readonly \SplQueue $deferreds;
@@ -132,7 +132,7 @@ class ConnectionProcessor implements TransientResource
     public function __construct(Socket $socket, MysqlConfig $config)
     {
         $this->socket = $socket;
-        $this->metadata = new MysqlConnectionMetdata();
+        $this->metadata = new MysqlConnectionMetadata();
         $this->config = $config;
         $this->lastUsedAt = \time();
 
@@ -270,7 +270,7 @@ class ConnectionProcessor implements TransientResource
         }
     }
 
-    public function getMetadata(): MysqlConnectionMetdata
+    public function getMetadata(): MysqlConnectionMetadata
     {
         return clone $this->metadata;
     }
