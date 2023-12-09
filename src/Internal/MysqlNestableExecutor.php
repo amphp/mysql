@@ -2,7 +2,6 @@
 
 namespace Amp\Mysql\Internal;
 
-use Amp\DeferredFuture;
 use Amp\Mysql\MysqlExecutor;
 use Amp\Mysql\MysqlResult;
 use Amp\Mysql\MysqlStatement;
@@ -14,8 +13,6 @@ use Amp\Sql\Common\NestableTransactionExecutor;
  */
 final class MysqlNestableExecutor implements MysqlExecutor, NestableTransactionExecutor
 {
-    private ?DeferredFuture $busy = null;
-
     public function __construct(
         private readonly ConnectionProcessor $processor,
     ) {
@@ -49,19 +46,11 @@ final class MysqlNestableExecutor implements MysqlExecutor, NestableTransactionE
 
     public function query(string $sql): MysqlResult
     {
-        while ($this->busy) {
-            $this->busy->getFuture()->await();
-        }
-
         return $this->processor->query($sql)->await();
     }
 
     public function prepare(string $sql): MysqlStatement
     {
-        while ($this->busy) {
-            $this->busy->getFuture()->await();
-        }
-
         return $this->processor->prepare($sql)->await();
     }
 
