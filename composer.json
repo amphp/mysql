@@ -18,8 +18,8 @@
         "amphp/parser": "^1.1",
         "amphp/pipeline": "^1",
         "amphp/socket": "^2",
-        "amphp/sql": "dev-refactor-transactions as 2.0",
-        "amphp/sql-common": "dev-refactor-transactions as 2.0"
+        "amphp/sql": "^2-beta.6",
+        "amphp/sql-common": "^2-beta.7"
     },
     "require-dev": {
         "ext-mysqli": "*",

@@ -42,6 +42,11 @@ final class SocketMysqlConnection implements MysqlConnection
         return $this->processor->getConfig();
     }
 
+    public function getTransactionIsolation(): TransactionIsolation
+    {
+        return $this->transactionIsolation;
+    }
+
     public function setTransactionIsolation(TransactionIsolation $isolation): void
     {
         $this->transactionIsolation = $isolation;
