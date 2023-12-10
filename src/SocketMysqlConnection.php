@@ -4,7 +4,9 @@ namespace Amp\Mysql;
 
 use Amp\Cancellation;
 use Amp\DeferredFuture;
-use Amp\Socket\Socket;
+use Amp\Socket\SocketConnector;
+use Amp\Socket\SocketException;
+use Amp\Sql\SqlException;
 use Amp\Sql\TransactionIsolation;
 use Amp\Sql\TransactionIsolationLevel;
 use Revolt\EventLoop;
@@ -19,10 +21,19 @@ final class SocketMysqlConnection implements MysqlConnection
     private readonly \Closure $release;
 
     public static function connect(
-        Socket $socket,
+        SocketConnector $connector,
         MysqlConfig $config,
         ?Cancellation $cancellation = null,
     ): self {
+        try {
+            $socket = $connector->connect($config->getConnectionString(), $config->getConnectContext(), $cancellation);
+        } catch (SocketException $exception) {
+            throw new SqlException(
+                'Connecting to the MySQL server failed: ' . $exception->getMessage(),
+                previous: $exception,
+            );
+        }
+
         $processor = new Internal\ConnectionProcessor($socket, $config);
         $processor->connect($cancellation);
         return new self($processor);

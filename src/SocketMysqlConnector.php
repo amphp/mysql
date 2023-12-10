@@ -22,9 +22,8 @@ final class SocketMysqlConnector implements SqlConnector
             throw new \TypeError(\sprintf("Must provide an instance of %s to MySQL connectors", MysqlConfig::class));
         }
 
-        $socket = ($this->connector ?? Socket\socketConnector())
-            ->connect($config->getConnectionString(), $config->getConnectContext(), $cancellation);
+        $connector = $this->connector ?? Socket\socketConnector();
 
-        return SocketMysqlConnection::connect($socket, $config, $cancellation);
+        return SocketMysqlConnection::connect($connector, $config, $cancellation);
     }
 }
