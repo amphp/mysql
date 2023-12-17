@@ -3,6 +3,8 @@
 namespace Amp\Mysql;
 
 use Amp\Cancellation;
+use Amp\ForbidCloning;
+use Amp\ForbidSerialization;
 use Amp\Socket;
 use Amp\Sql\SqlConfig;
 use Amp\Sql\SqlConnector;
@@ -12,6 +14,9 @@ use Amp\Sql\SqlConnector;
  */
 final class SocketMysqlConnector implements SqlConnector
 {
+    use ForbidCloning;
+    use ForbidSerialization;
+
     public function __construct(private readonly ?Socket\SocketConnector $connector = null)
     {
     }

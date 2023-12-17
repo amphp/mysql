@@ -3,6 +3,8 @@
 namespace Amp\Mysql\Internal;
 
 use Amp\DeferredFuture;
+use Amp\ForbidCloning;
+use Amp\ForbidSerialization;
 use Amp\Mysql\MysqlColumnDefinition;
 use Amp\Mysql\MysqlResult;
 use Amp\Pipeline\ConcurrentIterator;
@@ -14,6 +16,9 @@ use Amp\Pipeline\Queue;
  */
 final class MysqlResultProxy
 {
+    use ForbidCloning;
+    use ForbidSerialization;
+
     public int $columnsToFetch = 0;
 
     /** @var list<MysqlColumnDefinition> */

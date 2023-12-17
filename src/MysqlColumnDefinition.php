@@ -2,8 +2,14 @@
 
 namespace Amp\Mysql;
 
+use Amp\ForbidCloning;
+use Amp\ForbidSerialization;
+
 final class MysqlColumnDefinition
 {
+    use ForbidCloning;
+    use ForbidSerialization;
+
     /**
      * @param non-empty-string $table
      * @param non-empty-string $name

@@ -78,9 +78,9 @@ final class MysqlConnectionResult implements MysqlResult, \IteratorAggregate
 
     public function getNextResult(): ?MysqlResult
     {
-        self::dispose($this->generator);
-
         $this->nextResult ??= async(function (): ?MysqlResult {
+            self::dispose($this->generator);
+
             $deferred = $this->result->next ??= new DeferredFuture;
             $result = $deferred->getFuture()->await();
 

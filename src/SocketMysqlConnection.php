@@ -4,6 +4,8 @@ namespace Amp\Mysql;
 
 use Amp\Cancellation;
 use Amp\DeferredFuture;
+use Amp\ForbidCloning;
+use Amp\ForbidSerialization;
 use Amp\Socket\SocketConnector;
 use Amp\Socket\SocketException;
 use Amp\Sql\SqlException;
@@ -13,6 +15,9 @@ use Revolt\EventLoop;
 
 final class SocketMysqlConnection implements MysqlConnection
 {
+    use ForbidCloning;
+    use ForbidSerialization;
+
     private TransactionIsolation $transactionIsolation = TransactionIsolationLevel::Committed;
 
     private ?DeferredFuture $busy = null;

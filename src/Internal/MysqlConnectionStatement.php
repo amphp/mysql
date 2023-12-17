@@ -3,6 +3,8 @@
 namespace Amp\Mysql\Internal;
 
 use Amp\DeferredFuture;
+use Amp\ForbidCloning;
+use Amp\ForbidSerialization;
 use Amp\Mysql\MysqlResult;
 use Amp\Mysql\MysqlStatement;
 use Amp\Sql\ConnectionException;
@@ -11,6 +13,9 @@ use Revolt\EventLoop;
 /** @internal */
 final class MysqlConnectionStatement implements MysqlStatement
 {
+    use ForbidCloning;
+    use ForbidSerialization;
+
     private readonly int $totalParamCount;
     private readonly int $positionalParamCount;
 

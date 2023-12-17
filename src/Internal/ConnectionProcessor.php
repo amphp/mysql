@@ -6,6 +6,8 @@ use Amp\ByteStream\ResourceStream;
 use Amp\Cancellation;
 use Amp\DeferredFuture;
 use Amp\File;
+use Amp\ForbidCloning;
+use Amp\ForbidSerialization;
 use Amp\Future;
 use Amp\Mysql\MysqlColumnDefinition;
 use Amp\Mysql\MysqlConfig;
@@ -28,6 +30,9 @@ use Revolt\EventLoop;
 /** @internal */
 class ConnectionProcessor implements TransientResource
 {
+    use ForbidCloning;
+    use ForbidSerialization;
+
     private const COMPRESSION_MINIMUM_LENGTH = 860;
     private const MAX_PACKET_LENGTH = 0xffffff;
 

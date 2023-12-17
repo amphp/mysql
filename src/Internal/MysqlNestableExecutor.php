@@ -2,6 +2,8 @@
 
 namespace Amp\Mysql\Internal;
 
+use Amp\ForbidCloning;
+use Amp\ForbidSerialization;
 use Amp\Mysql\MysqlExecutor;
 use Amp\Mysql\MysqlResult;
 use Amp\Mysql\MysqlStatement;
@@ -13,6 +15,9 @@ use Amp\Sql\Common\NestableTransactionExecutor;
  */
 final class MysqlNestableExecutor implements MysqlExecutor, NestableTransactionExecutor
 {
+    use ForbidCloning;
+    use ForbidSerialization;
+
     public function __construct(
         private readonly ConnectionProcessor $processor,
     ) {
