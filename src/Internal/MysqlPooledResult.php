@@ -24,7 +24,7 @@ final class MysqlPooledResult extends PooledResult implements MysqlResult
         $this->result = $result;
     }
 
-    protected function newInstanceFrom(Result $result, \Closure $release): self
+    protected static function newInstanceFrom(Result $result, \Closure $release): self
     {
         \assert($result instanceof MysqlResult);
         return new self($result, $release);
