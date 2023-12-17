@@ -3,6 +3,8 @@
 namespace Amp\Mysql\Internal;
 
 use Amp\DeferredFuture;
+use Amp\ForbidCloning;
+use Amp\ForbidSerialization;
 use Amp\Future;
 use Amp\Mysql\MysqlColumnDefinition;
 use Amp\Mysql\MysqlResult;
@@ -16,6 +18,9 @@ use function Amp\async;
  */
 final class MysqlConnectionResult implements MysqlResult, \IteratorAggregate
 {
+    use ForbidCloning;
+    use ForbidSerialization;
+
     private readonly MysqlResultProxy $result;
 
     private readonly \Generator $generator;
