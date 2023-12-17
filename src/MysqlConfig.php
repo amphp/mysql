@@ -10,7 +10,6 @@ final class MysqlConfig extends SqlConfig
     public const DEFAULT_PORT = 3306;
     public const BIN_CHARSET = 45; // utf8mb4_general_ci
 
-    /** @var array<non-empty-string, non-empty-string> Psalm has a bug with the spread operator. */
     public const KEY_MAP = [
         ...parent::KEY_MAP,
         'compress' => 'compression',
@@ -37,7 +36,6 @@ final class MysqlConfig extends SqlConfig
 
     public static function fromString(string $connectionString, ConnectContext $context = null): self
     {
-        /** @psalm-suppress InvalidArgument Psalm does not recognize {@see self::KEY_MAP} is in fact a map. */
         $parts = self::parseConnectionString($connectionString, self::KEY_MAP);
 
         if (!isset($parts['host'])) {
