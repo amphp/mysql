@@ -152,19 +152,6 @@ enum MysqlDataType: int
         }
     }
 
-    public function isInternal(): bool
-    {
-        return match ($this) {
-            self::Timestamp2, self::Datetime2, self::NewDate, self::Time2 => true,
-            default => false,
-        };
-    }
-
-    public function isBindable(): bool
-    {
-        return $this !== self::Json;
-    }
-
     /**
      * @param int<0, max> $offset
      */

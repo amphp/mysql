@@ -430,7 +430,7 @@ class ConnectionProcessor implements TransientResource
      * call of this method ...
      *
      * @param list<MysqlColumnDefinition> $params
-     * @param array<int, mixed> $prebound
+     * @param array<int, string> $prebound
      * @param array<int, mixed> $data
      */
     public function execute(int $stmtId, string $query, array $params, array $prebound, array $data = []): Future
@@ -463,19 +463,14 @@ class ConnectionProcessor implements TransientResource
                     $paramType = $params[$paramId]->getType();
 
                     if (isset($prebound[$paramId])) {
-                        if (!$paramType->isBindable()) {
-                            throw new SqlException("Cannot use bind with columns of type " . \strtoupper($paramType->name));
-                        }
-
-                        $types[] = MysqlDataType::encodeInt16(MysqlDataType::LongBlob->value);
+                        $types[] = MysqlDataType::encodeInt16($this->getBindType($paramType)->value);
                         continue;
                     }
 
-                    if ($paramType === MysqlDataType::Json && \is_string($param)) {
-                        $encodedValue = MysqlEncodedValue::fromJson($param);
-                    } else {
-                        $encodedValue = MysqlEncodedValue::fromValue($param);
-                    }
+                    $encodedValue = match ($paramType) {
+                        MysqlDataType::Json => MysqlEncodedValue::fromJson((string) $param),
+                        default => MysqlEncodedValue::fromValue($param),
+                    };
 
                     $types[] = MysqlDataType::encodeInt16($encodedValue->getType()->value);
                     $values[] = $encodedValue->getBytes();
@@ -498,6 +493,14 @@ class ConnectionProcessor implements TransientResource
             $this->packetCallback = $this->handleExecute(...);
         });
         return $deferred->getFuture(); // do not use $this->startCommand(), that might unexpectedly reset the seqId!
+    }
+
+    private function getBindType(MysqlDataType $type): MysqlDataType
+    {
+        return match ($type) {
+            MysqlDataType::Json => MysqlDataType::VarString,
+            default => $type,
+        };
     }
 
     /** @see 14.7.7 COM_STMT_CLOSE */

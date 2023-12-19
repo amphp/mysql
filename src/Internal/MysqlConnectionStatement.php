@@ -20,6 +20,8 @@ final class MysqlConnectionStatement implements MysqlStatement
     private readonly int $positionalParamCount;
 
     private array $named = [];
+
+    /** @var array<string> */
     private array $prebound = [];
 
     private ?ConnectionProcessor $processor;

@@ -9,7 +9,6 @@ use Amp\Mysql\MysqlLink;
 use Amp\Mysql\MysqlResult;
 use Amp\Sql\QueryError;
 use Amp\Sql\Result;
-use Amp\Sql\SqlException;
 use function Amp\async;
 use function Amp\delay;
 
@@ -447,12 +446,15 @@ abstract class LinkTest extends MysqlTestCase
 
     public function testBindJson(): void
     {
-        $statement = $this->getLink()->prepare("SELECT CAST(? AS JSON)");
-        $statement->bind(0, '{"key": "value"}');
+        $json = '{"key": "value"}';
 
-        $this->expectException(SqlException::class);
-        $this->expectExceptionMessage("Cannot use bind with columns of type JSON");
+        $statement = $this->getLink()->prepare("SELECT CAST(? AS JSON) AS json_data");
+        $statement->bind(0, $json);
 
-        $statement->execute();
+        $result = $statement->execute();
+
+        foreach ($result as $row) {
+            self::assertSame($json, $row['json_data']);
+        }
     }
 }
