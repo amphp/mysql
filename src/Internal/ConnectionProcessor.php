@@ -221,6 +221,7 @@ class ConnectionProcessor implements TransientResource
             $future = $future->finally(static fn () => $cancellation?->unsubscribe($id));
         }
 
+        // if a charset is specified, we need to set before any query
         if ($this->config->getCharset() !== MysqlConfig::DEFAULT_CHARSET
             || $this->config->getCollation() !== MysqlConfig::DEFAULT_COLLATE
         ) {
@@ -229,6 +230,13 @@ class ConnectionProcessor implements TransientResource
                 $collate = $this->config->getCollation();
 
                 $this->query("SET NAMES '$charset'" . ($collate === "" ? "" : " COLLATE '$collate'"))->await();
+            });
+        }
+
+        if ($this->config->getSqlMode()) {
+            $future = $future->map(function (): void {
+                $sqlMode = $this->config->getSqlMode();
+                $this->query("SET SESSION sql_mode='$sqlMode'")->await();
             });
         }
 

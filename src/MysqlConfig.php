@@ -8,7 +8,7 @@ use Amp\Sql\SqlConfig;
 final class MysqlConfig extends SqlConfig
 {
     public const DEFAULT_PORT = 3306;
-    public const BIN_CHARSET = 45; // utf8mb4_general_ci
+    public const BIN_CHARSET = 255; // utf8mb4_0900_ai_ci
 
     public const KEY_MAP = [
         ...parent::KEY_MAP,
@@ -19,7 +19,7 @@ final class MysqlConfig extends SqlConfig
     ];
 
     public const DEFAULT_CHARSET = "utf8mb4";
-    public const DEFAULT_COLLATE = "utf8mb4_general_ci";
+    public const DEFAULT_COLLATE = "utf8mb4_0900_ai_ci";
 
     private bool $useCompression;
 
@@ -33,6 +33,8 @@ final class MysqlConfig extends SqlConfig
 
     /* @var string private key to use for sha256_password auth method */
     private string $key;
+
+    private ?string $sqlMode;
 
     public static function fromString(string $connectionString, ConnectContext $context = null): self
     {
@@ -84,6 +86,7 @@ final class MysqlConfig extends SqlConfig
         ?ConnectContext $context = null,
         string $charset = self::DEFAULT_CHARSET,
         string $collate = self::DEFAULT_COLLATE,
+        ?string $sqlMode = null,
         bool $useCompression = false,
         string $key = '',
         bool $useLocalInfile = false
@@ -93,6 +96,7 @@ final class MysqlConfig extends SqlConfig
         $this->context = $context ?? (new ConnectContext);
         $this->charset = $charset;
         $this->collate = $collate;
+        $this->sqlMode = $sqlMode;
         $this->useCompression = $useCompression;
         $this->key = $key;
         $this->useLocalInfile = $useLocalInfile;
@@ -170,6 +174,22 @@ final class MysqlConfig extends SqlConfig
         $new = clone $this;
         $new->charset = $charset;
         $new->collate = $collate;
+        return $new;
+    }
+
+    public function getSqlMode(): ?string
+    {
+        return $this->sqlMode;
+    }
+
+    /**
+     * Set the Server SQL Modes at connection time.
+     * @see https://dev.mysql.com/doc/refman/8.0/en/sql-mode.html
+     */
+    public function withSqlMode(?string $sqlMode): self
+    {
+        $new = clone $this;
+        $new->sqlMode = $sqlMode;
         return $new;
     }
 

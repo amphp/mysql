@@ -4,6 +4,7 @@ namespace Amp\Mysql\Test;
 
 use Amp\Future;
 use Amp\Mysql\MysqlColumnDefinition;
+use Amp\Mysql\MysqlConfig;
 use Amp\Mysql\MysqlDataType;
 use Amp\Mysql\MysqlLink;
 use Amp\Mysql\MysqlResult;
@@ -216,8 +217,8 @@ abstract class LinkTest extends MysqlTestCase
 
         $this->assertEquals([
             new MysqlColumnDefinition(...\array_merge($base, ["type" => MysqlDataType::LongLong, "flags" => 128])),
-            new MysqlColumnDefinition(...\array_merge($base, ["type" => MysqlDataType::Datetime, "length" => 104, "decimals" => 6, "charset" => 45])),
-            new MysqlColumnDefinition(...\array_merge($base, ["type" => MysqlDataType::VarString, "length" => 65532, "decimals" => 31, "charset" => 45])),
+            new MysqlColumnDefinition(...\array_merge($base, ["type" => MysqlDataType::Datetime, "length" => 104, "decimals" => 6, "charset" => MysqlConfig::BIN_CHARSET])),
+            new MysqlColumnDefinition(...\array_merge($base, ["type" => MysqlDataType::VarString, "length" => 65532, "decimals" => 31, "charset" => MysqlConfig::BIN_CHARSET])),
         ], $stmt->getParameterDefinitions());
 
         $stmt->bind("data", 'd');
