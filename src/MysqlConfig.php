@@ -169,7 +169,7 @@ final class MysqlConfig extends SqlConfig
         return $this->collate;
     }
 
-    public function withCharset(?string $charset, ?string $collate = null): self
+    public function withCharset(string $charset, string $collate): self
     {
         $new = clone $this;
         $new->charset = $charset;
