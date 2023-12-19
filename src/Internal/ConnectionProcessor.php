@@ -27,7 +27,10 @@ use Revolt\EventLoop;
  * 14.2.4 COM_CHANGE_USER
  */
 
-/** @internal */
+/**
+ * @internal
+ * @see https://dev.mysql.com/doc/dev/mysql-server/latest/PAGE_PROTOCOL.html Protocol documentation.
+ */
 class ConnectionProcessor implements TransientResource
 {
     use ForbidCloning;
@@ -91,6 +94,8 @@ class ConnectionProcessor implements TransientResource
     private int $refcount = 1;
 
     private ConnectionState $connectionState = ConnectionState::Unconnected;
+
+    private ?DeferredFuture $paused = null;
 
     private const MAX_PACKET_SIZE = 0xffffff;
     private const MAX_UNCOMPRESSED_BUFLEN = 0xfffffb;
@@ -253,6 +258,8 @@ class ConnectionProcessor implements TransientResource
 
                 $this->parser->push($bytes);
                 $bytes = null; // Free last data read.
+
+                $this->paused?->getFuture()->await(); // Pause next read if negotiating TLS.
             }
         } catch (\Throwable $exception) {
             // $exception used as previous exception below.
@@ -1523,7 +1530,7 @@ class ConnectionProcessor implements TransientResource
      * @see 14.2.5 Connection Phase Packets
      * @see 14.3 Authentication Method
      */
-    private function sendHandshake(bool $inSSL = false): void
+    private function sendHandshake(): void
     {
         if ($this->config->getDatabase() !== null) {
             $this->capabilities |= self::CLIENT_CONNECT_WITH_DB;
@@ -1535,27 +1542,33 @@ class ConnectionProcessor implements TransientResource
 
         $this->capabilities &= $this->serverCapabilities;
 
-        $payload = [];
-        $payload[] = \pack("V", $this->capabilities);
-        $payload[] = \pack("V", self::MAX_PACKET_LENGTH);
-        $payload[] = \chr(MysqlConfig::BIN_CHARSET);
-        $payload[] = \str_repeat("\0", 23); // reserved
+        $tlsEnabled = false;
 
-        if (!$inSSL && ($this->capabilities & self::CLIENT_SSL)) {
-            EventLoop::queue(function () use ($payload): void {
-                try {
-                    $this->write(\implode($payload));
+        do {
+            $payload = [];
+            $payload[] = \pack("V", $this->capabilities);
+            $payload[] = \pack("V", self::MAX_PACKET_LENGTH);
+            $payload[] = \chr(MysqlConfig::BIN_CHARSET);
+            $payload[] = \str_repeat("\0", 23); // reserved
 
-                    $this->socket->setupTls();
+            if ($tlsEnabled || !($this->capabilities & self::CLIENT_SSL)) {
+                break;
+            }
 
-                    $this->sendHandshake(true);
-                } catch (\Throwable $e) {
-                    $this->free($e);
-                }
-            });
+            $paused = $this->paused = new DeferredFuture;
 
-            return;
-        }
+            try {
+                $this->write(\implode($payload));
+                $this->socket->setupTls();
+                $tlsEnabled = true;
+            } catch (\Throwable $e) {
+                $this->free($e);
+                return;
+            } finally {
+                $paused->complete();
+                $this->paused = null;
+            }
+        } while (true);
 
         $payload[] = $this->config->getUser()."\0";
 
