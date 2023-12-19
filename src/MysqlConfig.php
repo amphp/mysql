@@ -8,7 +8,7 @@ use Amp\Sql\SqlConfig;
 final class MysqlConfig extends SqlConfig
 {
     public const DEFAULT_PORT = 3306;
-    public const BIN_CHARSET = 45; // utf8mb4_general_ci
+    public const BIN_CHARSET = 255; // utf8mb4_0900_ai_ci
 
     public const KEY_MAP = [
         ...parent::KEY_MAP,
@@ -19,7 +19,7 @@ final class MysqlConfig extends SqlConfig
     ];
 
     public const DEFAULT_CHARSET = "utf8mb4";
-    public const DEFAULT_COLLATE = "utf8mb4_general_ci";
+    public const DEFAULT_COLLATE = "utf8mb4_0900_ai_ci";
 
     private bool $useCompression;
 
@@ -27,9 +27,9 @@ final class MysqlConfig extends SqlConfig
 
     private ConnectContext $context;
 
-    private ?string $charset;
+    private string $charset;
 
-    private ?string $collate;
+    private string $collate;
 
     /* @var string private key to use for sha256_password auth method */
     private string $key;
@@ -51,8 +51,8 @@ final class MysqlConfig extends SqlConfig
             password: $parts['password'] ?? null,
             database: $parts['db'] ?? null,
             context: $context,
-            charset: $parts['charset'] ?? null,
-            collate: $parts['collate'] ?? null,
+            charset: $parts['charset'] ?? self::DEFAULT_CHARSET,
+            collate: $parts['collate'] ?? self::DEFAULT_COLLATE,
             useCompression: ($parts['compression'] ?? '') === 'on',
             useLocalInfile: ($parts['local-infile'] ?? '') === 'on'
         );
@@ -84,8 +84,8 @@ final class MysqlConfig extends SqlConfig
         ?string $password = null,
         ?string $database = null,
         ?ConnectContext $context = null,
-        ?string $charset = null,
-        ?string $collate = null,
+        string $charset = self::DEFAULT_CHARSET,
+        string $collate = self::DEFAULT_COLLATE,
         ?string $sqlMode = null,
         bool $useCompression = false,
         string $key = '',
