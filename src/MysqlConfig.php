@@ -159,12 +159,12 @@ final class MysqlConfig extends SqlConfig
         return $new;
     }
 
-    public function getCharset(): ?string
+    public function getCharset(): string
     {
         return $this->charset;
     }
 
-    public function getCollation(): ?string
+    public function getCollation(): string
     {
         return $this->collate;
     }
