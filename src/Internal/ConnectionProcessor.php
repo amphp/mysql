@@ -478,7 +478,7 @@ class ConnectionProcessor implements TransientResource
                     $paramType = $params[$paramId]->getType();
 
                     if (isset($prebound[$paramId])) {
-                        $types[] = MysqlDataType::encodeInt16($this->getBindType($paramType)->value);
+                        $types[] = MysqlDataType::encodeInt16(MysqlDataType::VarString->value);
                         continue;
                     }
 
@@ -508,14 +508,6 @@ class ConnectionProcessor implements TransientResource
             $this->packetCallback = $this->handleExecute(...);
         });
         return $deferred->getFuture(); // do not use $this->startCommand(), that might unexpectedly reset the seqId!
-    }
-
-    private function getBindType(MysqlDataType $type): MysqlDataType
-    {
-        return match ($type) {
-            MysqlDataType::Json => MysqlDataType::VarString,
-            default => $type,
-        };
     }
 
     /** @see 14.7.7 COM_STMT_CLOSE */
