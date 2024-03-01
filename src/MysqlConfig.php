@@ -21,22 +21,9 @@ final class MysqlConfig extends SqlConfig
     public const DEFAULT_CHARSET = "utf8mb4";
     public const DEFAULT_COLLATE = "utf8mb4_0900_ai_ci";
 
-    private bool $useCompression;
-
-    private bool $useLocalInfile;
-
     private ConnectContext $context;
 
-    private string $charset;
-
-    private string $collate;
-
-    /* @var string private key to use for sha256_password auth method */
-    private string $key;
-
-    private ?string $sqlMode;
-
-    public static function fromString(string $connectionString, ConnectContext $context = null): self
+    public static function fromString(string $connectionString, ?ConnectContext $context = null): self
     {
         $parts = self::parseConnectionString($connectionString, self::KEY_MAP);
 
@@ -63,7 +50,7 @@ final class MysqlConfig extends SqlConfig
         string $user,
         string $password,
         ?string $database = null,
-        ?ConnectContext $context = null
+        ?ConnectContext $context = null,
     ): self {
         [$host, $port] = \explode(':', $authority, 2) + ['', (string) self::DEFAULT_PORT];
 
@@ -77,6 +64,9 @@ final class MysqlConfig extends SqlConfig
         );
     }
 
+    /**
+     * @param string $key Private key to use for sha256_password auth method
+     */
     public function __construct(
         string $host,
         int $port = self::DEFAULT_PORT,
@@ -84,22 +74,16 @@ final class MysqlConfig extends SqlConfig
         ?string $password = null,
         ?string $database = null,
         ?ConnectContext $context = null,
-        string $charset = self::DEFAULT_CHARSET,
-        string $collate = self::DEFAULT_COLLATE,
-        ?string $sqlMode = null,
-        bool $useCompression = false,
-        string $key = '',
-        bool $useLocalInfile = false
+        private string $charset = self::DEFAULT_CHARSET,
+        private string $collate = self::DEFAULT_COLLATE,
+        private ?string $sqlMode = null,
+        private bool $useCompression = false,
+        private string $key = '',
+        private bool $useLocalInfile = false,
     ) {
         parent::__construct($host, $port, $user, $password, $database);
 
-        $this->context = $context ?? (new ConnectContext);
-        $this->charset = $charset;
-        $this->collate = $collate;
-        $this->sqlMode = $sqlMode;
-        $this->useCompression = $useCompression;
-        $this->key = $key;
-        $this->useLocalInfile = $useLocalInfile;
+        $this->context = $context ?? new ConnectContext();
     }
 
     public function getConnectionString(): string
