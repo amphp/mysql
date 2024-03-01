@@ -1,7 +1,10 @@
 <?php declare(strict_types=1);
 
-namespace Amp\Mysql;
+namespace Amp\Mysql\Internal;
 
+use Amp\Mysql\MysqlDataType;
+
+/** @internal */
 final class MysqlEncodedValue
 {
     public static function fromValue(mixed $param): self

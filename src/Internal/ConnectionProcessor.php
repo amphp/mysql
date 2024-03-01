@@ -12,13 +12,12 @@ use Amp\Future;
 use Amp\Mysql\MysqlColumnDefinition;
 use Amp\Mysql\MysqlConfig;
 use Amp\Mysql\MysqlDataType;
-use Amp\Mysql\MysqlEncodedValue;
 use Amp\Mysql\MysqlResult;
 use Amp\Parser\Parser;
 use Amp\Socket\Socket;
 use Amp\Sql\SqlConnectionException;
-use Amp\Sql\SqlQueryError;
 use Amp\Sql\SqlException;
+use Amp\Sql\SqlQueryError;
 use Amp\Sql\SqlTransientResource;
 use Revolt\EventLoop;
 
