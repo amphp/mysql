@@ -43,6 +43,8 @@ enum MysqlDataType: int
      * @see 14.7.3 Binary Protocol Value
      *
      * @param int<0, max> $offset
+     *
+     * @throws SqlException
      */
     public function decodeBinary(string $bytes, int &$offset = 0, int $flags = 0): int|float|string|null
     {
@@ -117,6 +119,8 @@ enum MysqlDataType: int
 
     /**
      * @param int<0, max> $offset
+     *
+     * @throws SqlException
      */
     public function decodeText(string $bytes, int &$offset = 0, int $flags = 0): int|float|string
     {
@@ -262,6 +266,8 @@ enum MysqlDataType: int
 
     /**
      * @param int<0, max> $offset
+     *
+     * @throws SqlException
      */
     public static function decodeString(string $bytes, int &$offset = 0): string
     {
