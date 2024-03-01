@@ -10,7 +10,7 @@ use Amp\Mysql\SocketMysqlConnector;
 use function Amp\delay;
 use function Amp\Mysql\connect;
 
-class ConnectionTest extends LinkTest
+class MysqlConnectionTest extends MysqlLinkTest
 {
     protected function getLink(bool $useCompression = false): MysqlLink
     {

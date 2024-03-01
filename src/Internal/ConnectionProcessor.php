@@ -16,10 +16,10 @@ use Amp\Mysql\MysqlEncodedValue;
 use Amp\Mysql\MysqlResult;
 use Amp\Parser\Parser;
 use Amp\Socket\Socket;
-use Amp\Sql\ConnectionException;
-use Amp\Sql\QueryError;
+use Amp\Sql\SqlConnectionException;
+use Amp\Sql\SqlQueryError;
 use Amp\Sql\SqlException;
-use Amp\Sql\TransientResource;
+use Amp\Sql\SqlTransientResource;
 use Revolt\EventLoop;
 
 /* @TODO
@@ -31,7 +31,7 @@ use Revolt\EventLoop;
  * @internal
  * @see https://dev.mysql.com/doc/dev/mysql-server/latest/PAGE_PROTOCOL.html Protocol documentation.
  */
-class ConnectionProcessor implements TransientResource
+class ConnectionProcessor implements SqlTransientResource
 {
     use ForbidCloning;
     use ForbidSerialization;
@@ -238,7 +238,7 @@ class ConnectionProcessor implements TransientResource
             });
         }
 
-        if ($this->config->getSqlMode()) {
+        if ($this->config->getSqlMode() !== null) {
             $future = $future->map(function (): void {
                 $sqlMode = $this->config->getSqlMode();
                 $this->query("SET SESSION sql_mode='$sqlMode'")->await();
@@ -675,7 +675,7 @@ class ConnectionProcessor implements TransientResource
 
         if ($connecting) {
             // connection failure
-            $this->free(new ConnectionException(\sprintf(
+            $this->free(new SqlConnectionException(\sprintf(
                 'Could not connect to %s: %s',
                 $this->config->getConnectionString(),
                 $this->metadata->errorMsg,
@@ -685,14 +685,14 @@ class ConnectionProcessor implements TransientResource
 
         if ($this->result === null && $this->deferreds->isEmpty()) {
             // connection killed without pending query or active result
-            $this->free(new ConnectionException('Connection closed after receiving an unexpected error packet'));
+            $this->free(new SqlConnectionException('Connection closed after receiving an unexpected error packet'));
             return;
         }
 
         $deferred = $this->result ?? $this->dequeueDeferred();
 
         // normal error
-        $exception = new QueryError(\sprintf(
+        $exception = new SqlQueryError(\sprintf(
             'MySQL error (%d): %s %s',
             $this->metadata->errorCode,
             $this->metadata->errorState ?? 'Unknown state',
@@ -809,7 +809,7 @@ class ConnectionProcessor implements TransientResource
         }
 
         if ($protocol !== 0x0a) {
-            throw new ConnectionException("Unsupported protocol version ".\ord($packet)." (Expected: 10)");
+            throw new SqlConnectionException("Unsupported protocol version ".\ord($packet)." (Expected: 10)");
         }
 
         $this->metadata->serverVersion = MysqlDataType::decodeNullTerminatedString($packet, $offset);
@@ -880,7 +880,7 @@ class ConnectionProcessor implements TransientResource
                 }
                 $this->write("");
             } catch (\Throwable $e) {
-                $this->dequeueDeferred()->error(new ConnectionException("Failed to transfer a file to the server", 0, $e));
+                $this->dequeueDeferred()->error(new SqlConnectionException("Failed to transfer a file to the server", 0, $e));
             }
         });
     }
@@ -913,7 +913,7 @@ class ConnectionProcessor implements TransientResource
                 if ($this->config->isLocalInfileEnabled()) {
                     $this->handleLocalInfileRequest($packet);
                 } else {
-                    $this->dequeueDeferred()->error(new ConnectionException("Unexpected LOCAL_INFILE_REQUEST packet"));
+                    $this->dequeueDeferred()->error(new SqlConnectionException("Unexpected LOCAL_INFILE_REQUEST packet"));
                 }
                 return;
             case self::ERR_PACKET:
@@ -1173,7 +1173,7 @@ class ConnectionProcessor implements TransientResource
                 $this->handleError($packet);
                 return;
             default:
-                throw new ConnectionException("Unexpected value for first byte of COM_STMT_PREPARE Response");
+                throw new SqlConnectionException("Unexpected value for first byte of COM_STMT_PREPARE Response");
         }
 
         $offset = 1;
@@ -1232,8 +1232,8 @@ class ConnectionProcessor implements TransientResource
         $this->parser->cancel();
 
         if (!$this->deferreds->isEmpty() || $this->result) {
-            if (!$exception instanceof ConnectionException) {
-                $exception = new ConnectionException("Connection closed unexpectedly", 0, $exception ?? null);
+            if (!$exception instanceof SqlConnectionException) {
+                $exception = new SqlConnectionException("Connection closed unexpectedly", 0, $exception ?? null);
             }
 
             while (!$this->deferreds->isEmpty()) {
@@ -1433,7 +1433,7 @@ class ConnectionProcessor implements TransientResource
                             }
                             break;
                         default:
-                            throw new ConnectionException(
+                            throw new SqlConnectionException(
                                 "Unexpected EXTRA_AUTH_PACKET in authentication phase for method {$this->authPluginName}"
                             );
                     }
@@ -1464,7 +1464,7 @@ class ConnectionProcessor implements TransientResource
                 // no break
             default:
                 if (!$cb) {
-                    throw new ConnectionException("Unexpected packet type: " . \ord($packet));
+                    throw new SqlConnectionException("Unexpected packet type: " . \ord($packet));
                 }
 
                 $cb($packet);
@@ -1514,7 +1514,7 @@ class ConnectionProcessor implements TransientResource
                 $this->handleError($packet);
                 return;
             default:
-                throw new ConnectionException("AuthSwitchRequest: Expecting 0xfe (or ERR_Packet), got 0x".\dechex(\ord($packet)));
+                throw new SqlConnectionException("AuthSwitchRequest: Expecting 0xfe (or ERR_Packet), got 0x".\dechex(\ord($packet)));
         }
     }
 
@@ -1613,11 +1613,11 @@ class ConnectionProcessor implements TransientResource
                 case "caching_sha2_password":
                     return self::sha2Auth($password, $this->authPluginData);
                 case "mysql_old_password":
-                    throw new ConnectionException(
+                    throw new SqlConnectionException(
                         "mysql_old_password is outdated and insecure. Intentionally not implemented!"
                     );
                 default:
-                    throw new ConnectionException(
+                    throw new SqlConnectionException(
                         "Invalid (or unimplemented?) auth method requested by server: {$this->authPluginName}"
                     );
             }

@@ -5,15 +5,15 @@ namespace Amp\Mysql\Internal;
 use Amp\Mysql\MysqlResult;
 use Amp\Mysql\MysqlStatement;
 use Amp\Mysql\MysqlTransaction;
-use Amp\Sql\Common\NestableTransactionExecutor;
-use Amp\Sql\Common\NestedTransaction;
-use Amp\Sql\Transaction;
+use Amp\Sql\Common\SqlNestableTransactionExecutor;
+use Amp\Sql\Common\SqlNestedTransaction;
+use Amp\Sql\SqlTransaction;
 
 /**
  * @internal
- * @extends NestedTransaction<MysqlResult, MysqlStatement, MysqlTransaction, MysqlNestableExecutor>
+ * @extends SqlNestedTransaction<MysqlResult, MysqlStatement, MysqlTransaction, MysqlNestableExecutor>
  */
-final class MysqlNestedTransaction extends NestedTransaction implements MysqlTransaction
+final class MysqlNestedTransaction extends SqlNestedTransaction implements MysqlTransaction
 {
     use MysqlTransactionDelegate;
 
@@ -36,8 +36,8 @@ final class MysqlNestedTransaction extends NestedTransaction implements MysqlTra
     }
 
     protected function createNestedTransaction(
-        Transaction $transaction,
-        NestableTransactionExecutor $executor,
+        SqlTransaction $transaction,
+        SqlNestableTransactionExecutor $executor,
         string $identifier,
         \Closure $release,
     ): MysqlTransaction {

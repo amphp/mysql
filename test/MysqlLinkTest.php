@@ -8,12 +8,11 @@ use Amp\Mysql\MysqlConfig;
 use Amp\Mysql\MysqlDataType;
 use Amp\Mysql\MysqlLink;
 use Amp\Mysql\MysqlResult;
-use Amp\Sql\QueryError;
-use Amp\Sql\Result;
+use Amp\Sql\SqlQueryError;
 use function Amp\async;
 use function Amp\delay;
 
-abstract class LinkTest extends MysqlTestCase
+abstract class MysqlLinkTest extends MysqlTestCase
 {
     public const EPOCH = '1970-01-01 00:00:00';
 
@@ -57,7 +56,7 @@ abstract class LinkTest extends MysqlTestCase
 
     public function testQueryWithInvalidQuery()
     {
-        $this->expectException(QueryError::class);
+        $this->expectException(SqlQueryError::class);
         $this->expectExceptionMessage('You have an error in your SQL syntax');
 
         $db = $this->getLink();
@@ -124,13 +123,13 @@ abstract class LinkTest extends MysqlTestCase
 
         $result = $db->query("SELECT a FROM main");
 
-        $this->assertInstanceOf(Result::class, $result);
+        $this->assertInstanceOf(MysqlResult::class, $result);
 
         unset($result); // Force destruction of result object.
 
         $result = $db->query("SELECT b FROM main");
 
-        $this->assertInstanceOf(Result::class, $result);
+        $this->assertInstanceOf(MysqlResult::class, $result);
     }
 
     public function testUnconsumedMultiResult(): void
@@ -265,7 +264,7 @@ abstract class LinkTest extends MysqlTestCase
 
     public function testPrepareWithInvalidQuery(): void
     {
-        $this->expectException(QueryError::class);
+        $this->expectException(SqlQueryError::class);
         $this->expectExceptionMessage('You have an error in your SQL syntax');
 
         $db = $this->getLink();
@@ -337,7 +336,7 @@ abstract class LinkTest extends MysqlTestCase
 
     public function testExecuteWithInvalidQuery(): void
     {
-        $this->expectException(QueryError::class);
+        $this->expectException(SqlQueryError::class);
         $this->expectExceptionMessage('You have an error in your SQL syntax');
 
         $db = $this->getLink();

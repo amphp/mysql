@@ -9,8 +9,8 @@ use Amp\ForbidSerialization;
 use Amp\Socket\SocketConnector;
 use Amp\Socket\SocketException;
 use Amp\Sql\SqlException;
-use Amp\Sql\TransactionIsolation;
-use Amp\Sql\TransactionIsolationLevel;
+use Amp\Sql\SqlTransactionIsolation;
+use Amp\Sql\SqlTransactionIsolationLevel;
 use Revolt\EventLoop;
 
 final class SocketMysqlConnection implements MysqlConnection
@@ -18,7 +18,7 @@ final class SocketMysqlConnection implements MysqlConnection
     use ForbidCloning;
     use ForbidSerialization;
 
-    private TransactionIsolation $transactionIsolation = TransactionIsolationLevel::Committed;
+    private SqlTransactionIsolation $transactionIsolation = SqlTransactionIsolationLevel::Committed;
 
     private ?DeferredFuture $busy = null;
 
@@ -58,12 +58,12 @@ final class SocketMysqlConnection implements MysqlConnection
         return $this->processor->getConfig();
     }
 
-    public function getTransactionIsolation(): TransactionIsolation
+    public function getTransactionIsolation(): SqlTransactionIsolation
     {
         return $this->transactionIsolation;
     }
 
-    public function setTransactionIsolation(TransactionIsolation $isolation): void
+    public function setTransactionIsolation(SqlTransactionIsolation $isolation): void
     {
         $this->transactionIsolation = $isolation;
     }

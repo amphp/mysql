@@ -5,14 +5,14 @@ namespace Amp\Mysql\Internal;
 use Amp\Mysql\MysqlResult;
 use Amp\Mysql\MysqlStatement;
 use Amp\Mysql\MysqlTransaction;
-use Amp\Sql\Result;
-use Amp\Sql\Statement;
+use Amp\Sql\SqlResult;
+use Amp\Sql\SqlStatement;
 
 /** @internal */
 trait MysqlTransactionDelegate
 {
     protected function createStatement(
-        Statement $statement,
+        SqlStatement $statement,
         \Closure $release,
         ?\Closure $awaitBusyResource = null,
     ): MysqlStatement {
@@ -20,7 +20,7 @@ trait MysqlTransactionDelegate
         return new MysqlPooledStatement($statement, $release, $awaitBusyResource);
     }
 
-    protected function createResult(Result $result, \Closure $release): MysqlResult
+    protected function createResult(SqlResult $result, \Closure $release): MysqlResult
     {
         \assert($result instanceof MysqlResult);
         return new MysqlPooledResult($result, $release);

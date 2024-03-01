@@ -2,11 +2,11 @@
 
 namespace Amp\Mysql;
 
-use Amp\Sql\Transaction;
+use Amp\Sql\SqlTransaction;
 
 /**
- * @extends Transaction<MysqlResult, MysqlStatement, MysqlTransaction>
+ * @extends SqlTransaction<MysqlResult, MysqlStatement, MysqlTransaction>
  */
-interface MysqlTransaction extends MysqlLink, Transaction
+interface MysqlTransaction extends MysqlLink, SqlTransaction
 {
 }

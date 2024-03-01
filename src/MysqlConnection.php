@@ -2,12 +2,12 @@
 
 namespace Amp\Mysql;
 
-use Amp\Sql\Connection;
+use Amp\Sql\SqlConnection;
 
 /**
- * @extends Connection<MysqlConfig, MysqlResult, MysqlStatement, MysqlTransaction>
+ * @extends SqlConnection<MysqlConfig, MysqlResult, MysqlStatement, MysqlTransaction>
  */
-interface MysqlConnection extends MysqlLink, Connection
+interface MysqlConnection extends MysqlLink, SqlConnection
 {
     /**
      * @return MysqlConfig Config object specific to this library.

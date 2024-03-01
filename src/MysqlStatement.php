@@ -2,12 +2,12 @@
 
 namespace Amp\Mysql;
 
-use Amp\Sql\Statement;
+use Amp\Sql\SqlStatement;
 
 /**
- * @extends Statement<MysqlResult>
+ * @extends SqlStatement<MysqlResult>
  */
-interface MysqlStatement extends Statement
+interface MysqlStatement extends SqlStatement
 {
     public function execute(array $params = []): MysqlResult;
 

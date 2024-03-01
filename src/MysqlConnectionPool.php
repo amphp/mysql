@@ -2,16 +2,16 @@
 
 namespace Amp\Mysql;
 
-use Amp\Sql\Common\ConnectionPool;
-use Amp\Sql\Result;
+use Amp\Sql\Common\SqlCommonConnectionPool;
+use Amp\Sql\SqlResult;
 use Amp\Sql\SqlConnector;
-use Amp\Sql\Statement;
-use Amp\Sql\Transaction;
+use Amp\Sql\SqlStatement;
+use Amp\Sql\SqlTransaction;
 
 /**
- * @extends ConnectionPool<MysqlConfig, MysqlResult, MysqlStatement, MysqlTransaction, MysqlConnection>
+ * @extends SqlCommonConnectionPool<MysqlConfig, MysqlResult, MysqlStatement, MysqlTransaction, MysqlConnection>
  */
-final class MysqlConnectionPool extends ConnectionPool implements MysqlConnection
+final class MysqlConnectionPool extends SqlCommonConnectionPool implements MysqlConnection
 {
     /**
      * @param positive-int $maxConnections
@@ -27,13 +27,13 @@ final class MysqlConnectionPool extends ConnectionPool implements MysqlConnectio
         parent::__construct($config, $connector ?? mysqlConnector(), $maxConnections, $idleTimeout);
     }
 
-    protected function createResult(Result $result, \Closure $release): MysqlResult
+    protected function createResult(SqlResult $result, \Closure $release): MysqlResult
     {
         \assert($result instanceof MysqlResult);
         return new Internal\MysqlPooledResult($result, $release);
     }
 
-    protected function createStatement(Statement $statement, \Closure $release): MysqlStatement
+    protected function createStatement(SqlStatement $statement, \Closure $release): MysqlStatement
     {
         \assert($statement instanceof MysqlStatement);
         return new Internal\MysqlPooledStatement($statement, $release);
@@ -44,7 +44,7 @@ final class MysqlConnectionPool extends ConnectionPool implements MysqlConnectio
         return new Internal\MysqlStatementPool($this, $sql, $prepare);
     }
 
-    protected function createTransaction(Transaction $transaction, \Closure $release): MysqlTransaction
+    protected function createTransaction(SqlTransaction $transaction, \Closure $release): MysqlTransaction
     {
         return new Internal\MysqlPooledTransaction($transaction, $release);
     }

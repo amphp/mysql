@@ -2,12 +2,12 @@
 
 namespace Amp\Mysql;
 
-use Amp\Sql\Link;
+use Amp\Sql\SqlLink;
 
 /**
- * @extends Link<MysqlResult, MysqlStatement, MysqlTransaction>
+ * @extends SqlLink<MysqlResult, MysqlStatement, MysqlTransaction>
  */
-interface MysqlLink extends MysqlExecutor, Link
+interface MysqlLink extends MysqlExecutor, SqlLink
 {
     /**
      * @return MysqlTransaction Transaction object specific to this library.

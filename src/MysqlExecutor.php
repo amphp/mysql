@@ -2,12 +2,12 @@
 
 namespace Amp\Mysql;
 
-use Amp\Sql\Executor;
+use Amp\Sql\SqlExecutor;
 
 /**
- * @extends Executor<MysqlResult, MysqlStatement>
+ * @extends SqlExecutor<MysqlResult, MysqlStatement>
  */
-interface MysqlExecutor extends Executor
+interface MysqlExecutor extends SqlExecutor
 {
     /**
      * @return MysqlResult Result object specific to this library.

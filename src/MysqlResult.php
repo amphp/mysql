@@ -2,15 +2,15 @@
 
 namespace Amp\Mysql;
 
-use Amp\Sql\Result;
+use Amp\Sql\SqlResult;
 
 /**
  * @psalm-type TFieldType = int|float|string|null
  * @psalm-type TRowType = array<string, TFieldType>
  *
- * @extends Result<TFieldType>
+ * @extends SqlResult<TFieldType>
  */
-interface MysqlResult extends Result
+interface MysqlResult extends SqlResult
 {
     /**
      * Changes return type to this library's Result type.

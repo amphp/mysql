@@ -6,9 +6,9 @@ use Amp\Mysql\MysqlConfig;
 use Amp\Mysql\MysqlResult;
 use Amp\Mysql\MysqlStatement;
 use Amp\Mysql\MysqlTransaction;
-use Amp\Sql\Common\StatementPool as SqlStatementPool;
-use Amp\Sql\Result as SqlResult;
-use Amp\Sql\Statement;
+use Amp\Sql\Common\SqlStatementPool;
+use Amp\Sql\SqlResult;
+use Amp\Sql\SqlStatement;
 
 /**
  * @internal
@@ -36,7 +36,7 @@ final class MysqlStatementPool extends SqlStatementPool implements MysqlStatemen
         return $statement;
     }
 
-    protected function push(Statement $statement): void
+    protected function push(SqlStatement $statement): void
     {
         if ($statement->isClosed()) {
             return;

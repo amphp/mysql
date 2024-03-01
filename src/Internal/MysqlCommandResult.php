@@ -4,14 +4,14 @@ namespace Amp\Mysql\Internal;
 
 use Amp\Future;
 use Amp\Mysql\MysqlResult;
-use Amp\Sql\Common\CommandResult;
+use Amp\Sql\Common\SqlCommandResult;
 
 /**
  * @internal
  * @psalm-import-type TFieldType from MysqlResult
- * @extends CommandResult<TFieldType, MysqlResult>
+ * @extends SqlCommandResult<TFieldType, MysqlResult>
  */
-final class MysqlCommandResult extends CommandResult implements MysqlResult
+final class MysqlCommandResult extends SqlCommandResult implements MysqlResult
 {
     private ?int $lastInsertId;
 

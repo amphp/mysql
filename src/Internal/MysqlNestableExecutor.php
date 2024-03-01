@@ -7,13 +7,13 @@ use Amp\ForbidSerialization;
 use Amp\Mysql\MysqlExecutor;
 use Amp\Mysql\MysqlResult;
 use Amp\Mysql\MysqlStatement;
-use Amp\Sql\Common\NestableTransactionExecutor;
+use Amp\Sql\Common\SqlNestableTransactionExecutor;
 
 /**
  * @internal
- * @implements NestableTransactionExecutor<MysqlResult, MysqlStatement>
+ * @implements SqlNestableTransactionExecutor<MysqlResult, MysqlStatement>
  */
-final class MysqlNestableExecutor implements MysqlExecutor, NestableTransactionExecutor
+final class MysqlNestableExecutor implements MysqlExecutor, SqlNestableTransactionExecutor
 {
     use ForbidCloning;
     use ForbidSerialization;

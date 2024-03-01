@@ -8,7 +8,7 @@ use Amp\Mysql\MysqlTransaction;
 use Amp\Mysql\SocketMysqlConnector;
 use function Amp\async;
 
-class NestedTransactionTest extends LinkTest
+class MysqlNestedTransactionTest extends MysqlLinkTest
 {
     private ?MysqlLink $link;
     private ?MysqlTransaction $transaction = null;

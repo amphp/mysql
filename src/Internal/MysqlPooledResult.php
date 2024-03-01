@@ -3,15 +3,15 @@
 namespace Amp\Mysql\Internal;
 
 use Amp\Mysql\MysqlResult;
-use Amp\Sql\Common\PooledResult;
-use Amp\Sql\Result;
+use Amp\Sql\Common\SqlPooledResult;
+use Amp\Sql\SqlResult;
 
 /**
  * @internal
  * @psalm-import-type TFieldType from MysqlResult
- * @extends PooledResult<TFieldType, MysqlResult>
+ * @extends SqlPooledResult<TFieldType, MysqlResult>
  */
-final class MysqlPooledResult extends PooledResult implements MysqlResult
+final class MysqlPooledResult extends SqlPooledResult implements MysqlResult
 {
     private readonly MysqlResult $result;
 
@@ -24,7 +24,7 @@ final class MysqlPooledResult extends PooledResult implements MysqlResult
         $this->result = $result;
     }
 
-    protected static function newInstanceFrom(Result $result, \Closure $release): self
+    protected static function newInstanceFrom(SqlResult $result, \Closure $release): self
     {
         \assert($result instanceof MysqlResult);
         return new self($result, $release);

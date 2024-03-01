@@ -12,12 +12,12 @@ use Amp\Mysql\MysqlLink;
 use Amp\Mysql\MysqlResult;
 use Amp\Mysql\SocketMysqlConnection;
 use Amp\Sql\SqlConnector;
-use Amp\Sql\Transaction as SqlTransaction;
+use Amp\Sql\SqlTransaction;
 use PHPUnit\Framework\MockObject\MockObject;
 use function Amp\async;
 use function Amp\delay;
 
-class PoolTest extends LinkTest
+class MysqlPoolTest extends MysqlLinkTest
 {
     protected function getLink(bool $useCompression = false): MysqlLink
     {

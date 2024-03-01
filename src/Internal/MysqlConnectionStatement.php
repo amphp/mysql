@@ -7,7 +7,7 @@ use Amp\ForbidCloning;
 use Amp\ForbidSerialization;
 use Amp\Mysql\MysqlResult;
 use Amp\Mysql\MysqlStatement;
-use Amp\Sql\ConnectionException;
+use Amp\Sql\SqlConnectionException;
 use Revolt\EventLoop;
 
 /** @internal */
@@ -62,7 +62,7 @@ final class MysqlConnectionStatement implements MysqlStatement
         }
 
         if ($this->processor->isClosed()) {
-            throw new ConnectionException("Connection went away");
+            throw new SqlConnectionException("Connection went away");
         }
 
         return $this->processor;

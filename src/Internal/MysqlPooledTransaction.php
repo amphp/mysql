@@ -5,14 +5,14 @@ namespace Amp\Mysql\Internal;
 use Amp\Mysql\MysqlResult;
 use Amp\Mysql\MysqlStatement;
 use Amp\Mysql\MysqlTransaction;
-use Amp\Sql\Common\PooledTransaction;
-use Amp\Sql\Transaction;
+use Amp\Sql\Common\SqlPooledTransaction;
+use Amp\Sql\SqlTransaction;
 
 /**
  * @internal
- * @extends PooledTransaction<MysqlResult, MysqlStatement, MysqlTransaction>
+ * @extends SqlPooledTransaction<MysqlResult, MysqlStatement, MysqlTransaction>
  */
-final class MysqlPooledTransaction extends PooledTransaction implements MysqlTransaction
+final class MysqlPooledTransaction extends SqlPooledTransaction implements MysqlTransaction
 {
     use MysqlTransactionDelegate;
 
@@ -24,7 +24,7 @@ final class MysqlPooledTransaction extends PooledTransaction implements MysqlTra
         parent::__construct($transaction, $release);
     }
 
-    protected function createTransaction(Transaction $transaction, \Closure $release): Transaction
+    protected function createTransaction(SqlTransaction $transaction, \Closure $release): MysqlTransaction
     {
         \assert($transaction instanceof MysqlTransaction);
         return new MysqlPooledTransaction($transaction, $release);
