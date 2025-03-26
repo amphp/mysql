@@ -66,6 +66,10 @@ enum MysqlDataType: int
             case self::Json:
                 return self::decodeString($bytes, $offset);
 
+            case self::Bit:
+                return (int) self::decodeString($bytes, $offset);
+
+
             case self::LongLong:
                 return $unsigned
                     ? self::decodeUnsigned64($bytes, $offset)
@@ -87,7 +91,6 @@ enum MysqlDataType: int
                     ? self::decodeUnsigned16($bytes, $offset)
                     : self::decodeInt16($bytes, $offset);
 
-            case self::Bit:
             case self::Tiny:
                 return $unsigned
                     ? self::decodeUnsigned8($bytes, $offset)
