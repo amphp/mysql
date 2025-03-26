@@ -61,7 +61,6 @@ enum MysqlDataType: int
             case self::Blob:
             case self::TinyBlob:
             case self::Geometry:
-            case self::Bit:
             case self::Decimal:
             case self::NewDecimal:
             case self::Json:
@@ -88,6 +87,7 @@ enum MysqlDataType: int
                     ? self::decodeUnsigned16($bytes, $offset)
                     : self::decodeInt16($bytes, $offset);
 
+            case self::Bit:
             case self::Tiny:
                 return $unsigned
                     ? self::decodeUnsigned8($bytes, $offset)
