@@ -800,7 +800,7 @@ class ConnectionProcessor implements SqlTransientResource
     {
         $offset = 1;
 
-        $protocol = \ord($packet);
+        $protocol = \ord($packet[0]);
 
         if ($protocol === self::ERR_PACKET) {
             $this->handleError($packet);
@@ -808,7 +808,7 @@ class ConnectionProcessor implements SqlTransientResource
         }
 
         if ($protocol !== 0x0a) {
-            throw new SqlConnectionException("Unsupported protocol version ".\ord($packet)." (Expected: 10)");
+            throw new SqlConnectionException("Unsupported protocol version ".\ord($packet[0])." (Expected: 10)");
         }
 
         $this->metadata->serverVersion = MysqlDataType::decodeNullTerminatedString($packet, $offset);
@@ -887,7 +887,7 @@ class ConnectionProcessor implements SqlTransientResource
     /** @see 14.6.4.1.1 Text Resultset */
     private function handleQuery(string $packet): void
     {
-        switch (\ord($packet)) {
+        switch (\ord($packet[0])) {
             case self::OK_PACKET:
                 $this->parseOk($packet);
 
@@ -929,16 +929,16 @@ class ConnectionProcessor implements SqlTransientResource
     private function handleExecute(string $packet): void
     {
         $this->parseCallback = $this->handleBinaryColumnDefinition(...);
-        $this->result = new MysqlResultProxy(\ord($packet));
+        $this->result = new MysqlResultProxy(\ord($packet[0]));
         $this->dequeueDeferred()->complete(new MysqlConnectionResult($this->result));
     }
 
     private function handleFieldList(string $packet): void
     {
-        if (\ord($packet) === self::ERR_PACKET) {
+        if (\ord($packet[0]) === self::ERR_PACKET) {
             $this->parseCallback = null;
             $this->handleError($packet);
-        } elseif (\ord($packet) === self::EOF_PACKET) {
+        } elseif (\ord($packet[0]) === self::EOF_PACKET) {
             $this->parseCallback = null;
             $this->parseEof($packet);
             $this->dequeueDeferred()->complete();
@@ -965,7 +965,7 @@ class ConnectionProcessor implements SqlTransientResource
 
         if (!$this->result->columnsToFetch--) {
             $this->result->markDefinitionsFetched();
-            if (\ord($packet) === self::ERR_PACKET) {
+            if (\ord($packet[0]) === self::ERR_PACKET) {
                 $this->parseCallback = null;
                 $this->handleError($packet);
             } else {
@@ -1094,7 +1094,7 @@ class ConnectionProcessor implements SqlTransientResource
     /** @see 14.6.4.1.1.3 Resultset Row */
     private function handleTextResultSetRow(string $packet): void
     {
-        $packetType = \ord($packet);
+        $packetType = \ord($packet[0]);
         if ($packetType === self::EOF_PACKET) {
             if ($this->capabilities & self::CLIENT_DEPRECATE_EOF) {
                 $this->parseOk($packet);
@@ -1130,7 +1130,7 @@ class ConnectionProcessor implements SqlTransientResource
     /** @see 14.7.2 Binary Protocol Resultset Row */
     private function handleBinaryResultSetRow(string $packet): void
     {
-        $packetType = \ord($packet);
+        $packetType = \ord($packet[0]);
         if ($packetType === self::EOF_PACKET) {
             $this->parseEof($packet);
             $this->successfulResultFetch();
@@ -1165,7 +1165,7 @@ class ConnectionProcessor implements SqlTransientResource
     /** @see 14.7.4.1 COM_STMT_PREPARE Response */
     private function handlePrepare(string $packet): void
     {
-        switch (\ord($packet)) {
+        switch (\ord($packet[0])) {
             case self::OK_PACKET:
                 break;
             case self::ERR_PACKET:
@@ -1391,7 +1391,7 @@ class ConnectionProcessor implements SqlTransientResource
         }
 
         if ($this->connectionState === ConnectionState::Established) {
-            switch (\ord($packet)) {
+            switch (\ord($packet[0])) {
                 case self::OK_PACKET:
                     if ($this->capabilities & self::CLIENT_COMPRESS) {
                         $this->parser = new Parser($this->parseCompression($this->parser));
@@ -1448,7 +1448,7 @@ class ConnectionProcessor implements SqlTransientResource
 
         $cb = $this->packetCallback;
         $this->packetCallback = null;
-        switch (\ord($packet)) {
+        switch (\ord($packet[0])) {
             case self::OK_PACKET:
                 $this->handleOk($packet);
                 break;
@@ -1463,7 +1463,7 @@ class ConnectionProcessor implements SqlTransientResource
                 // no break
             default:
                 if (!$cb) {
-                    throw new SqlConnectionException("Unexpected packet type: " . \ord($packet));
+                    throw new SqlConnectionException("Unexpected packet type: " . \ord($packet[0]));
                 }
 
                 $cb($packet);
@@ -1499,7 +1499,7 @@ class ConnectionProcessor implements SqlTransientResource
     private function authSwitchRequest(string $packet): void
     {
         $this->parseCallback = null;
-        switch (\ord($packet)) {
+        switch (\ord($packet[0])) {
             case self::EOF_PACKET:
                 if (\strlen($packet) === 1) {
                     break;
@@ -1513,7 +1513,7 @@ class ConnectionProcessor implements SqlTransientResource
                 $this->handleError($packet);
                 return;
             default:
-                throw new SqlConnectionException("AuthSwitchRequest: Expecting 0xfe (or ERR_Packet), got 0x".\dechex(\ord($packet)));
+                throw new SqlConnectionException("AuthSwitchRequest: Expecting 0xfe (or ERR_Packet), got 0x".\dechex(\ord($packet[0])));
         }
     }
 
