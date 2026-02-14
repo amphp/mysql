@@ -239,22 +239,22 @@ class MysqlPoolTest extends MysqlLinkTest
             $processor->expects($this->atLeastOnce())
                 ->method('query')
                 ->with($query)
-                ->willReturn(async(function () use ($result): MysqlResult {
-                    delay(0.01);
-                    return $result;
-                }));
+                ->willReturn(Future::complete($result));
         }
 
+        $queried = false;
         $processor = $this->createMock(ConnectionProcessor::class);
         $processor->method('isClosed')
-            ->willReturnOnConsecutiveCalls(false, true);
+            ->willReturnCallback(function () use (&$queried): bool {
+                return $queried;
+            });
         $processor->expects($this->once())
             ->method('query')
             ->with($query)
-            ->willReturn(async(function () use ($result): MysqlResult {
-                delay(0.01);
-                return $result;
-            }));
+            ->willReturnCallback(function () use (&$queried, $result): Future {
+                $queried = true;
+                return Future::complete($result);
+            });
 
         \array_unshift($processors, $processor);
 
