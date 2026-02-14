@@ -7,6 +7,8 @@ use Amp\Sql\SqlConnector;
 use Amp\Sql\SqlResult;
 use Amp\Sql\SqlStatement;
 use Amp\Sql\SqlTransaction;
+use Amp\Sql\SqlTransactionIsolation;
+use Amp\Sql\SqlTransactionIsolationLevel;
 
 /**
  * @extends SqlCommonConnectionPool<MysqlConfig, MysqlResult, MysqlStatement, MysqlTransaction, MysqlConnection>
@@ -23,8 +25,15 @@ final class MysqlConnectionPool extends SqlCommonConnectionPool implements Mysql
         int $maxConnections = self::DEFAULT_MAX_CONNECTIONS,
         int $idleTimeout = self::DEFAULT_IDLE_TIMEOUT,
         ?SqlConnector $connector = null,
+        SqlTransactionIsolation $transactionIsolation = SqlTransactionIsolationLevel::Committed,
     ) {
-        parent::__construct($config, $connector ?? mysqlConnector(), $maxConnections, $idleTimeout);
+        parent::__construct(
+            config: $config,
+            connector: $connector ?? mysqlConnector(),
+            maxConnections: $maxConnections,
+            idleTimeout: $idleTimeout,
+            transactionIsolation: $transactionIsolation,
+        );
     }
 
     protected function createResult(SqlResult $result, \Closure $release): MysqlResult
