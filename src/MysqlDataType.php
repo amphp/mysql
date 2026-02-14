@@ -417,9 +417,7 @@ enum MysqlDataType: int
         $result = \unpack("V", $bytes, $offset)[1];
         $offset += 4;
 
-        if ($result < 0) {
-            throw new \RuntimeException('Expecting a non-negative integer');
-        }
+        \assert($result >= 0);
 
         return $result;
     }
@@ -437,8 +435,10 @@ enum MysqlDataType: int
             return \unpack("V", $bytes, $offset - 4)[1];
         }
 
-        \assert(\extension_loaded("gmp"), "The GMP extension is required for UNSIGNED INT fields on 32-bit systems");
-        /** @psalm-suppress UndefinedConstant */
+        if (!\extension_loaded("gmp")) {
+            throw new \Error('The GMP extension is required for UNSIGNED INT fields on 32-bit systems');
+        }
+
         return \gmp_strval(\gmp_import(\substr($bytes, $offset - 4, 4), 1, \GMP_LSW_FIRST));
     }
 
@@ -452,7 +452,7 @@ enum MysqlDataType: int
             return \unpack("P", $bytes, $offset - 8)[1];
         }
 
-        throw new \RuntimeException('64-bit integers are not supported by 32-bit builds of PHP');
+        throw new \Error('64-bit integers are not supported by 32-bit builds of PHP');
     }
 
     public static function decodeInt64WithGmp(string $bytes, int &$offset = 0): int|string
@@ -463,8 +463,10 @@ enum MysqlDataType: int
             return \unpack("P", $bytes, $offset - 8)[1];
         }
 
-        \assert(\extension_loaded("gmp"), "The GMP extension is required for BIGINT fields on 32-bit systems");
-        /** @psalm-suppress UndefinedConstant */
+        if (!\extension_loaded("gmp")) {
+            throw new \Error('The GMP extension is required for BIGINT fields on 32-bit systems');
+        }
+
         return \gmp_strval(\gmp_import(\substr($bytes, $offset - 8, 8), 1, \GMP_LSW_FIRST));
     }
 
@@ -476,15 +478,13 @@ enum MysqlDataType: int
     public static function decodeUnsigned64(string $bytes, int &$offset = 0): int
     {
         if (\PHP_INT_SIZE <= 4) {
-            throw new \RuntimeException('64-bit integers are not supported by 32-bit builds of PHP');
+            throw new \Error('64-bit integers are not supported by 32-bit builds of PHP');
         }
 
         $result = \unpack("P", $bytes, $offset)[1];
         $offset += 8;
 
-        if ($result < 0) {
-            throw new \RuntimeException('Expecting a non-negative integer');
-        }
+        \assert($result >= 0);
 
         return $result;
     }
@@ -496,8 +496,10 @@ enum MysqlDataType: int
     {
         $offset += 8;
 
-        \assert(\extension_loaded("gmp"), "The GMP extension is required for UNSIGNED BIGINT fields");
-        /** @psalm-suppress UndefinedConstant */
+        if (!\extension_loaded("gmp")) {
+            throw new \Error('The GMP extension is required for UNSIGNED BIGINT fields');
+        }
+
         return \gmp_strval(\gmp_import(\substr($bytes, $offset - 8, 8), 1, \GMP_LSW_FIRST));
     }
 
