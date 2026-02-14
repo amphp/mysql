@@ -15,6 +15,19 @@ jobs:
           - operating-system: 'ubuntu-latest'
             php-version: '8.2'
 
+          - operating-system: 'ubuntu-latest'
+            php-version: '8.3'
+
+          - operating-system: 'ubuntu-latest'
+            php-version: '8.4'
+            static-analysis: none
+            style-fix: none
+
+          - operating-system: 'ubuntu-latest'
+            php-version: '8.5'
+            static-analysis: none
+            style-fix: none
+
     name: PHP ${{ matrix.php-version }} ${{ matrix.job-description }}
 
     runs-on: ${{ matrix.operating-system }}
@@ -72,8 +85,10 @@ jobs:
 
       - name: Run static analysis
         run: vendor/bin/psalm.phar
+        if: matrix.static-analysis != 'none'
 
-#      - name: Run style fixer
-#        env:
-#          PHP_CS_FIXER_IGNORE_ENV: 1
-#        run: vendor/bin/php-cs-fixer --diff --dry-run -v fix
+      - name: Run style fixer
+        env:
+          PHP_CS_FIXER_IGNORE_ENV: 1
+        run: vendor/bin/php-cs-fixer --diff --dry-run -v fix
+        if: runner.os != 'Windows' && matrix.style-fix != 'none'
