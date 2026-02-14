@@ -64,7 +64,7 @@ class MysqlPoolTest extends MysqlLinkTest
 
     public function getConnectionCounts(): array
     {
-        return \array_map(function (int $count): array { return [$count]; }, \range(2, 10, 2));
+        return \array_map(fn (int $count) => [$count], \range(2, 10, 2));
     }
 
     /**
