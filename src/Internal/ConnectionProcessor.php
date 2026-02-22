@@ -488,7 +488,7 @@ class ConnectionProcessor implements SqlTransientResource
                     }
 
                     $encodedValue = match ($paramType) {
-                        MysqlDataType::Json => MysqlEncodedValue::fromJson((string) $param),
+                        MysqlDataType::Json => MysqlEncodedValue::fromJson($param),
                         default => MysqlEncodedValue::fromValue($param),
                     };
 

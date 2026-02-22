@@ -51,8 +51,12 @@ final class MysqlEncodedValue
         }
     }
 
-    public static function fromJson(string $json): self
+    public static function fromJson(?string $json): self
     {
+        if ($json === null) {
+            return new self(MysqlDataType::Null, "");
+        }
+
         return new self(MysqlDataType::Json, MysqlDataType::encodeInt(\strlen($json)) . $json);
     }
 
