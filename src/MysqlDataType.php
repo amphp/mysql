@@ -73,14 +73,10 @@ enum MysqlDataType: int
                     : self::decodeInt64($bytes, $offset);
 
             case self::Long:
+            case self::Int24:
                 return $unsigned
                     ? self::decodeUnsigned32($bytes, $offset)
                     : self::decodeInt32($bytes, $offset);
-
-            case self::Int24:
-                return $unsigned
-                    ? self::decodeUnsigned24($bytes, $offset)
-                    : self::decodeInt24($bytes, $offset);
 
             case self::Short:
             case self::Year:
