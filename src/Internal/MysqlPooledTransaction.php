@@ -14,6 +14,7 @@ use Amp\Sql\SqlTransaction;
  */
 final class MysqlPooledTransaction extends SqlPooledTransaction implements MysqlTransaction
 {
+    use MysqlStatementCreationDelegate;
     use MysqlTransactionDelegate;
 
     /**

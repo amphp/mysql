@@ -5,7 +5,6 @@ namespace Amp\Mysql;
 use Amp\Sql\Common\SqlCommonConnectionPool;
 use Amp\Sql\SqlConnector;
 use Amp\Sql\SqlResult;
-use Amp\Sql\SqlStatement;
 use Amp\Sql\SqlTransaction;
 use Amp\Sql\SqlTransactionIsolation;
 use Amp\Sql\SqlTransactionIsolationLevel;
@@ -15,6 +14,8 @@ use Amp\Sql\SqlTransactionIsolationLevel;
  */
 final class MysqlConnectionPool extends SqlCommonConnectionPool implements MysqlConnection
 {
+    use Internal\MysqlStatementCreationDelegate;
+
     /**
      * @param positive-int $maxConnections
      * @param positive-int $idleTimeout
@@ -41,13 +42,6 @@ final class MysqlConnectionPool extends SqlCommonConnectionPool implements Mysql
     {
         \assert($result instanceof MysqlResult);
         return new Internal\MysqlPooledResult($result, $release);
-    }
-
-    #[\Override]
-    protected function createStatement(SqlStatement $statement, \Closure $release): MysqlStatement
-    {
-        \assert($statement instanceof MysqlStatement);
-        return new Internal\MysqlPooledStatement($statement, $release);
     }
 
     #[\Override]

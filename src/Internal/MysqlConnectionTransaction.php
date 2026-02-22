@@ -15,6 +15,7 @@ use Amp\Sql\SqlTransaction;
  */
 final class MysqlConnectionTransaction extends SqlConnectionTransaction implements MysqlTransaction
 {
+    use MysqlStatementCreationDelegate;
     use MysqlTransactionDelegate;
 
     #[\Override]
