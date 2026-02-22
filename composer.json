@@ -30,7 +30,7 @@
         "amphp/phpunit-util": "^3",
         "amphp/php-cs-fixer-config": "^2",
         "phpbench/phpbench": "^1.2.6",
-        "psalm/phar": "5.23"
+        "psalm/phar": "6.15.1"
     },
     "autoload": {
         "psr-4": {
