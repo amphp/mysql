@@ -24,6 +24,7 @@ final class MysqlPooledTransaction extends SqlPooledTransaction implements Mysql
         parent::__construct($transaction, $release);
     }
 
+    #[\Override]
     protected function createTransaction(SqlTransaction $transaction, \Closure $release): MysqlTransaction
     {
         \assert($transaction instanceof MysqlTransaction);

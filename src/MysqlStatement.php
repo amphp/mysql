@@ -9,6 +9,7 @@ use Amp\Sql\SqlStatement;
  */
 interface MysqlStatement extends SqlStatement
 {
+    #[\Override]
     public function execute(array $params = []): MysqlResult;
 
     /**

@@ -15,6 +15,7 @@ interface MysqlResult extends SqlResult
     /**
      * Changes return type to this library's Result type.
      */
+    #[\Override]
     public function getNextResult(): ?self;
 
     /**

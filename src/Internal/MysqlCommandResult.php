@@ -27,6 +27,7 @@ final class MysqlCommandResult extends SqlCommandResult implements MysqlResult
     /**
      * Changes return type to this library's Result type.
      */
+    #[\Override]
     public function getNextResult(): ?MysqlResult
     {
         return parent::getNextResult();
@@ -35,6 +36,7 @@ final class MysqlCommandResult extends SqlCommandResult implements MysqlResult
     /**
      * @return int|null Insert ID of the last auto increment row or null if not applicable to the query.
      */
+    #[\Override]
     public function getLastInsertId(): ?int
     {
         return $this->lastInsertId;
@@ -43,6 +45,7 @@ final class MysqlCommandResult extends SqlCommandResult implements MysqlResult
     /**
      * @return null Always returns null as command results do not have a field list.
      */
+    #[\Override]
     public function getColumnDefinitions(): ?array
     {
         return null; // Command results do not have a field list.

@@ -12,5 +12,6 @@ interface MysqlLink extends MysqlExecutor, SqlLink
     /**
      * @return MysqlTransaction Transaction object specific to this library.
      */
+    #[\Override]
     public function beginTransaction(): MysqlTransaction;
 }

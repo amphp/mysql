@@ -152,6 +152,7 @@ class ConnectionProcessor implements SqlTransientResource
         $this->parser = new Parser($this->parseMysql());
     }
 
+    #[\Override]
     public function isClosed(): bool
     {
         return match ($this->connectionState) {
@@ -160,6 +161,7 @@ class ConnectionProcessor implements SqlTransientResource
         };
     }
 
+    #[\Override]
     public function onClose(\Closure $onClose): void
     {
         $this->socket->onClose($onClose);
@@ -305,6 +307,7 @@ class ConnectionProcessor implements SqlTransientResource
         return $this->connectionId;
     }
 
+    #[\Override]
     public function getLastUsedAt(): int
     {
         return $this->lastUsedAt;
@@ -1213,6 +1216,7 @@ class ConnectionProcessor implements SqlTransientResource
         });
     }
 
+    #[\Override]
     public function close(): void
     {
         $this->free();

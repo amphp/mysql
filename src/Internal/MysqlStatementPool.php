@@ -18,6 +18,7 @@ final class MysqlStatementPool extends SqlStatementPool implements MysqlStatemen
 {
     private array $params = [];
 
+    #[\Override]
     protected function pop(): MysqlStatement
     {
         $statement = parent::pop();
@@ -36,6 +37,7 @@ final class MysqlStatementPool extends SqlStatementPool implements MysqlStatemen
         return $statement;
     }
 
+    #[\Override]
     protected function push(SqlStatement $statement): void
     {
         if ($statement->isClosed()) {
@@ -46,6 +48,7 @@ final class MysqlStatementPool extends SqlStatementPool implements MysqlStatemen
         parent::push($statement);
     }
 
+    #[\Override]
     protected function createResult(SqlResult $result, \Closure $release): MysqlResult
     {
         if (!$result instanceof MysqlResult) {
@@ -55,22 +58,26 @@ final class MysqlStatementPool extends SqlStatementPool implements MysqlStatemen
         return new MysqlPooledResult($result, $release);
     }
 
+    #[\Override]
     public function execute(array $params = []): MysqlResult
     {
         return parent::execute($params);
     }
 
+    #[\Override]
     public function bind(int|string $paramId, string $data): void
     {
         $prior = $this->params[$paramId] ?? '';
         $this->params[$paramId] = $prior . $data;
     }
 
+    #[\Override]
     public function reset(): void
     {
         $this->params = [];
     }
 
+    #[\Override]
     public function getColumnDefinitions(): array
     {
         $statement = parent::pop();
@@ -79,6 +86,7 @@ final class MysqlStatementPool extends SqlStatementPool implements MysqlStatemen
         return $columns;
     }
 
+    #[\Override]
     public function getParameterDefinitions(): array
     {
         $statement = parent::pop();

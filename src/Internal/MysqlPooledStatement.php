@@ -25,6 +25,7 @@ final class MysqlPooledStatement extends SqlPooledStatement implements MysqlStat
         parent::__construct($statement, $release, $awaitBusyResource);
     }
 
+    #[\Override]
     protected function createResult(SqlResult $result, \Closure $release): MysqlResult
     {
         \assert($result instanceof MysqlResult);
@@ -34,26 +35,31 @@ final class MysqlPooledStatement extends SqlPooledStatement implements MysqlStat
     /**
      * Changes return type to this library's Result type.
      */
+    #[\Override]
     public function execute(array $params = []): MysqlResult
     {
         return parent::execute($params);
     }
 
+    #[\Override]
     public function bind(int|string $paramId, string $data): void
     {
         $this->statement->bind($paramId, $data);
     }
 
+    #[\Override]
     public function getColumnDefinitions(): array
     {
         return $this->statement->getColumnDefinitions();
     }
 
+    #[\Override]
     public function getParameterDefinitions(): array
     {
         return $this->statement->getParameterDefinitions();
     }
 
+    #[\Override]
     public function reset(): void
     {
         $this->statement->reset();

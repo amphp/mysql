@@ -12,5 +12,6 @@ interface MysqlConnection extends MysqlLink, SqlConnection
     /**
      * @return MysqlConfig Config object specific to this library.
      */
+    #[\Override]
     public function getConfig(): MysqlConfig;
 }

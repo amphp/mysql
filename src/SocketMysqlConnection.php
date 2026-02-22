@@ -53,16 +53,19 @@ final class SocketMysqlConnection implements MysqlConnection
         };
     }
 
+    #[\Override]
     public function getConfig(): MysqlConfig
     {
         return $this->processor->getConfig();
     }
 
+    #[\Override]
     public function getTransactionIsolation(): SqlTransactionIsolation
     {
         return $this->transactionIsolation;
     }
 
+    #[\Override]
     public function setTransactionIsolation(SqlTransactionIsolation $isolation): void
     {
         $this->transactionIsolation = $isolation;
@@ -71,6 +74,7 @@ final class SocketMysqlConnection implements MysqlConnection
     /**
      * @return bool False if the connection has been closed.
      */
+    #[\Override]
     public function isClosed(): bool
     {
         return $this->processor->isClosed();
@@ -79,6 +83,7 @@ final class SocketMysqlConnection implements MysqlConnection
     /**
      * @return int Timestamp of the last time this connection was used.
      */
+    #[\Override]
     public function getLastUsedAt(): int
     {
         return $this->processor->getLastUsedAt();
@@ -89,6 +94,7 @@ final class SocketMysqlConnection implements MysqlConnection
         $this->processor->useCharacterSet($charset, $collate)->await();
     }
 
+    #[\Override]
     public function close(): void
     {
         // Send close command if connection is not already in a closed or closing state
@@ -97,6 +103,7 @@ final class SocketMysqlConnection implements MysqlConnection
         }
     }
 
+    #[\Override]
     public function onClose(\Closure $onClose): void
     {
         $this->processor->onClose($onClose);
@@ -107,6 +114,7 @@ final class SocketMysqlConnection implements MysqlConnection
         $this->processor->useDatabase($database)->await();
     }
 
+    #[\Override]
     public function query(string $sql): MysqlResult
     {
         while ($this->busy) {
@@ -116,6 +124,7 @@ final class SocketMysqlConnection implements MysqlConnection
         return $this->processor->query($sql)->await();
     }
 
+    #[\Override]
     public function beginTransaction(): MysqlTransaction
     {
         while ($this->busy) {
@@ -146,6 +155,7 @@ final class SocketMysqlConnection implements MysqlConnection
         $this->processor->ping()->await();
     }
 
+    #[\Override]
     public function prepare(string $sql): MysqlStatement
     {
         while ($this->busy) {
@@ -155,6 +165,7 @@ final class SocketMysqlConnection implements MysqlConnection
         return $this->processor->prepare($sql)->await();
     }
 
+    #[\Override]
     public function execute(string $sql, array $params = []): MysqlResult
     {
         $statement = $this->prepare($sql);

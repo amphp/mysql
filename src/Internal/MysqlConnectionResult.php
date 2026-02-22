@@ -64,12 +64,14 @@ final class MysqlConnectionResult implements MysqlResult, \IteratorAggregate
         }
     }
 
+    #[\Override]
     public function getIterator(): \Traversable
     {
         // Using a Generator to keep a reference to $this.
         yield from $this->generator;
     }
 
+    #[\Override]
     public function fetchRow(): ?array
     {
         if (!$this->generator->valid()) {
@@ -81,6 +83,7 @@ final class MysqlConnectionResult implements MysqlResult, \IteratorAggregate
         return $current;
     }
 
+    #[\Override]
     public function getNextResult(): ?MysqlResult
     {
         $this->nextResult ??= async(function (): ?MysqlResult {
@@ -99,21 +102,25 @@ final class MysqlConnectionResult implements MysqlResult, \IteratorAggregate
         return $this->nextResult->await();
     }
 
+    #[\Override]
     public function getRowCount(): ?int
     {
         return $this->result->affectedRows;
     }
 
+    #[\Override]
     public function getColumnCount(): int
     {
         return $this->result->columnCount;
     }
 
+    #[\Override]
     public function getLastInsertId(): ?int
     {
         return $this->result->insertId;
     }
 
+    #[\Override]
     public function getColumnDefinitions(): ?array
     {
         return $this->result->getColumnDefinitions();

@@ -21,6 +21,7 @@ final class SocketMysqlConnector implements SqlConnector
     {
     }
 
+    #[\Override]
     public function connect(SqlConfig $config, ?Cancellation $cancellation = null): MysqlConnection
     {
         if (!$config instanceof MysqlConfig) {

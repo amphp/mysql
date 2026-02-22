@@ -36,23 +36,27 @@ final class MysqlConnectionPool extends SqlCommonConnectionPool implements Mysql
         );
     }
 
+    #[\Override]
     protected function createResult(SqlResult $result, \Closure $release): MysqlResult
     {
         \assert($result instanceof MysqlResult);
         return new Internal\MysqlPooledResult($result, $release);
     }
 
+    #[\Override]
     protected function createStatement(SqlStatement $statement, \Closure $release): MysqlStatement
     {
         \assert($statement instanceof MysqlStatement);
         return new Internal\MysqlPooledStatement($statement, $release);
     }
 
+    #[\Override]
     protected function createStatementPool(string $sql, \Closure $prepare): MysqlStatement
     {
         return new Internal\MysqlStatementPool($this, $sql, $prepare);
     }
 
+    #[\Override]
     protected function createTransaction(SqlTransaction $transaction, \Closure $release): MysqlTransaction
     {
         return new Internal\MysqlPooledTransaction($transaction, $release);
@@ -61,6 +65,7 @@ final class MysqlConnectionPool extends SqlCommonConnectionPool implements Mysql
     /**
      * Changes return type to this library's configuration type.
      */
+    #[\Override]
     public function getConfig(): MysqlConfig
     {
         return parent::getConfig();
@@ -69,6 +74,7 @@ final class MysqlConnectionPool extends SqlCommonConnectionPool implements Mysql
     /**
      * Changes return type to this library's Result type.
      */
+    #[\Override]
     public function query(string $sql): MysqlResult
     {
         return parent::query($sql);
@@ -77,6 +83,7 @@ final class MysqlConnectionPool extends SqlCommonConnectionPool implements Mysql
     /**
      * Changes return type to this library's Statement type.
      */
+    #[\Override]
     public function prepare(string $sql): MysqlStatement
     {
         return parent::prepare($sql);
@@ -85,6 +92,7 @@ final class MysqlConnectionPool extends SqlCommonConnectionPool implements Mysql
     /**
      * Changes return type to this library's Result type.
      */
+    #[\Override]
     public function execute(string $sql, array $params = []): MysqlResult
     {
         return parent::execute($sql, $params);
@@ -93,6 +101,7 @@ final class MysqlConnectionPool extends SqlCommonConnectionPool implements Mysql
     /**
      * Changes return type to this library's Transaction type.
      */
+    #[\Override]
     public function beginTransaction(): MysqlTransaction
     {
         return parent::beginTransaction();

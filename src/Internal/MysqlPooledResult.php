@@ -24,22 +24,26 @@ final class MysqlPooledResult extends SqlPooledResult implements MysqlResult
         $this->result = $result;
     }
 
+    #[\Override]
     protected static function newInstanceFrom(SqlResult $result, \Closure $release): self
     {
         \assert($result instanceof MysqlResult);
         return new self($result, $release);
     }
 
+    #[\Override]
     public function getNextResult(): ?MysqlResult
     {
         return parent::getNextResult();
     }
 
+    #[\Override]
     public function getLastInsertId(): ?int
     {
         return $this->result->getLastInsertId();
     }
 
+    #[\Override]
     public function getColumnDefinitions(): ?array
     {
         return $this->result->getColumnDefinitions();

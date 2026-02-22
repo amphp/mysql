@@ -35,6 +35,7 @@ final class MysqlNestedTransaction extends SqlNestedTransaction implements Mysql
         return $this->transaction;
     }
 
+    #[\Override]
     protected function createNestedTransaction(
         SqlTransaction $transaction,
         SqlNestableTransactionExecutor $executor,

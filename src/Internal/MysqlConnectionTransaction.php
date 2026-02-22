@@ -17,6 +17,7 @@ final class MysqlConnectionTransaction extends SqlConnectionTransaction implemen
 {
     use MysqlTransactionDelegate;
 
+    #[\Override]
     protected function createNestedTransaction(
         SqlTransaction $transaction,
         SqlNestableTransactionExecutor $executor,

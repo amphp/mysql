@@ -12,15 +12,18 @@ interface MysqlExecutor extends SqlExecutor
     /**
      * @return MysqlResult Result object specific to this library.
      */
+    #[\Override]
     public function query(string $sql): MysqlResult;
 
     /**
      * @return MysqlStatement Statement object specific to this library.
      */
+    #[\Override]
     public function prepare(string $sql): MysqlStatement;
 
     /**
      * @return MysqlResult Result object specific to this library.
      */
+    #[\Override]
     public function execute(string $sql, array $params = []): MysqlResult;
 }

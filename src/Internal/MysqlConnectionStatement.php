@@ -68,11 +68,13 @@ final class MysqlConnectionStatement implements MysqlStatement
         return $this->processor;
     }
 
+    #[\Override]
     public function isClosed(): bool
     {
         return !$this->processor || $this->processor->isClosed();
     }
 
+    #[\Override]
     public function close(): void
     {
         if ($this->processor) {
@@ -81,11 +83,13 @@ final class MysqlConnectionStatement implements MysqlStatement
         }
     }
 
+    #[\Override]
     public function onClose(\Closure $onClose): void
     {
         $this->onClose->getFuture()->finally($onClose);
     }
 
+    #[\Override]
     public function bind(int|string $paramId, string $data): void
     {
         if (\is_int($paramId)) {
@@ -116,6 +120,7 @@ final class MysqlConnectionStatement implements MysqlStatement
         $this->prebound[$paramId] = $prior . $data;
     }
 
+    #[\Override]
     public function execute(array $params = []): MysqlResult
     {
         $this->lastUsedAt = \time();
@@ -146,11 +151,13 @@ final class MysqlConnectionStatement implements MysqlStatement
             ->await();
     }
 
+    #[\Override]
     public function getQuery(): string
     {
         return $this->query;
     }
 
+    #[\Override]
     public function reset(): void
     {
         $this->getProcessor()
@@ -158,16 +165,19 @@ final class MysqlConnectionStatement implements MysqlStatement
             ->await();
     }
 
+    #[\Override]
     public function getColumnDefinitions(): array
     {
         return $this->result->getColumnDefinitions();
     }
 
+    #[\Override]
     public function getParameterDefinitions(): array
     {
         return $this->result->getParameterDefinitions();
     }
 
+    #[\Override]
     public function getLastUsedAt(): int
     {
         return $this->lastUsedAt;
