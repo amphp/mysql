@@ -249,6 +249,9 @@ class ConnectionProcessor implements SqlTransientResource
         $future->await();
     }
 
+    /**
+     * @psalm-suppress UnusedVariable
+     */
     private function read(): void
     {
         try {
@@ -1311,6 +1314,10 @@ class ConnectionProcessor implements SqlTransientResource
         }
 
         $deflated = \zlib_encode($packet, \ZLIB_ENCODING_DEFLATE);
+        if ($deflated === false) {
+            throw new SqlConnectionException("Failed to compress packet");
+        }
+
         if ($length < \strlen($deflated)) {
             return $this->makeCompressedPacket(0, $packet);
         }
@@ -1500,6 +1507,9 @@ class ConnectionProcessor implements SqlTransientResource
         return $digestStage1 ^ $scrambleStage1;
     }
 
+    /**
+     * @psalm-suppress UnusedMethod Retaining unused method for potential future use.
+     */
     private function authSwitchRequest(string $packet): void
     {
         $this->parseCallback = null;
@@ -1509,7 +1519,7 @@ class ConnectionProcessor implements SqlTransientResource
                     break;
                 }
                 $length = (int) \strpos($packet, "\0");
-                $pluginName = \substr($packet, 0, $length); // @TODO mysql_native_pass only now...
+                //$pluginName = \substr($packet, 0, $length); // @TODO mysql_native_pass only now...
                 $authPluginData = \substr($packet, $length + 1);
                 $this->write($this->secureAuth($this->config->getPassword() ?? '', $authPluginData));
                 break;

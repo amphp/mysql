@@ -22,17 +22,12 @@ final class MysqlNestedTransaction extends SqlNestedTransaction implements Mysql
      * @param \Closure():void $release
      */
     public function __construct(
-        private readonly MysqlTransaction $transaction,
+        MysqlTransaction $transaction,
         MysqlNestableExecutor $executor,
         string $identifier,
         \Closure $release,
     ) {
         parent::__construct($transaction, $executor, $identifier, $release);
-    }
-
-    protected function getTransaction(): MysqlTransaction
-    {
-        return $this->transaction;
     }
 
     #[\Override]

@@ -18,6 +18,9 @@ final class PublicKeyCache
         return self::$cache->computeIfAbsent($pem, fn () => \openssl_pkey_get_public($pem));
     }
 
+    /**
+     * @psalm-suppress UnusedConstructor Private constructor to prevent instantiation.
+     */
     private function __construct()
     {
     }

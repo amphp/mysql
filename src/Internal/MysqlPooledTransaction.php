@@ -19,7 +19,7 @@ final class MysqlPooledTransaction extends SqlPooledTransaction implements Mysql
     /**
      * @param \Closure():void $release
      */
-    public function __construct(private readonly MysqlTransaction $transaction, \Closure $release)
+    public function __construct(MysqlTransaction $transaction, \Closure $release)
     {
         parent::__construct($transaction, $release);
     }
