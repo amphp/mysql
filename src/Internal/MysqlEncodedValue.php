@@ -11,7 +11,7 @@ final class MysqlEncodedValue
     {
         switch (\get_debug_type($param)) {
             case "string":
-                return new self(MysqlDataType::LongBlob, MysqlDataType::encodeInt(\strlen($param)) . $param);
+                return new self(MysqlDataType::VarString, MysqlDataType::encodeInt(\strlen($param)) . $param);
 
             case "int":
                 if ($param >= -(1 << 7) && $param < (1 << 7)) {
