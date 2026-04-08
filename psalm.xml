@@ -56,11 +56,5 @@
                 <directory name="src"/>
             </errorLevel>
         </UnusedClass>
-
-        <InvalidAttribute>
-            <errorLevel type="suppress">
-                <directory name="src"/>
-            </errorLevel>
-        </InvalidAttribute>
     </issueHandlers>
 </psalm>
