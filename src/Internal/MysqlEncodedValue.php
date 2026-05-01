@@ -7,11 +7,11 @@ use Amp\Mysql\MysqlDataType;
 /** @internal */
 final class MysqlEncodedValue
 {
-    public static function fromValue(mixed $param): self
+    public static function fromValue(mixed $param, ?MysqlDataType $targetType = null): self
     {
         switch (\get_debug_type($param)) {
             case "string":
-                return new self(MysqlDataType::VarString, MysqlDataType::encodeInt(\strlen($param)) . $param);
+                return new self(self::stringTypeFor($targetType), MysqlDataType::encodeInt(\strlen($param)) . $param);
 
             case "int":
                 if ($param >= -(1 << 7) && $param < (1 << 7)) {
@@ -40,15 +40,33 @@ final class MysqlEncodedValue
 
             default:
                 if ($param instanceof \BackedEnum) {
-                    return self::fromValue($param->value);
+                    return self::fromValue($param->value, $targetType);
                 }
 
                 if ($param instanceof \Stringable) {
-                    return self::fromValue((string) $param);
+                    return self::fromValue((string) $param, $targetType);
                 }
 
                 throw new \TypeError("Unexpected type for query parameter: " . \get_debug_type($param));
         }
+    }
+
+    /**
+     * Picks the wire type for a PHP string parameter. Blob-family targets keep
+     * the binary (charset 63) interpretation of LongBlob so raw bytes are not
+     * transcoded against the connection charset; everything else uses VarString
+     * so MariaDB's native UUID column type and similar string-typed columns
+     * parse the value correctly.
+     */
+    private static function stringTypeFor(?MysqlDataType $targetType): MysqlDataType
+    {
+        return match ($targetType) {
+            MysqlDataType::TinyBlob,
+            MysqlDataType::Blob,
+            MysqlDataType::MediumBlob,
+            MysqlDataType::LongBlob => MysqlDataType::LongBlob,
+            default => MysqlDataType::VarString,
+        };
     }
 
     public static function fromJson(?string $json): self
