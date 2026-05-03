@@ -233,7 +233,7 @@ abstract class MysqlLinkTest extends MysqlTestCase
         $stmt = $db->prepare("SELECT * FROM main WHERE a = ? OR b = ?");
         $result = $stmt->execute([1, 8]);
         $this->assertInstanceOf(MysqlResult::class, $result);
-        $this->assertSame(5, $result->getColumnCount());
+        $this->assertSame(EXPECTED_COLUMN_COUNT, $result->getColumnCount());
         $got = [];
         foreach ($result as $row) {
             $got[] = \array_values($row);
@@ -243,7 +243,7 @@ abstract class MysqlLinkTest extends MysqlTestCase
         $stmt = $db->prepare("SELECT * FROM main WHERE a = :a OR b = ?");
         $result = $stmt->execute(["a" => 2, 5]);
         $this->assertInstanceOf(MysqlResult::class, $result);
-        $this->assertSame(5, $result->getColumnCount());
+        $this->assertSame(EXPECTED_COLUMN_COUNT, $result->getColumnCount());
         $got = [];
         foreach ($result as $row) {
             $got[] = \array_values($row);
@@ -324,7 +324,7 @@ abstract class MysqlLinkTest extends MysqlTestCase
             $got[] = \array_values($row);
         }
         $this->assertCount(2, $got);
-        $this->assertSame([[2, 2, 3, self::EPOCH, 'b'], [4, 4, 5, self::EPOCH, 'd']], $got);
+        $this->assertSame([[2, 2, 3, self::EPOCH, 'b', null], [4, 4, 5, self::EPOCH, 'd', null]], $got);
 
         $result = $db->execute("INSERT INTO main (a, b) VALUES (:a, :b)", ["a" => 10, "b" => 11, "c" => '1970-01-01 00:00:00']);
         $this->assertInstanceOf(MysqlResult::class, $result);
@@ -456,5 +456,31 @@ abstract class MysqlLinkTest extends MysqlTestCase
         foreach ($result as $row) {
             self::assertSame($json, $row['json_data']);
         }
+    }
+
+    public function provideBlobData(): iterable
+    {
+        foreach (\range(0, 9) as $i) {
+            yield 'blob-data-' . $i => [\random_bytes(10)];
+        }
+    }
+
+    /**
+     * @dataProvider provideBlobData
+     */
+    public function testBlobData(string $data): void
+    {
+        $db = $this->getLink();
+
+        $result = $db->execute("INSERT INTO main SET e = :data", ['data' => $data]);
+
+        $this->assertSame($result->getRowCount(), 1);
+        $id = $result->getLastInsertId();
+        $this->assertNotEmpty($id);
+
+        $result = $db->execute("SELECT e FROM main WHERE id = :id", ['id' => $id]);
+        $this->assertSame($data, $result->fetchRow()['e']);
+
+        $db->close();
     }
 }
