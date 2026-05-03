@@ -449,7 +449,7 @@ abstract class MysqlLinkTest extends MysqlTestCase
         return \array_map(
             fn (mixed $data) => [$data, \json_encode($data, \JSON_THROW_ON_ERROR)],
             [
-                'object' => (object)['key' => 'value'],
+                'object' => (object) ['key' => 'value'],
                 'array' => [1, 2, 3],
                 'string' => 'string',
                 'integer' => 123,
