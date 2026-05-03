@@ -2,7 +2,7 @@
 
 namespace Amp\Mysql\Test;
 
-const EXPECTED_COLUMN_COUNT = 6;
+const EXPECTED_COLUMN_COUNT = 7;
 
 function initialize(\mysqli $db): void
 {
@@ -16,6 +16,7 @@ function initialize(\mysqli $db): void
             c DATETIME NULL,
             d VARCHAR(255) NULL,
             e BLOB NULL,
+            f JSON NULL,
             PRIMARY KEY (id)
         );
     SQL);

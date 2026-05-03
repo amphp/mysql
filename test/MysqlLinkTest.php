@@ -317,14 +317,14 @@ abstract class MysqlLinkTest extends MysqlTestCase
     {
         $db = $this->getLink();
 
-        $result = $db->execute("SELECT * FROM test.main WHERE a = ? OR b = ?", [2, 5]);
+        $result = $db->execute("SELECT id, a, b, c, d FROM test.main WHERE a = ? OR b = ?", [2, 5]);
         $this->assertInstanceOf(MysqlResult::class, $result);
         $got = [];
         foreach ($result as $row) {
             $got[] = \array_values($row);
         }
         $this->assertCount(2, $got);
-        $this->assertSame([[2, 2, 3, self::EPOCH, 'b', null], [4, 4, 5, self::EPOCH, 'd', null]], $got);
+        $this->assertSame([[2, 2, 3, self::EPOCH, 'b'], [4, 4, 5, self::EPOCH, 'd']], $got);
 
         $result = $db->execute("INSERT INTO main (a, b) VALUES (:a, :b)", ["a" => 10, "b" => 11, "c" => '1970-01-01 00:00:00']);
         $this->assertInstanceOf(MysqlResult::class, $result);
@@ -444,18 +444,73 @@ abstract class MysqlLinkTest extends MysqlTestCase
         $db->close();
     }
 
-    public function testBindJson(): void
+    public function provideJsonData(): array
     {
-        $json = '{"key": "value"}';
+        return \array_map(
+            fn (mixed $data) => [$data, \json_encode($data, \JSON_THROW_ON_ERROR)],
+            [
+                'object' => (object)['key' => 'value'],
+                'array' => [1, 2, 3],
+                'string' => 'string',
+                'integer' => 123,
+                'float' => 3.14159,
+                'boolean' => true,
+                'null' => null,
+            ],
+        );
+    }
 
-        $statement = $this->getLink()->prepare("SELECT CAST(? AS JSON) AS json_data");
-        $statement->bind(0, $json);
+    /**
+     * @dataProvider provideJsonData
+     */
+    public function testJsonData(mixed $data, string $json): void
+    {
+        $db = $this->getLink();
 
-        $result = $statement->execute();
+        $transaction = $db->beginTransaction();
 
-        foreach ($result as $row) {
-            self::assertSame($json, $row['json_data']);
+        try {
+            $result = $transaction->execute("INSERT INTO main SET f = :json", ['json' => $json]);
+
+            self::assertSame($result->getRowCount(), 1);
+            $id = $result->getLastInsertId();
+            self::assertNotEmpty($id);
+
+            $result = $transaction->execute("SELECT f FROM main WHERE id = :id", ['id' => $id]);
+            self::assertEquals($data, \json_decode($result->fetchRow()['f'], flags: \JSON_THROW_ON_ERROR));
+        } finally {
+            $transaction->rollback();
         }
+
+        $db->close();
+    }
+
+    /**
+     * @dataProvider provideJsonData
+     */
+    public function testBindJsonData(mixed $data, string $json): void
+    {
+        $db = $this->getLink();
+
+        $transaction = $db->beginTransaction();
+
+        try {
+            $statement = $transaction->prepare("INSERT INTO main SET f = ?");
+            $statement->bind(0, $json);
+
+            $result = $statement->execute();
+
+            self::assertSame($result->getRowCount(), 1);
+            $id = $result->getLastInsertId();
+            self::assertNotEmpty($id);
+
+            $result = $transaction->execute("SELECT f FROM main WHERE id = :id", ['id' => $id]);
+            self::assertEquals($data, \json_decode($result->fetchRow()['f'], flags: \JSON_THROW_ON_ERROR));
+        } finally {
+            $transaction->rollback();
+        }
+
+        $db->close();
     }
 
     public function provideBlobData(): iterable
@@ -477,12 +532,40 @@ abstract class MysqlLinkTest extends MysqlTestCase
         try {
             $result = $transaction->execute("INSERT INTO main SET e = :data", ['data' => $data]);
 
-            $this->assertSame($result->getRowCount(), 1);
+            self::assertSame($result->getRowCount(), 1);
             $id = $result->getLastInsertId();
-            $this->assertNotEmpty($id);
+            self::assertNotEmpty($id);
 
             $result = $transaction->execute("SELECT e FROM main WHERE id = :id", ['id' => $id]);
-            $this->assertSame($data, $result->fetchRow()['e']);
+            self::assertSame($data, $result->fetchRow()['e']);
+        } finally {
+            $transaction->rollback();
+        }
+
+        $db->close();
+    }
+
+    /**
+     * @dataProvider provideBlobData
+     */
+    public function testBindBlobData(string $data): void
+    {
+        $db = $this->getLink();
+
+        $transaction = $db->beginTransaction();
+
+        try {
+            $statement = $transaction->prepare("INSERT INTO main SET e = ?");
+            $statement->bind(0, $data);
+
+            $result = $statement->execute();
+
+            self::assertSame($result->getRowCount(), 1);
+            $id = $result->getLastInsertId();
+            self::assertNotEmpty($id);
+
+            $result = $transaction->execute("SELECT e FROM main WHERE id = :id", ['id' => $id]);
+            self::assertSame($data, $result->fetchRow()['e']);
         } finally {
             $transaction->rollback();
         }
