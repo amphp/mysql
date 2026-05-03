@@ -472,14 +472,20 @@ abstract class MysqlLinkTest extends MysqlTestCase
     {
         $db = $this->getLink();
 
-        $result = $db->execute("INSERT INTO main SET e = :data", ['data' => $data]);
+        $transaction = $db->beginTransaction();
 
-        $this->assertSame($result->getRowCount(), 1);
-        $id = $result->getLastInsertId();
-        $this->assertNotEmpty($id);
+        try {
+            $result = $transaction->execute("INSERT INTO main SET e = :data", ['data' => $data]);
 
-        $result = $db->execute("SELECT e FROM main WHERE id = :id", ['id' => $id]);
-        $this->assertSame($data, $result->fetchRow()['e']);
+            $this->assertSame($result->getRowCount(), 1);
+            $id = $result->getLastInsertId();
+            $this->assertNotEmpty($id);
+
+            $result = $transaction->execute("SELECT e FROM main WHERE id = :id", ['id' => $id]);
+            $this->assertSame($data, $result->fetchRow()['e']);
+        } finally {
+            $transaction->rollback();
+        }
 
         $db->close();
     }
