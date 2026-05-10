@@ -483,12 +483,25 @@ class ConnectionProcessor implements SqlTransientResource
                     $paramType = $params[$paramId]->getType();
 
                     if (isset($prebound[$paramId])) {
-                        $types[] = MysqlDataType::encodeInt16(MysqlDataType::VarString->value);
+                        $preboundType = match ($paramType) {
+                            MysqlDataType::TinyBlob,
+                            MysqlDataType::Blob,
+                            MysqlDataType::MediumBlob,
+                            MysqlDataType::LongBlob => MysqlDataType::LongBlob,
+                            default => MysqlDataType::VarString,
+                        };
+
+                        $types[] = MysqlDataType::encodeInt16($preboundType->value);
+
                         continue;
                     }
 
                     $encodedValue = match ($paramType) {
-                        MysqlDataType::Json => MysqlEncodedValue::fromJson($param),
+                        MysqlDataType::TinyBlob,
+                        MysqlDataType::Blob,
+                        MysqlDataType::MediumBlob,
+                        MysqlDataType::LongBlob => MysqlEncodedValue::forTargetType(MysqlDataType::LongBlob, $param),
+                        MysqlDataType::Json => MysqlEncodedValue::forTargetType(MysqlDataType::Json, $param),
                         default => MysqlEncodedValue::fromValue($param),
                     };
 

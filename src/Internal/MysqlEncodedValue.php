@@ -11,7 +11,7 @@ final class MysqlEncodedValue
     {
         switch (\get_debug_type($param)) {
             case "string":
-                return new self(MysqlDataType::LongBlob, MysqlDataType::encodeInt(\strlen($param)) . $param);
+                return new self(MysqlDataType::VarString, MysqlDataType::encodeInt(\strlen($param)) . $param);
 
             case "int":
                 if ($param >= -(1 << 7) && $param < (1 << 7)) {
@@ -51,13 +51,25 @@ final class MysqlEncodedValue
         }
     }
 
-    public static function fromJson(?string $json): self
+    public static function forTargetType(MysqlDataType $targetType, mixed $data): self
     {
-        if ($json === null) {
+        if ($data === null) {
             return new self(MysqlDataType::Null, "");
         }
 
-        return new self(MysqlDataType::Json, MysqlDataType::encodeInt(\strlen($json)) . $json);
+        if ($data instanceof \Stringable) {
+            $data = (string) $data;
+        }
+
+        if (!\is_string($data)) {
+            throw new \TypeError(\sprintf(
+                "Expected string or null for %s column data, got %s",
+                $targetType->name,
+                \get_debug_type($data),
+            ));
+        }
+
+        return new self($targetType, MysqlDataType::encodeInt(\strlen($data)) . $data);
     }
 
     private function __construct(
