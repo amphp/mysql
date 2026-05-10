@@ -886,7 +886,6 @@ class ConnectionProcessor implements SqlTransientResource
         EventLoop::queue(function () use ($packet): void {
             try {
                 $filePath = \substr($packet, 1);
-                /** @var \Amp\File\File $fileHandle */
                 if (!\function_exists("Amp\\File\\openFile")) {
                     throw new \Error("amphp/file must be installed for LOCAL INFILE queries");
                 }

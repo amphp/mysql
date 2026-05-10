@@ -25,7 +25,7 @@
         "ext-mysqli": "*",
         "ext-openssl": "*",
         "amphp/process": "^2",
-        "amphp/file": "^3",
+        "amphp/file": "^3 | ^4",
         "phpunit/phpunit": "^9",
         "amphp/phpunit-util": "^3",
         "amphp/php-cs-fixer-config": "^2",
