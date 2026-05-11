@@ -201,24 +201,28 @@ abstract class MysqlLinkTest extends MysqlTestCase
             new MysqlColumnDefinition(...\array_merge($base, ["name" => "c", "originalName" => "c", "type" => MysqlDataType::Datetime, "length" => 19, "flags" => 128])),
         ], $stmt->getColumnDefinitions());
 
-        $base = [
-            "name" => "?",
-            "catalog" => "def",
-            "schema" => "",
-            "table" => "",
-            "originalTable" => "",
-            "originalName" => "",
-            "charset" => 63,
-            "length" => 21,
-            "flags" => 0,
-            "decimals" => 0,
-        ];
+        if (!$this->isMariaDb()) {
+            // MariaDB returns MYSQL_TYPE_NULL for parameter placeholders rather than
+            // the resolved column types. See https://mariadb.com/kb/en/com_stmt_prepare/
+            $base = [
+                "name" => "?",
+                "catalog" => "def",
+                "schema" => "",
+                "table" => "",
+                "originalTable" => "",
+                "originalName" => "",
+                "charset" => 63,
+                "length" => 21,
+                "flags" => 0,
+                "decimals" => 0,
+            ];
 
-        $this->assertEquals([
-            new MysqlColumnDefinition(...\array_merge($base, ["type" => MysqlDataType::LongLong, "flags" => 128])),
-            new MysqlColumnDefinition(...\array_merge($base, ["type" => MysqlDataType::Datetime, "length" => 104, "decimals" => 6, "charset" => MysqlConfig::BIN_CHARSET])),
-            new MysqlColumnDefinition(...\array_merge($base, ["type" => MysqlDataType::VarString, "length" => 65532, "decimals" => 31, "charset" => MysqlConfig::BIN_CHARSET])),
-        ], $stmt->getParameterDefinitions());
+            $this->assertEquals([
+                new MysqlColumnDefinition(...\array_merge($base, ["type" => MysqlDataType::LongLong, "flags" => 128])),
+                new MysqlColumnDefinition(...\array_merge($base, ["type" => MysqlDataType::Datetime, "length" => 104, "decimals" => 6, "charset" => MysqlConfig::BIN_CHARSET])),
+                new MysqlColumnDefinition(...\array_merge($base, ["type" => MysqlDataType::VarString, "length" => 65532, "decimals" => 31, "charset" => MysqlConfig::BIN_CHARSET])),
+            ], $stmt->getParameterDefinitions());
+        }
 
         $stmt->bind("data", 'd');
         $result = $stmt->execute([0 => 5, 'date' => self::EPOCH]);

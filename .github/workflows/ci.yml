@@ -160,5 +160,5 @@ jobs:
             composer update --optimize-autoloader --no-interaction --no-progress
             composer info -D
 
-      - name: Run MariaDB UUID test
-        run: vendor/bin/phpunit --bootstrap .github/workflows/bootstrap.php --filter MariaDbUuidTest
+      - name: Run tests
+        run: vendor/bin/phpunit --bootstrap .github/workflows/bootstrap.php
