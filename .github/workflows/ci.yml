@@ -93,3 +93,72 @@ jobs:
           PHP_CS_FIXER_IGNORE_ENV: 1
         run: vendor/bin/php-cs-fixer --diff --dry-run -v fix
         if: runner.os != 'Windows' && matrix.style-fix != 'none'
+
+  tests-mariadb:
+    strategy:
+      matrix:
+        include:
+          - operating-system: 'ubuntu-latest'
+            php-version: '8.4'
+
+          - operating-system: 'ubuntu-latest'
+            php-version: '8.5'
+
+    name: PHP ${{ matrix.php-version }} (MariaDB)
+
+    runs-on: ${{ matrix.operating-system }}
+
+    env:
+      MYSQL_DATABASE: test
+      MYSQL_USER: root
+      MYSQL_PASSWORD: root
+
+    steps:
+      - name: Setup MariaDB
+        run: |
+          sudo systemctl stop mysql
+          sudo apt-get update
+          sudo apt-get install -y mariadb-server
+          sudo systemctl start mariadb
+          sudo mariadb -e "ALTER USER 'root'@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD('root'); FLUSH PRIVILEGES;"
+          mariadb --version
+
+      - name: Set git to use LF
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache dependencies
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-mariadb-${{ runner.os }}-${{ matrix.php-version }}-${{ hashFiles('**/composer.*') }}
+          restore-keys: |
+            composer-mariadb-${{ runner.os }}-${{ matrix.php-version }}-
+            composer-${{ runner.os }}-${{ matrix.php-version }}-
+            composer-${{ runner.os }}-
+
+      - name: Install dependencies
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 5
+          max_attempts: 5
+          retry_wait_seconds: 30
+          command: |
+            composer update --optimize-autoloader --no-interaction --no-progress
+            composer info -D
+
+      - name: Run MariaDB UUID test
+        run: vendor/bin/phpunit --bootstrap .github/workflows/bootstrap.php --filter MariaDbUuidTest
