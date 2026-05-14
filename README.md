@@ -2,7 +2,7 @@
 
 AMPHP is a collection of event-driven libraries for PHP designed with fibers and concurrency in mind.
 `amphp/mysql` is an asynchronous MySQL client.
-The library implements concurrent querying by transparently distributing queries across a scalable pool of available connections. The client transparently distributes these queries across a scalable pool of available connections and does so using 100% userland PHP; there are *no external extension dependencies* (e.g. `ext/mysqli`, `ext/pdo`, etc.).
+The library implements concurrent querying by transparently distributing queries across a scalable pool of available connections. The MySQL client protocol is implemented using 100% PHP code; there are *no external extension dependencies* (e.g. `ext/mysqli`, `ext/pdo`, etc.).
 
 ## Features
 
@@ -42,7 +42,7 @@ $config = MysqlConfig::fromString(
 
 $pool = new MysqlConnectionPool($config);
 
-$statement = $pool->prepare("SELECT * FROM table_name WHERE id = :id");
+$statement = $pool->prepare("SELECT * FROM `table_name` WHERE `id` = :id");
 
 $result = $statement->execute(['id' => 1337]);
 foreach ($result as $row) {
