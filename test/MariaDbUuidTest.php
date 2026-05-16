@@ -5,9 +5,8 @@ namespace Amp\Mysql\Test;
 use Amp\Mysql\SocketMysqlConnector;
 
 /**
- * Exercises the prepared-statement parameter encoding path against MariaDB's
- * native UUID column type. Regresses if MysqlEncodedValue::stringTypeFor() ever
- * stops picking VarString for string-family targets (see #142).
+ * Exercises the prepared-statement parameter encoding path against MariaDB's native UUID column type.
+ * Regresses if VarString is not chosen for string-family targets (see #142).
  */
 class MariaDbUuidTest extends MysqlTestCase
 {
@@ -65,7 +64,7 @@ class MariaDbUuidTest extends MysqlTestCase
         $db->close();
 
         self::assertCount(1, $rows);
-        self::assertSame(self::FIXTURE_UUID, (string) $rows[0]['id']);
+        self::assertSame(self::FIXTURE_UUID, $rows[0]['id']);
         self::assertSame('fixture', $rows[0]['label']);
     }
 }
