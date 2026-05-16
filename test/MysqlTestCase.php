@@ -22,17 +22,15 @@ abstract class MysqlTestCase extends AsyncTestCase
 
     protected function isMariaDb(): bool
     {
-        if (self::$isMariaDb !== null) {
-            return self::$isMariaDb;
-        }
+        return self::$isMariaDb ??= \str_contains($this->getDbVersion(), 'MariaDB');
+    }
 
-        $db = (new SocketMysqlConnector)->connect($this->getConfig());
-        $version = '';
-        foreach ($db->query('SELECT VERSION() AS v') as $row) {
-            $version = (string) $row['v'];
-        }
+    protected function getDbVersion(): string
+    {
+        $db = (new SocketMysqlConnector())->connect($this->getConfig());
+        $version = $db->query('SELECT VERSION() AS v')->fetchRow()['v'] ?? '';
         $db->close();
 
-        return self::$isMariaDb = \str_contains($version, 'MariaDB');
+        return $version;
     }
 }
