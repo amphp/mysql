@@ -69,6 +69,10 @@ class MysqlDataTypeTest extends MysqlTestCase
      */
     public function testDateType(int|float|string|null $expected, string $type): void
     {
+        if ($type === 'YEAR' && $this->isMariaDb()) {
+            self::markTestSkipped('MariaDB does not support CAST(... AS YEAR); covered by storage-column tests.');
+        }
+
         $result = $this->connection->execute("SELECT CAST(:expected AS $type) AS data", ['expected' => $expected]);
 
         foreach ($result as $row) {
@@ -110,6 +114,10 @@ class MysqlDataTypeTest extends MysqlTestCase
      */
     public function testJson(mixed $json): void
     {
+        if ($this->isMariaDb()) {
+            self::markTestSkipped('MariaDB has no native JSON type; JSON is aliased to LONGTEXT and CAST(... AS JSON) is unsupported.');
+        }
+
         $result = $this->connection->execute("SELECT CAST(? AS JSON) AS data", [$json]);
 
         foreach ($result as $row) {
