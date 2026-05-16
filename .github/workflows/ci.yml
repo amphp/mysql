@@ -25,6 +25,16 @@ jobs:
           - operating-system: 'ubuntu-latest'
             php-version: '8.5'
 
+          - operating-system: 'ubuntu-latest'
+            php-version: '8.4'
+            db-version: 'MariaDB'
+            job-description: 'with MariaDB'
+
+          - operating-system: 'ubuntu-latest'
+            php-version: '8.5'
+            db-version: 'MariaDB'
+            job-description: 'with MariaDB'
+
     name: PHP ${{ matrix.php-version }} ${{ matrix.job-description }}
 
     runs-on: ${{ matrix.operating-system }}
@@ -38,6 +48,17 @@ jobs:
       - name: Setup MySQL
         run: |
           sudo systemctl start mysql
+        if: matrix.db-version != 'MariaDB'
+
+      - name: Setup MariaDB
+        run: |
+          sudo systemctl stop mysql
+          sudo apt-get update
+          sudo apt-get install -y mariadb-server
+          sudo systemctl start mariadb
+          sudo mariadb -e "ALTER USER 'root'@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD('root'); FLUSH PRIVILEGES;"
+          mariadb --version
+        if: matrix.db-version == 'MariaDB'
 
       - name: Set git to use LF
         run: |
@@ -86,79 +107,10 @@ jobs:
 
       - name: Run static analysis
         run: vendor/bin/psalm.phar
-        if: matrix.psalm != 'skip'
+        if: matrix.db-version != 'MariaDB' && matrix.psalm != 'skip'
 
       - name: Run style fixer
         env:
           PHP_CS_FIXER_IGNORE_ENV: 1
         run: vendor/bin/php-cs-fixer --diff --dry-run -v fix
-        if: runner.os != 'Windows' && matrix.style-fix != 'none'
-
-  tests-mariadb:
-    strategy:
-      matrix:
-        include:
-          - operating-system: 'ubuntu-latest'
-            php-version: '8.4'
-
-          - operating-system: 'ubuntu-latest'
-            php-version: '8.5'
-
-    name: PHP ${{ matrix.php-version }} (MariaDB)
-
-    runs-on: ${{ matrix.operating-system }}
-
-    env:
-      MYSQL_DATABASE: test
-      MYSQL_USER: root
-      MYSQL_PASSWORD: root
-
-    steps:
-      - name: Setup MariaDB
-        run: |
-          sudo systemctl stop mysql
-          sudo apt-get update
-          sudo apt-get install -y mariadb-server
-          sudo systemctl start mariadb
-          sudo mariadb -e "ALTER USER 'root'@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD('root'); FLUSH PRIVILEGES;"
-          mariadb --version
-
-      - name: Set git to use LF
-        run: |
-          git config --global core.autocrlf false
-          git config --global core.eol lf
-
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: ${{ matrix.php-version }}
-
-      - name: Get Composer cache directory
-        id: composer-cache
-        run: echo "dir=$(composer config cache-dir)" >> $GITHUB_OUTPUT
-
-      - name: Cache dependencies
-        uses: actions/cache@v5
-        with:
-          path: ${{ steps.composer-cache.outputs.dir }}
-          key: composer-mariadb-${{ runner.os }}-${{ matrix.php-version }}-${{ hashFiles('**/composer.*') }}
-          restore-keys: |
-            composer-mariadb-${{ runner.os }}-${{ matrix.php-version }}-
-            composer-${{ runner.os }}-${{ matrix.php-version }}-
-            composer-${{ runner.os }}-
-
-      - name: Install dependencies
-        uses: nick-fields/retry@v4
-        with:
-          timeout_minutes: 5
-          max_attempts: 5
-          retry_wait_seconds: 30
-          command: |
-            composer update --optimize-autoloader --no-interaction --no-progress
-            composer info -D
-
-      - name: Run tests
-        run: vendor/bin/phpunit --bootstrap .github/workflows/bootstrap.php
+        if: runner.os != 'Windows' && matrix.db-version != 'MariaDB' && matrix.style-fix != 'none'
