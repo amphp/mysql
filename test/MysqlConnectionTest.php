@@ -119,10 +119,6 @@ class MysqlConnectionTest extends MysqlLinkTest
 
     public function testTransactionsCallbacksOnDestruct(): void
     {
-        if ($this->isMariaDb()) {
-            self::markTestSkipped('Transaction destructor rollback callbacks fire on a delayed schedule on MariaDB; needs a separate timing-tolerant test.');
-        }
-
         $db = $this->getLink();
 
         $transaction = $db->beginTransaction();
