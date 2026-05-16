@@ -518,7 +518,7 @@ enum MysqlDataType: int
 
     public static function encodeInt8(int $int): string
     {
-        return \chr($int);
+        return \pack("C", $int);
     }
 
     public static function encodeInt16(int $int): string
