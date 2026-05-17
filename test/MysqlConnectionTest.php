@@ -4,10 +4,10 @@ namespace Amp\Mysql\Test;
 
 use Amp\CancelledException;
 use Amp\DeferredCancellation;
+use Amp\DeferredFuture;
 use Amp\Mysql\MysqlConnection;
 use Amp\Mysql\MysqlLink;
 use Amp\Mysql\SocketMysqlConnector;
-use function Amp\delay;
 use function Amp\Mysql\connect;
 
 class MysqlConnectionTest extends MysqlLinkTest
@@ -121,12 +121,15 @@ class MysqlConnectionTest extends MysqlLinkTest
     {
         $db = $this->getLink();
 
+        $closed = new DeferredFuture();
+
         $transaction = $db->beginTransaction();
         $transaction->onCommit($this->createCallback(0));
         $transaction->onRollback($this->createCallback(1));
         $transaction->onClose($this->createCallback(1));
+        $transaction->onClose($closed->complete(...));
 
         unset($transaction);
-        delay(0); // Destructor is async, so give control to the loop to invoke callbacks.
+        $closed->getFuture()->await();
     }
 }
