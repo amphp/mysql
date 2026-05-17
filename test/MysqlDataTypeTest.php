@@ -13,7 +13,7 @@ class MysqlDataTypeTest extends MysqlTestCase
     {
         parent::setUp();
 
-        $this->connection = (new SocketMysqlConnector)->connect($this->getConfig());
+        $this->connection = (new SocketMysqlConnector())->connect($this->getConfig());
     }
 
     public function provideDataAndTypes(): array
@@ -115,7 +115,9 @@ class MysqlDataTypeTest extends MysqlTestCase
     public function testJson(mixed $json): void
     {
         if ($this->isMariaDb()) {
-            self::markTestSkipped('MariaDB has no native JSON type; JSON is aliased to LONGTEXT and CAST(... AS JSON) is unsupported.');
+            self::markTestSkipped(
+                'MariaDB has no native JSON type; JSON is aliased to LONGTEXT and CAST(... AS JSON) is unsupported.',
+            );
         }
 
         $result = $this->connection->execute("SELECT CAST(? AS JSON) AS data", [$json]);

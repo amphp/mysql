@@ -15,7 +15,6 @@ use Amp\Sql\SqlConnector;
 use Amp\Sql\SqlTransaction;
 use PHPUnit\Framework\MockObject\MockObject;
 use function Amp\async;
-use function Amp\delay;
 
 class MysqlPoolTest extends MysqlLinkTest
 {
@@ -24,6 +23,9 @@ class MysqlPoolTest extends MysqlLinkTest
         return new MysqlConnectionPool($this->getConfig($useCompression));
     }
 
+    /**
+     * @param array<SocketMysqlConnection> $connections
+     */
     protected function createPool(array $connections): MysqlConnectionPool
     {
         $connector = $this->createMock(SqlConnector::class);
@@ -35,7 +37,12 @@ class MysqlPoolTest extends MysqlLinkTest
 
         $config = MysqlConfig::fromString('host=host;user=user;password=password');
 
-        return new MysqlConnectionPool($config, \count($connections), MysqlConnectionPool::DEFAULT_IDLE_TIMEOUT, $connector);
+        return new MysqlConnectionPool(
+            $config,
+            \count($connections),
+            MysqlConnectionPool::DEFAULT_IDLE_TIMEOUT,
+            $connector,
+        );
     }
 
     /**
@@ -55,11 +62,18 @@ class MysqlPoolTest extends MysqlLinkTest
         return $processors;
     }
 
+    /**
+     * @param array<ConnectionProcessor> $processors
+     *
+     * @return array<SocketMysqlConnection>
+     */
     private function makeConnectionSet(array $processors): array
     {
-        return \array_map((function (ConnectionProcessor $processor): SocketMysqlConnection {
-            return new self($processor);
-        })->bindTo(null, SocketMysqlConnection::class), $processors);
+        return \array_map(
+            (fn (ConnectionProcessor $processor) => new SocketMysqlConnection($processor))
+                ->bindTo(null, SocketMysqlConnection::class),
+            $processors,
+        );
     }
 
     public function getConnectionCounts(): array
@@ -80,10 +94,7 @@ class MysqlPoolTest extends MysqlLinkTest
         $connection->expects($this->once())
             ->method('query')
             ->with('SQL Query')
-            ->willReturn(async(function () use ($result): MysqlResult {
-                delay(0.01);
-                return $result;
-            }));
+            ->willReturn(Future::complete($result));
 
         $pool = $this->createPool($this->makeConnectionSet($processors));
 
@@ -98,7 +109,6 @@ class MysqlPoolTest extends MysqlLinkTest
      */
     public function testConsecutiveQueries(int $count)
     {
-        $rounds = 3;
         $result = $this->createMock(MysqlResult::class);
 
         $processors = $this->makeProcessorSet($count);
@@ -106,10 +116,7 @@ class MysqlPoolTest extends MysqlLinkTest
         foreach ($processors as $connection) {
             $connection->method('query')
                 ->with('SQL Query')
-                ->willReturn(async(function () use ($result): MysqlResult {
-                    delay(0.01);
-                    return $result;
-                }));
+                ->willReturn(Future::complete($result));
         }
 
         $pool = $this->createPool($this->makeConnectionSet($processors));
@@ -142,10 +149,7 @@ class MysqlPoolTest extends MysqlLinkTest
 
         $connection->expects($this->exactly(2))
             ->method('query')
-            ->willReturn(async(function (): MysqlResult {
-                delay(0.01);
-                return new MysqlCommandResult(0, 0);
-            }));
+            ->willReturn(Future::complete(new MysqlCommandResult(0, 0)));
 
         $pool = $this->createPool($this->makeConnectionSet($processors));
 
@@ -163,17 +167,13 @@ class MysqlPoolTest extends MysqlLinkTest
      */
     public function testConsecutiveTransactions(int $count)
     {
-        $rounds = 3;
         $result = new MysqlCommandResult(0, 0);
 
         $processors = $this->makeProcessorSet($count);
 
         foreach ($processors as $connection) {
             $connection->method('query')
-                ->willReturnCallback(fn () => async(function () use ($result): MysqlResult {
-                    delay(0.01);
-                    return $result;
-                }));
+                ->willReturn(Future::complete($result));
         }
 
         $pool = $this->createPool($this->makeConnectionSet($processors));

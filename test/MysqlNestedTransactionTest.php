@@ -11,7 +11,9 @@ use function Amp\async;
 class MysqlNestedTransactionTest extends MysqlLinkTest
 {
     private ?MysqlLink $link;
+
     private ?MysqlTransaction $transaction = null;
+
     private ?MysqlTransaction $nested = null;
 
     public function getLink(bool $useCompression = false): MysqlLink
@@ -40,7 +42,7 @@ class MysqlNestedTransactionTest extends MysqlLinkTest
 
     protected function connect(bool $useCompression = false): MysqlConnection
     {
-        return (new SocketMysqlConnector)->connect($this->getConfig($useCompression));
+        return (new SocketMysqlConnector())->connect($this->getConfig($useCompression));
     }
 
     public function testStatementExecuteWaitsForNestedTransaction(): void
@@ -48,7 +50,7 @@ class MysqlNestedTransactionTest extends MysqlLinkTest
         $sql = "SELECT * FROM main WHERE a = :a";
         $params = ["a" => 1];
 
-        $this->link = (new SocketMysqlConnector)->connect($this->getConfig());
+        $this->link = (new SocketMysqlConnector())->connect($this->getConfig());
         $this->transaction = $this->link->beginTransaction();
 
         $stmt = $this->transaction->prepare($sql);

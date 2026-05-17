@@ -8,13 +8,14 @@ use Amp\DeferredFuture;
 use Amp\Mysql\MysqlConnection;
 use Amp\Mysql\MysqlLink;
 use Amp\Mysql\SocketMysqlConnector;
+use Amp\TimeoutCancellation;
 use function Amp\Mysql\connect;
 
 class MysqlConnectionTest extends MysqlLinkTest
 {
     protected function getLink(bool $useCompression = false): MysqlLink
     {
-        return (new SocketMysqlConnector)->connect($this->getConfig($useCompression));
+        return (new SocketMysqlConnector())->connect($this->getConfig($useCompression));
     }
 
     public function testConnect()
@@ -40,7 +41,7 @@ class MysqlConnectionTest extends MysqlLinkTest
 
         $connector = new SocketMysqlConnector();
 
-        $source = new DeferredCancellation;
+        $source = new DeferredCancellation();
         $cancellation = $source->getCancellation();
         $source->cancel();
         $connector->connect($this->getConfig(), $cancellation);
@@ -53,7 +54,7 @@ class MysqlConnectionTest extends MysqlLinkTest
     {
         $connector = new SocketMysqlConnector();
 
-        $source = new DeferredCancellation;
+        $source = new DeferredCancellation();
         $cancellation = $source->getCancellation();
         $connection = $connector->connect($this->getConfig(), $cancellation);
         $this->assertInstanceOf(MysqlConnection::class, $connection);
@@ -76,7 +77,7 @@ class MysqlConnectionTest extends MysqlLinkTest
     {
         $this->expectException(CancelledException::class);
 
-        $source = new DeferredCancellation;
+        $source = new DeferredCancellation();
         $cancellation = $source->getCancellation();
         $source->cancel();
         connect($this->getConfig(), $cancellation);
@@ -130,6 +131,6 @@ class MysqlConnectionTest extends MysqlLinkTest
         $transaction->onClose($closed->complete(...));
 
         unset($transaction);
-        $closed->getFuture()->await();
+        $closed->getFuture()->await(new TimeoutCancellation(1));
     }
 }

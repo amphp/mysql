@@ -158,7 +158,7 @@ abstract class MysqlLinkTest extends MysqlTestCase
             $got = [];
             foreach ($result as $row) {
                 $got[] = $row['a'];
-                delay(0.1);
+                delay(0.1); // Delay ensures query results are processed simultaneously.
             }
             self::assertSame(\range(1, \count($got)), $got);
         });
@@ -168,7 +168,7 @@ abstract class MysqlLinkTest extends MysqlTestCase
             $got = [];
             foreach ($result as $row) {
                 $got[] = $row['b'];
-                delay(0.1);
+                delay(0.1); // Delay ensures query results are processed simultaneously.
             }
             self::assertSame(\range(2, \count($got) + 1), $got);
         });
