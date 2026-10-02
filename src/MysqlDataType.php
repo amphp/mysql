@@ -61,11 +61,14 @@ enum MysqlDataType: int
             case self::Blob:
             case self::TinyBlob:
             case self::Geometry:
-            case self::Bit:
             case self::Decimal:
             case self::NewDecimal:
             case self::Json:
                 return self::decodeString($bytes, $offset);
+
+            case self::Bit:
+                return (int) self::decodeString($bytes, $offset);
+
 
             case self::LongLong:
                 return $unsigned
