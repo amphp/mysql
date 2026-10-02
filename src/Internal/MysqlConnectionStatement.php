@@ -147,7 +147,7 @@ final class MysqlConnectionStatement implements MysqlStatement
         }
 
         return $this->getProcessor()
-            ->execute($this->statementId, $this->query, $this->result->params, $prebound, $args)
+            ->execute($this->statementId, $this->query, $this->result->getParameterDefinitions(), $prebound, $args)
             ->await();
     }
 
