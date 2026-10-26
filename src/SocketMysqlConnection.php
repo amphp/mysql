@@ -31,7 +31,9 @@ final class SocketMysqlConnection implements MysqlConnection
         ?Cancellation $cancellation = null,
     ): self {
         try {
-            $socket = $connector->connect($config->getConnectionString(), $config->getConnectContext(), $cancellation);
+            // Disable Nagle's algorithm: COM_STMT_CLOSE gets no reply, so the next command would wait for the delayed ACK
+            $context = $config->getConnectContext()->withTcpNoDelay();
+            $socket = $connector->connect($config->getConnectionString(), $context, $cancellation);
         } catch (SocketException $exception) {
             throw new SqlException(
                 'Connecting to the MySQL server failed: ' . $exception->getMessage(),
