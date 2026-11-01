@@ -117,29 +117,29 @@ REGEX;
     private const MAX_PACKET_SIZE = 0xffffff;
     private const MAX_UNCOMPRESSED_BUFLEN = 0xfffffb;
 
-    private const CLIENT_LONG_FLAG = 0x00000004;
-    private const CLIENT_CONNECT_WITH_DB = 0x00000008;
-    private const CLIENT_COMPRESS = 0x00000020;
-    private const CLIENT_LOCAL_INFILE = 0x00000080;
-    private const CLIENT_PROTOCOL_41 = 0x00000200;
-    private const CLIENT_SSL = 0x00000800;
-    private const CLIENT_TRANSACTIONS = 0x00002000;
-    private const CLIENT_SECURE_CONNECTION = 0x00008000;
-    private const CLIENT_MULTI_STATEMENTS = 0x00010000;
-    private const CLIENT_MULTI_RESULTS = 0x00020000;
-    private const CLIENT_PS_MULTI_RESULTS = 0x00040000;
-    private const CLIENT_PLUGIN_AUTH = 0x00080000;
-    private const CLIENT_CONNECT_ATTRS = 0x00100000;
-    private const CLIENT_SESSION_TRACK = 0x00800000;
-    private const CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA = 0x00200000;
-    private const CLIENT_DEPRECATE_EOF = 0x01000000;
+    public const CLIENT_LONG_FLAG = 0x00000004;
+    public const CLIENT_CONNECT_WITH_DB = 0x00000008;
+    public const CLIENT_COMPRESS = 0x00000020;
+    public const CLIENT_LOCAL_INFILE = 0x00000080;
+    public const CLIENT_PROTOCOL_41 = 0x00000200;
+    public const CLIENT_SSL = 0x00000800;
+    public const CLIENT_TRANSACTIONS = 0x00002000;
+    public const CLIENT_SECURE_CONNECTION = 0x00008000;
+    public const CLIENT_MULTI_STATEMENTS = 0x00010000;
+    public const CLIENT_MULTI_RESULTS = 0x00020000;
+    public const CLIENT_PS_MULTI_RESULTS = 0x00040000;
+    public const CLIENT_PLUGIN_AUTH = 0x00080000;
+    public const CLIENT_CONNECT_ATTRS = 0x00100000;
+    public const CLIENT_SESSION_TRACK = 0x00800000;
+    public const CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA = 0x00200000;
+    public const CLIENT_DEPRECATE_EOF = 0x01000000;
 
-    private const OK_PACKET = 0x00;
-    private const EXTRA_AUTH_PACKET = 0x01;
-    private const LOCAL_INFILE_REQUEST = 0xfb;
-    private const AUTH_SWITCH_PACKET = 0xfe;
-    private const EOF_PACKET = 0xfe;
-    private const ERR_PACKET = 0xff;
+    public const OK_PACKET = 0x00;
+    public const EXTRA_AUTH_PACKET = 0x01;
+    public const LOCAL_INFILE_REQUEST = 0xfb;
+    public const AUTH_SWITCH_PACKET = 0xfe;
+    public const EOF_PACKET = 0xfe;
+    public const ERR_PACKET = 0xff;
 
     private const UNCONNECTED = 0;
     private const ESTABLISHED = 1;
@@ -1468,7 +1468,7 @@ REGEX;
                                 case 3: // success
                                     return; // expecting OK afterwards
                                 case 4: // fast auth failure
-                                    if ($this->capabilities & self::CLIENT_SSL || $this->config->getHost()[0] === "/" /* unix domain socket, information not trivially available from $this->socket */) {
+                                    if ($this->isSecureTransport()) {
                                         $this->write($this->config->getPassword() . "\0");
                                     } else {
                                         $this->write("\x02");
@@ -1621,6 +1621,15 @@ REGEX;
         $this->write($payload);
     }
 
+    /**
+     * True when the password may be sent in cleartext: TLS has been negotiated or the connection
+     * uses a unix domain socket (information not trivially available from $this->socket).
+     */
+    private function isSecureTransport(): bool
+    {
+        return ($this->capabilities & self::CLIENT_SSL) !== 0 || $this->config->getHost()[0] === "/";
+    }
+
     private function getAuthData(): string
     {
         $password = (string) $this->config->getPassword();
@@ -1634,6 +1643,12 @@ REGEX;
                 case "mysql_native_password":
                     return $this->secureAuth($password, $this->authPluginData);
                 case "mysql_clear_password":
+                    if (!$this->isSecureTransport()) {
+                        throw new ConnectionException(
+                            "Refusing mysql_clear_password authentication over an unencrypted TCP connection; "
+                            . "enable TLS or connect through a unix socket"
+                        );
+                    }
                     return $password;
                 case "sha256_password":
                     $key = $this->config->getKey();
