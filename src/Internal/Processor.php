@@ -827,9 +827,9 @@ REGEX;
     {
         $off = 1;
 
-        $this->protocol = \ord($packet);
+        $this->protocol = \ord($packet[0]);
         if ($this->protocol !== 0x0a) {
-            throw new ConnectionException("Unsupported protocol version ".\ord($packet)." (Expected: 10)");
+            throw new ConnectionException("Unsupported protocol version ".\ord($packet[0])." (Expected: 10)");
         }
 
         $this->connInfo->serverVersion = DataTypes::decodeNullString(\substr($packet, $off), $len);
@@ -847,7 +847,7 @@ REGEX;
         $off += 2;
 
         if (\strlen($packet) > $off) {
-            $this->connInfo->charset = \ord(\substr($packet, $off));
+            $this->connInfo->charset = \ord($packet[$off]);
             $off += 1;
 
             $this->connInfo->statusFlags = DataTypes::decodeUnsigned16(\substr($packet, $off));
@@ -856,7 +856,7 @@ REGEX;
             $this->serverCapabilities += DataTypes::decodeUnsigned16(\substr($packet, $off)) << 16;
             $off += 2;
 
-            $this->authPluginDataLen = $this->serverCapabilities & self::CLIENT_PLUGIN_AUTH ? \ord(\substr($packet, $off)) : 0;
+            $this->authPluginDataLen = $this->serverCapabilities & self::CLIENT_PLUGIN_AUTH ? \ord($packet[$off]) : 0;
             $off += 1;
 
             if ($this->serverCapabilities & self::CLIENT_SECURE_CONNECTION) {
@@ -923,7 +923,7 @@ REGEX;
     /** @see 14.6.4.1.1 Text Resultset */
     private function handleQuery(string $packet): void
     {
-        switch (\ord($packet)) {
+        switch (\ord($packet[0])) {
             case self::OK_PACKET:
                 $this->parseOk($packet);
                 if ($this->connInfo->statusFlags & StatusFlags::SERVER_MORE_RESULTS_EXISTS) {
@@ -963,15 +963,15 @@ REGEX;
         $this->getDeferred()->resolve($result = new ResultProxy);
         /* we need to resolve before assigning vars, so that a onResolve() handler won't have a partial result available */
         $this->result = $result;
-        $result->setColumns(\ord($packet));
+        $result->setColumns(\ord($packet[0]));
     }
 
     private function handleFieldList(string $packet): void
     {
-        if (\ord($packet) === self::ERR_PACKET) {
+        if (\ord($packet[0]) === self::ERR_PACKET) {
             $this->parseCallback = null;
             $this->handleError($packet);
-        } elseif (\ord($packet) === self::EOF_PACKET) {
+        } elseif (\ord($packet[0]) === self::EOF_PACKET) {
             $this->parseCallback = null;
             $this->parseEof($packet);
             $this->getDeferred()->resolve(null);
@@ -996,7 +996,7 @@ REGEX;
     {
         if (!$this->result->columnsToFetch--) {
             $this->result->updateState(ResultProxy::COLUMNS_FETCHED);
-            if (\ord($packet) === self::ERR_PACKET) {
+            if (\ord($packet[0]) === self::ERR_PACKET) {
                 $this->parseCallback = null;
                 $this->handleError($packet);
             } else {
@@ -1131,7 +1131,7 @@ REGEX;
     /** @see 14.6.4.1.1.3 Resultset Row */
     private function handleTextResultSetRow(string $packet): void
     {
-        $packettype = \ord($packet);
+        $packettype = \ord($packet[0]);
         if ($packettype === self::EOF_PACKET) {
             if ($this->capabilities & self::CLIENT_DEPRECATE_EOF) {
                 $this->parseOk($packet);
@@ -1163,7 +1163,7 @@ REGEX;
     /** @see 14.7.2 Binary Protocol Resultset Row */
     private function handleBinaryResultSetRow(string $packet): void
     {
-        $packettype = \ord($packet);
+        $packettype = \ord($packet[0]);
         if ($packettype === self::EOF_PACKET) {
             $this->parseEof($packet);
             $this->successfulResultsetFetch();
@@ -1200,7 +1200,7 @@ REGEX;
     /** @see 14.7.4.1 COM_STMT_PREPARE Response */
     private function handlePrepare(string $packet): void
     {
-        switch (\ord($packet)) {
+        switch (\ord($packet[0])) {
             case self::OK_PACKET:
                 break;
             case self::ERR_PACKET:
@@ -1441,7 +1441,7 @@ REGEX;
         }
 
         if ($this->connectionState === self::ESTABLISHED) {
-            switch (\ord($packet)) {
+            switch (\ord($packet[0])) {
                 case self::OK_PACKET:
                     if ($this->capabilities & self::CLIENT_COMPRESS) {
                         $this->processors = \array_merge([$this->parseCompression()], $this->processors);
@@ -1464,7 +1464,7 @@ REGEX;
                             $this->sendHandshake();
                             break;
                         case "caching_sha2_password":
-                            switch (\ord(\substr($packet, 1, 1))) {
+                            switch (\ord($packet[1])) {
                                 case 3: // success
                                     return; // expecting OK afterwards
                                 case 4: // fast auth failure
@@ -1495,7 +1495,7 @@ REGEX;
 
         $cb = $this->packetCallback;
         $this->packetCallback = null;
-        switch (\ord($packet)) {
+        switch (\ord($packet[0])) {
             case self::OK_PACKET:
                 $this->handleOk($packet);
                 break;
@@ -1510,7 +1510,7 @@ REGEX;
                 // no break
             default:
                 if (!$cb) {
-                    throw new ConnectionException("Unexpected packet type: " . \ord($packet));
+                    throw new ConnectionException("Unexpected packet type: " . \ord($packet[0]));
                 }
 
                 $cb($packet);
@@ -1540,7 +1540,7 @@ REGEX;
     private function authSwitchRequest(string $packet): void
     {
         $this->parseCallback = null;
-        switch (\ord($packet)) {
+        switch (\ord($packet[0])) {
             case self::EOF_PACKET:
                 if (\strlen($packet) === 1) {
                     break;
@@ -1554,7 +1554,7 @@ REGEX;
                 $this->handleError($packet);
                 return;
             default:
-                throw new ConnectionException("AuthSwitchRequest: Expecting 0xfe (or ERR_Packet), got 0x".\dechex(\ord($packet)));
+                throw new ConnectionException("AuthSwitchRequest: Expecting 0xfe (or ERR_Packet), got 0x".\dechex(\ord($packet[0])));
         }
     }
 

@@ -124,7 +124,7 @@ final class DataTypes
             case self::MYSQL_TYPE_TINY:
             case self::MYSQL_TYPE_TINY | 0x80:
                 $len = 1;
-                return $unsigned ? \ord($str) : self::decodeInt8($str);
+                return $unsigned ? \ord($str[0]) : self::decodeInt8($str);
 
             case self::MYSQL_TYPE_DOUBLE:
                 $len = 8;
@@ -138,7 +138,7 @@ final class DataTypes
             case self::MYSQL_TYPE_DATETIME:
             case self::MYSQL_TYPE_TIMESTAMP:
                 $year = $month = $day = $hour = $minute = $second = $microsecond = 0;
-                switch ($len = \ord($str) + 1) {
+                switch ($len = \ord($str[0]) + 1) {
                     case 12:
                         $microsecond = self::decodeUnsigned32(\substr($str, 8));
                         // no break
@@ -173,7 +173,7 @@ final class DataTypes
 
             case self::MYSQL_TYPE_TIME:
                 $negative = $day = $hour = $minute = $second = $microsecond = 0;
-                switch ($len = \ord($str) + 1) {
+                switch ($len = \ord($str[0]) + 1) {
                     case 13:
                         $microsecond = self::decodeUnsigned32(\substr($str, 9));
                         // no break
@@ -285,7 +285,7 @@ final class DataTypes
 
     public static function decodeUnsigned(string $str, ?int &$len = null)
     {
-        $int = \ord($str);
+        $int = \ord($str[0]);
         if ($int < 0xfb) {
             $len = 1;
             return $int;
@@ -321,7 +321,7 @@ final class DataTypes
 
     public static function decodeInt8(string $str): int
     {
-        $int = \ord($str);
+        $int = \ord($str[0]);
         if ($int < (1 << 7)) {
             return $int;
         }
@@ -331,7 +331,7 @@ final class DataTypes
 
     public static function decodeUnsigned8(string $str): int
     {
-        return \ord($str);
+        return \ord($str[0]);
     }
 
     public static function decodeInt16(string $str): int

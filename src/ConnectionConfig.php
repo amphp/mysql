@@ -38,7 +38,7 @@ final class ConnectionConfig extends SqlConnectionConfig
     /* @var string private key to use for sha256_password auth method */
     private $key;
 
-    public static function fromString(string $connectionString, ConnectContext $context = null): self
+    public static function fromString(string $connectionString, ?ConnectContext $context = null): self
     {
         $parts = self::parseConnectionString($connectionString, self::KEY_MAP);
 
@@ -63,10 +63,10 @@ final class ConnectionConfig extends SqlConnectionConfig
     public function __construct(
         string $host,
         int $port = self::DEFAULT_PORT,
-        string $user = null,
-        string $password = null,
-        string $database = null,
-        ConnectContext $context = null,
+        ?string $user = null,
+        ?string $password = null,
+        ?string $database = null,
+        ?ConnectContext $context = null,
         string $charset = self::DEFAULT_CHARSET,
         string $collate = self::DEFAULT_COLLATE,
         bool $useCompression = false,

@@ -36,13 +36,13 @@ final class PooledResultSet extends SqlPooledResultSet implements ResultSet
     {
         $promise = $this->result->advance();
 
-        $promise->onResolve(function (\Throwable $exception = null, bool $moreResults = null) {
+        $promise->onResolve(function (?\Throwable $exception = null, bool $moreResults = null) {
             if ($moreResults || $this->release === null) {
                 return;
             }
 
             $this->nextResultPromise = $this->result->nextResultSet();
-            $this->nextResultPromise->onResolve(function (\Throwable $exception = null, bool $moreResults = null) {
+            $this->nextResultPromise->onResolve(function (?\Throwable $exception = null, bool $moreResults = null) {
                 $this->nextResultPromise = null;
 
                 if ($moreResults || $this->release === null) {
@@ -68,7 +68,7 @@ final class PooledResultSet extends SqlPooledResultSet implements ResultSet
 
         $promise = $this->result->nextResultSet();
 
-        $promise->onResolve(function (\Throwable $exception = null, bool $moreResults = null) {
+        $promise->onResolve(function (?\Throwable $exception = null, bool $moreResults = null) {
             if ($moreResults || $this->release === null) {
                 return;
             }
