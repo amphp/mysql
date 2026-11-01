@@ -96,48 +96,48 @@ class ConnectionProcessor implements SqlTransientResource
 
     private ?DeferredFuture $paused = null;
 
-    private const MAX_PACKET_SIZE = 0xffffff;
-    private const MAX_UNCOMPRESSED_BUFLEN = 0xfffffb;
+    public const MAX_PACKET_SIZE = 0xffffff;
+    public const MAX_UNCOMPRESSED_BUFLEN = 0xfffffb;
 
-    private const CLIENT_LONG_FLAG = 0x00000004;
-    private const CLIENT_CONNECT_WITH_DB = 0x00000008;
-    private const CLIENT_COMPRESS = 0x00000020;
-    private const CLIENT_LOCAL_INFILE = 0x00000080;
-    private const CLIENT_PROTOCOL_41 = 0x00000200;
-    private const CLIENT_SSL = 0x00000800;
-    private const CLIENT_TRANSACTIONS = 0x00002000;
-    private const CLIENT_SECURE_CONNECTION = 0x00008000;
-    private const CLIENT_MULTI_STATEMENTS = 0x00010000;
-    private const CLIENT_MULTI_RESULTS = 0x00020000;
-    private const CLIENT_PS_MULTI_RESULTS = 0x00040000;
-    private const CLIENT_PLUGIN_AUTH = 0x00080000;
-    private const CLIENT_CONNECT_ATTRS = 0x00100000;
-    private const CLIENT_SESSION_TRACK = 0x00800000;
-    private const CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA = 0x00200000;
-    private const CLIENT_DEPRECATE_EOF = 0x01000000;
+    public const CLIENT_LONG_FLAG = 0x00000004;
+    public const CLIENT_CONNECT_WITH_DB = 0x00000008;
+    public const CLIENT_COMPRESS = 0x00000020;
+    public const CLIENT_LOCAL_INFILE = 0x00000080;
+    public const CLIENT_PROTOCOL_41 = 0x00000200;
+    public const CLIENT_SSL = 0x00000800;
+    public const CLIENT_TRANSACTIONS = 0x00002000;
+    public const CLIENT_SECURE_CONNECTION = 0x00008000;
+    public const CLIENT_MULTI_STATEMENTS = 0x00010000;
+    public const CLIENT_MULTI_RESULTS = 0x00020000;
+    public const CLIENT_PS_MULTI_RESULTS = 0x00040000;
+    public const CLIENT_PLUGIN_AUTH = 0x00080000;
+    public const CLIENT_CONNECT_ATTRS = 0x00100000;
+    public const CLIENT_SESSION_TRACK = 0x00800000;
+    public const CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA = 0x00200000;
+    public const CLIENT_DEPRECATE_EOF = 0x01000000;
 
     /* @see 14.1.3.4 Status Flags */
-    private const SERVER_STATUS_IN_TRANS = 0x0001; // a transaction is active
-    private const SERVER_STATUS_AUTOCOMMIT = 0x0002; // auto-commit is enabled
-    private const SERVER_MORE_RESULTS_EXISTS = 0x0008;
-    private const SERVER_STATUS_NO_GOOD_INDEX_USED = 0x0010;
-    private const SERVER_STATUS_NO_INDEX_USED = 0x0020;
-    private const SERVER_STATUS_CURSOR_EXISTS = 0x0040; // Used by Binary Protocol Resultset to signal that COM_STMT_FETCH has to be used to fetch the row-data.
-    private const SERVER_STATUS_LAST_ROW_SENT = 0x0080;
-    private const SERVER_STATUS_DB_DROPPED = 0x0100;
-    private const SERVER_STATUS_NO_BACKSLASH_ESCAPES = 0x0200;
-    private const SERVER_STATUS_METADATA_CHANGED = 0x0400;
-    private const SERVER_QUERY_WAS_SLOW = 0x0800;
-    private const SERVER_PS_OUT_PARAMS = 0x1000;
-    private const SERVER_STATUS_IN_TRANS_READONLY = 0x2000; // in a read-only transaction
-    private const SERVER_SESSION_STATE_CHANGED = 0x4000; // connection state information has changed
+    public const SERVER_STATUS_IN_TRANS = 0x0001; // a transaction is active
+    public const SERVER_STATUS_AUTOCOMMIT = 0x0002; // auto-commit is enabled
+    public const SERVER_MORE_RESULTS_EXISTS = 0x0008;
+    public const SERVER_STATUS_NO_GOOD_INDEX_USED = 0x0010;
+    public const SERVER_STATUS_NO_INDEX_USED = 0x0020;
+    public const SERVER_STATUS_CURSOR_EXISTS = 0x0040; // Used by Binary Protocol Resultset to signal that COM_STMT_FETCH has to be used to fetch the row-data.
+    public const SERVER_STATUS_LAST_ROW_SENT = 0x0080;
+    public const SERVER_STATUS_DB_DROPPED = 0x0100;
+    public const SERVER_STATUS_NO_BACKSLASH_ESCAPES = 0x0200;
+    public const SERVER_STATUS_METADATA_CHANGED = 0x0400;
+    public const SERVER_QUERY_WAS_SLOW = 0x0800;
+    public const SERVER_PS_OUT_PARAMS = 0x1000;
+    public const SERVER_STATUS_IN_TRANS_READONLY = 0x2000; // in a read-only transaction
+    public const SERVER_SESSION_STATE_CHANGED = 0x4000; // connection state information has changed
 
-    private const OK_PACKET = 0x00;
-    private const EXTRA_AUTH_PACKET = 0x01;
-    private const LOCAL_INFILE_REQUEST = 0xfb;
-    private const AUTH_SWITCH_PACKET = 0xfe;
-    private const EOF_PACKET = 0xfe;
-    private const ERR_PACKET = 0xff;
+    public const OK_PACKET = 0x00;
+    public const EXTRA_AUTH_PACKET = 0x01;
+    public const LOCAL_INFILE_REQUEST = 0xfb;
+    public const AUTH_SWITCH_PACKET = 0xfe;
+    public const EOF_PACKET = 0xfe;
+    public const ERR_PACKET = 0xff;
 
     public function __construct(Socket $socket, MysqlConfig $config)
     {
@@ -1441,8 +1441,7 @@ class ConnectionProcessor implements SqlTransientResource
                                 case 3: // success
                                     return; // expecting OK afterwards
                                 case 4: // fast auth failure
-                                    /* unix domain socket, information not trivially available from $this->socket */
-                                    if ($this->capabilities & self::CLIENT_SSL || $this->config->getHost()[0] === "/") {
+                                    if ($this->isSecureTransport()) {
                                         $this->write($this->config->getPassword() . "\0");
                                     } else {
                                         $this->write("\x02");
@@ -1615,6 +1614,15 @@ class ConnectionProcessor implements SqlTransientResource
         $this->write(\implode($payload));
     }
 
+    /**
+     * True when the password may be sent in cleartext: TLS has been negotiated or the connection
+     * uses a unix domain socket (information not trivially available from $this->socket).
+     */
+    private function isSecureTransport(): bool
+    {
+        return ($this->capabilities & self::CLIENT_SSL) !== 0 || $this->config->getHost()[0] === "/";
+    }
+
     private function getAuthData(): string
     {
         $password = $this->config->getPassword() ?? "";
@@ -1628,6 +1636,12 @@ class ConnectionProcessor implements SqlTransientResource
                 case "mysql_native_password":
                     return $this->secureAuth($password, $this->authPluginData);
                 case "mysql_clear_password":
+                    if (!$this->isSecureTransport()) {
+                        throw new SqlConnectionException(
+                            "Refusing mysql_clear_password authentication over an unencrypted TCP connection; "
+                            . "enable TLS or connect through a unix socket"
+                        );
+                    }
                     return $password;
                 case "sha256_password":
                     $key = $this->config->getKey();
