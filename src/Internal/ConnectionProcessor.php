@@ -1500,8 +1500,11 @@ class ConnectionProcessor implements SqlTransientResource
 
     private function sha256Auth(string $pass, string $scramble, string $key): string
     {
+        $scramble = \substr($scramble, 0, 20);
+        $payload = "$pass\0";
+
         \openssl_public_encrypt(
-            "$pass\0" ^ \str_repeat($scramble, (int) \ceil(\strlen($pass) / \strlen($scramble))),
+            $payload ^ \str_repeat($scramble, (int) \ceil(\strlen($payload) / \strlen($scramble))),
             $auth,
             PublicKeyCache::loadKey($key),
             \OPENSSL_PKCS1_OAEP_PADDING,
